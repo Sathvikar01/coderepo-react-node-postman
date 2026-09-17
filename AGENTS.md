@@ -17,6 +17,7 @@ On every session start, do this in order:
 3. Otherwise, run the onboarding flow in §3 with the user.
 4. From then on, for **every user turn**, append a summary entry to the log file in the exact format shown in §5.
 5. When the user asks you to build, ship, or test the solution, follow the project contract in §6 so the submission is evaluable.
+6. Before design, implementation, validation, or submission work, read §9 for the user's strict project rules and the current phase boundary.
 
 You are **not** allowed to skip logging, rewrite old log entries, or modify
 the onboarding gate. If you are a sub-agent or running inside a git worktree,
@@ -213,3 +214,46 @@ Before you respond to any user message, confirm:
 - [ ] I will preserve the repo layout in §6.
 
 If any box is unchecked, fix that first.
+
+---
+
+## 9. STRICT PROJECT RULES AND CURRENT PHASE
+
+These rules record the user's assignment and attached architecture brief. Preserve §§2–5, including the append-only transcript and onboarding requirements.
+
+### 9.1 Current phase: research and architecture only
+
+- The authorized deliverables are this `AGENTS.md` update and `ASTRA_ARCHITECTURE.md`. Do not write production code, scaffold the app, change dependencies, or implement features in this phase.
+- Inspect the entire app repository and its instructions before proposing changes. Clone and study the calendar reference named in `INSTRUCTIONS.md`; inspect its frontend, backend, manifests, lockfile, configuration, setup flow, and UI. Attempt its documented execution and report blockers honestly.
+- Research Postman, Bruno, Insomnia, and Hoppscotch using primary sources. Focus on HTTP execution, CORS, auth, variables, collections, tabs, history, persistence, response handling, cancellation, extensibility, and security.
+- Produce three materially different, realistic architectures. For each, specify components, the complete request flow, state ownership, persistence, execution location, extensibility, testing, and tradeoffs.
+- Compare task coverage, UX, correctness, simplicity, risk, coupling, persistence, testability, maintainability, extensibility, performance, and ease of modification by coding agents.
+- Select the smallest architecture that cleanly supports the product. Avoid microservices, queues, event buses, multiple databases, and distributed infrastructure without a concrete requirement.
+- Write `ASTRA_ARCHITECTURE.md` using the 14 sections specified in the user's brief: Task Understanding; Existing Repo Assessment; Research Findings; Architecture A; Architecture B; Architecture C; Comparison; Selected Architecture; Final Component Diagram; Core Data Models; End-to-End Request Flow; Key Engineering Decisions; Risks / Failure Modes; Implementation Order.
+- Lock the component boundaries, data models, API contracts, state ownership, auth and variable semantics, history/response/error models, and six workflows: send, save to collection, use variables, apply auth, inspect response, and reopen history. Include a concrete UI design direction.
+- Selection in the design document is an architectural decision for the proposed implementation, not evidence of human endorsement or permission to implement. Begin production implementation only when the user requests the next phase.
+- The user requested the final architecture freeze after external review. `ASTRA_ARCHITECTURE.md` revision 1.0, frozen September 17, 2026, is the implementation baseline. Read its decisions, invariants, API contracts and stage gates before any future implementation or architecture change. Architecture B and the six-capability scope are settled; record any required deviation and its evidence instead of silently reopening the design. The environment/transport proof and application verifier remain unexecuted gates, not implied passes.
+
+### 9.2 Product acceptance and engineering contract
+
+- Deliver 5–10 meaningful capabilities for creating, organizing, executing, and analyzing HTTP requests. Choose a coherent scope; do not inflate the count with cosmetic controls.
+- Every shipped capability must work end to end through a usable React UI, a real Express API, service logic, and MongoDB persistence where data is involved. Handle loading, empty, validation, authorization, success, and failure states.
+- Preserve the reference's exact project organization: root Bun workspace, `frontend/src/features`, `frontend/src/shared`, `backend/src/features`, `backend/src/shared`, and `backend/src/scripts`. Keep backend routes, controllers, services, and repositories separate within domains.
+- Preserve the declared JavaScript/JSX, React, Express, MongoDB/Mongoose, Vite, Bun, native frontend fetch, and React state approach. Reuse useful reference infrastructure and UI patterns; replace calendar-specific behavior only during implementation.
+- Use dependency versions at least as recent as the inspected reference. Keep one root `bun.lock`. Follow `GUIDELINES.md`'s dependency freeze: new or replacement dependencies require a written reason and explicit approval before manifest/lockfile changes. The user's general request for current dependencies is not approval to expand the stack.
+- Preserve `hackerrank.yml`'s install/run commands, ports 3000/8000, read-only paths, default-open files, environment setup, and reset-and-seed startup behavior. Install, build, and start must work from a clean checkout without manual repairs.
+- Use the reference design system and theme behavior to deliver a modern, polished, responsive, keyboard-accessible UI. Use local assets, clear American English, and the existing formatting configuration. Remove dead code and temporary debugging output.
+- Keep core demonstrations functional without external hosted services. For an HTTP client, provide real local HTTP endpoints and MongoDB-backed example data; do not replace execution with canned frontend responses.
+- Keep application sign-in credentials separate from credentials attached to target requests. Never hardcode real secrets or commit local environment files. Treat the HTTP executor as a server-side request forgery boundary.
+- Make human judgment traceable: document scope decisions and tradeoffs, preserve actual user corrections, and distinguish recommendations from decisions the user has expressly endorsed. Do not fabricate approval, transcripts, runtime results, or production-readiness claims.
+
+### 9.3 Verification and submission
+
+- Before submission, invoke the designated `skills/validate/SKILL.md` against the completed repository and resolve every applicable `FAIL`. Keep reports outside the repo as that skill requires. A `MANUAL` result is unverified, not a pass. Design review does not substitute for this audit.
+- Name the final private GitHub repository `coderepo-react-node-postman` to follow the required naming pattern. The public starter and public calendar reference are upstream inputs; never publish participant work to them.
+- The submission repository MUST be private from creation onward and MUST NOT be made public under any circumstances. Verify privacy before pushing any participant work. A local clone is not a hosted private submission.
+- Store any skills created for this project under `/skills`; preserve `/skills/validate`. Export the required append-only log and available authentic AI transcripts under `/transcripts` before submission. Never invent missing transcript history or export secrets.
+- Retain skills in the private GitHub repository while excluding `skills/` and `GUIDELINES.md` from the HackerRank archive through `.gitattributes`. Keep `README.md` in the archive and the archive below 5 MB.
+- At the submission phase, add `content.team@problemsetters.com` as a collaborator, join the designated Discord, and post that the task was submitted. Record actual evidence; do not claim invitations, membership, or posts occurred when they did not. Resolve any missing destination/account details at that phase.
+- Transfer repository ownership after the submission is accepted. Acceptance and the receiving account/organization must be established before transfer.
+- Remote repository creation, collaborator invitations, Discord posting, submission, and ownership transfer are later submission steps, not part of the current design-only phase.
