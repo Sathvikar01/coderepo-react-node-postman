@@ -213,12 +213,30 @@ export async function performRequest({ target, method, headers, body, timeoutMs,
 			const transferEncoding = (
 				parsedHeaders.find((header) => header.name.toLowerCase() === "transfer-encoding")?.value || ""
 			).toLowerCase();
-			const contentLength = parsedHeaders.find((header) => header.name.toLowerCase() === "content-length")?.value;
 			if (transferEncoding.includes("chunked")) {
 				chunked = true;
 				chunkState = "size";
-			} else if (contentLength !== undefined && /^\d+$/.test(contentLength.trim())) remaining = Number(contentLength.trim());
-			else remaining = null;
+			} else if (transferEncoding.trim() && transferEncoding.trim() !== "identity") {
+				fail(new TransportError("decode_error", "The target returned an unsupported Transfer-Encoding."));
+				return "parsed";
+			} else {
+				const lengths = parsedHeaders
+					.filter((header) => header.name.toLowerCase() === "content-length")
+					.map((header) => header.value.trim());
+				if (lengths.length > 1 && new Set(lengths).size > 1) {
+					fail(new TransportError("decode_error", "The target returned conflicting Content-Length headers."));
+					return "parsed";
+				}
+				if (lengths.length > 0) {
+					if (!/^\d+$/.test(lengths[0]) || !Number.isSafeInteger(Number(lengths[0]))) {
+						fail(new TransportError("decode_error", "The target returned an invalid Content-Length header."));
+						return "parsed";
+					}
+					remaining = Number(lengths[0]);
+				} else {
+					remaining = null;
+				}
+			}
 			if (remaining === 0) {
 				finish(null);
 				return "parsed";
