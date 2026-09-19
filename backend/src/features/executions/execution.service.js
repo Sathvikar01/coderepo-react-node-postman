@@ -29,6 +29,34 @@ function findRequest(collection, requestId) {
 	return collection?.requests?.find((request) => request.id === requestId) ?? null;
 }
 
+const REQUIRED_INPUT = "[REQUIRED_INPUT]";
+const VARIABLE_REFERENCE = /\{\{\s*[A-Za-z_][A-Za-z0-9_]*\s*\}\}/;
+
+function sanitizeAuthForHistory(auth) {
+	if (!auth || auth.mode === "none" || auth.mode === "inherit") return auth ?? { mode: "none" };
+	if (auth.mode === "bearer")
+		return { mode: "bearer", tokenTemplate: VARIABLE_REFERENCE.test(auth.tokenTemplate ?? "") ? auth.tokenTemplate : REQUIRED_INPUT };
+	if (auth.mode === "basic")
+		return {
+			mode: "basic",
+			usernameTemplate: VARIABLE_REFERENCE.test(auth.usernameTemplate ?? "") ? auth.usernameTemplate : REQUIRED_INPUT,
+			passwordTemplate: VARIABLE_REFERENCE.test(auth.passwordTemplate ?? "") ? auth.passwordTemplate : REQUIRED_INPUT,
+		};
+	if (auth.mode === "apiKey")
+		return {
+			mode: "apiKey",
+			key: auth.key,
+			valueTemplate: VARIABLE_REFERENCE.test(auth.valueTemplate ?? "") ? auth.valueTemplate : REQUIRED_INPUT,
+			in: auth.in,
+		};
+	return { mode: "none" };
+}
+
+function sanitizeRequestForHistory(request) {
+	if (!request) return request;
+	return { ...request, auth: sanitizeAuthForHistory(request.auth) };
+}
+
 export function terminalResult(record) {
 	return {
 		executionId: record.executionId,
@@ -160,7 +188,7 @@ export function createExecutionService({ registry = operationRegistry, transport
 				? {
 						name: resolved.collection.name,
 						variables: (resolved.collection.variables ?? []).map((variable) => ({ key: variable.key, kind: variable.kind })),
-						auth: resolved.collection.auth,
+						auth: sanitizeAuthForHistory(resolved.collection.auth),
 					}
 				: null,
 		};
@@ -175,7 +203,7 @@ export function createExecutionService({ registry = operationRegistry, transport
 				status: "running",
 				effectCertainty: "not_dispatched",
 				persistence: { state: "saved" },
-				request: effectiveRequest,
+				request: sanitizeRequestForHistory(effectiveRequest),
 				context: { tabId, draftVersion, source: resolved.source, environment: environment.source },
 				snapshot,
 				startedAt,
@@ -336,7 +364,7 @@ export function createExecutionService({ registry = operationRegistry, transport
 			persistence: { state: "saved" },
 			"snapshot.bytesSent": result.bytesSent ?? 0,
 			"snapshot.executedUrl": executedUrl,
-			"snapshot.effectiveAuth": compiled.authSource === "override" ? null : compiled.authTemplate,
+			"snapshot.effectiveAuth": compiled.authSource === "override" ? null : sanitizeAuthForHistory(compiled.authTemplate),
 			"snapshot.requestHeaders": compiled.headers.map((header) => header.name),
 			compileTrace: compiled.trace,
 			warnings,
