@@ -75,3 +75,23 @@ export function duplicateFolder(aggregate, folderId) {
 		requests: [...aggregate.requests, ...copies],
 	};
 }
+
+
+export function moveFolder(aggregate, folderId, delta) {
+	const index = aggregate.folders.findIndex((folder) => folder.id === folderId);
+	const target = index + delta;
+	if (index < 0 || target < 0 || target >= aggregate.folders.length) return aggregate;
+	const folders = [...aggregate.folders];
+	[folders[index], folders[target]] = [folders[target], folders[index]];
+	return { ...aggregate, folders };
+}
+
+export function moveRequestToFolder(aggregate, requestId, folderId) {
+	if (folderId && !aggregate.folders.some((folder) => folder.id === folderId)) return aggregate;
+	return {
+		...aggregate,
+		requests: aggregate.requests.map((request) =>
+			request.id === requestId ? { ...request, folderId: folderId ?? null } : request,
+		),
+	};
+}
