@@ -96,7 +96,13 @@ export function createExecutionService({ registry = operationRegistry, transport
 				throw new AppError(404, "HISTORY_NOT_FOUND", "The requested history entry does not exist or has expired.");
 			return {
 				request: draftRequest ?? record.request,
-				collection: null,
+				collection: record.snapshot?.collectionDefaults
+					? {
+							name: record.snapshot.collectionDefaults.name,
+							variables: structuredClone(record.snapshot.collectionDefaults.variables ?? []),
+							auth: structuredClone(record.snapshot.collectionDefaults.auth ?? { mode: "none" }),
+						}
+					: null,
 				replay: record,
 				source: { type: "history", historyId: context.replayHistoryId },
 			};
@@ -187,7 +193,13 @@ export function createExecutionService({ registry = operationRegistry, transport
 			collectionDefaults: resolved.collection
 				? {
 						name: resolved.collection.name,
-						variables: (resolved.collection.variables ?? []).map((variable) => ({ key: variable.key, kind: variable.kind })),
+						variables: (resolved.collection.variables ?? []).map((variable) => ({
+							id: variable.id,
+							key: variable.key,
+							kind: variable.kind,
+							enabled: variable.enabled !== false,
+							...(variable.kind === "plain" ? { value: variable.value ?? "" } : { alias: variable.alias }),
+						})),
 						auth: sanitizeAuthForHistory(resolved.collection.auth),
 					}
 				: null,
