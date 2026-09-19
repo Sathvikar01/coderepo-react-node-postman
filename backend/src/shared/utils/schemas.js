@@ -3,6 +3,7 @@ import { LIMITS, utf8Bytes } from "./limits.js";
 
 export const METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
 export const AUTH_MODES = ["inherit", "none", "bearer", "basic", "apiKey"];
+const CREDENTIAL_REFERENCE = /\{\{\s*[A-Za-z_][A-Za-z0-9_]*\s*\}\}/;
 
 const idSchema = z.uuid("Provide a valid identifier.");
 export const rowSchema = z
@@ -106,6 +107,15 @@ export const requestDefinitionSchema = z
 		if (["GET", "HEAD"].includes(request.method) && request.body.mode !== "none") {
 			context.addIssue({ code: "custom", path: ["body"], message: `${request.method} requests cannot include a body.` });
 		}
+		if (request.auth.mode === "bearer" && !CREDENTIAL_REFERENCE.test(request.auth.tokenTemplate))
+			context.addIssue({ code: "custom", path: ["auth", "tokenTemplate"], message: "Saved bearer credentials must use a variable reference." });
+		if (
+			request.auth.mode === "basic" &&
+			(!CREDENTIAL_REFERENCE.test(request.auth.usernameTemplate) || !CREDENTIAL_REFERENCE.test(request.auth.passwordTemplate))
+		)
+			context.addIssue({ code: "custom", path: ["auth"], message: "Saved basic credentials must use variable references." });
+		if (request.auth.mode === "apiKey" && !CREDENTIAL_REFERENCE.test(request.auth.valueTemplate))
+			context.addIssue({ code: "custom", path: ["auth", "valueTemplate"], message: "Saved API-key credentials must use a variable reference." });
 		const seen = new Set();
 		request.headers.forEach((row, index) => {
 			if (!row.enabled) return;
@@ -136,11 +146,18 @@ export const collectionAggregateSchema = z
 	})
 	.strict()
 	.superRefine((collection, context) => {
+		if (collection.auth.mode === "inherit")
+			context.addIssue({ code: "custom", path: ["auth"], message: "Collection authentication cannot inherit." });
 		const folderIds = new Set();
+		const folderNames = new Set();
 		collection.folders.forEach((folder, index) => {
 			if (folderIds.has(folder.id))
 				context.addIssue({ code: "custom", path: ["folders", index, "id"], message: "Folder identifiers must be unique." });
 			folderIds.add(folder.id);
+			const normalizedName = folder.name.trim().toLocaleLowerCase();
+			if (folderNames.has(normalizedName))
+				context.addIssue({ code: "custom", path: ["folders", index, "name"], message: "Folder names must be unique within a collection." });
+			folderNames.add(normalizedName);
 		});
 		const requestIds = new Set();
 		collection.requests.forEach((request, index) => {
