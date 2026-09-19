@@ -26,6 +26,7 @@ import { profileApi } from "./features/profiles/profile.api.js";
 import { RequestBuilder } from "./features/requests/RequestBuilder.jsx";
 import { MaterialIcon } from "./shared/components/MaterialIcon.jsx";
 import {
+	clearProfileSession,
 	clearSession,
 	hasProfileToken,
 	hasSessionToken,
@@ -275,7 +276,7 @@ export default function App() {
 			toast(error.message, "error");
 			return;
 		}
-		clearSession();
+		clearProfileSession();
 		resetWorkspaceState();
 	};
 
@@ -351,11 +352,14 @@ export default function App() {
 	const { reconcile: startReconciliation, cancel: cancelExecution } = useExecutionReconciliation({
 		dispatch,
 		onTerminal: useCallback(() => setHistoryRefresh((current) => current + 1), []),
-		onStatus: useCallback((tabId, status) => dispatch({ type: "draft/status", tabId, status, error: null }), [dispatch]),
+		onStatus: useCallback(
+			(tabId, status, executionId) => dispatch({ type: "draft/status", tabId, executionId, status, error: null }),
+			[dispatch],
+		),
 	});
 
 	const send = async () => {
-		if (!activeTab || activeTab.status === "running") return;
+		if (!activeTab || ["running", "reconciling"].includes(activeTab.status)) return;
 		const executionId = crypto.randomUUID();
 		dispatch({ type: "draft/dispatched", tabId: activeTab.id, executionId });
 		setAuthOverrides((current) => {
@@ -390,7 +394,18 @@ export default function App() {
 			setHistoryRefresh((current) => current + 1);
 			if (result.outcome === "validation_error") toast(result.error?.message ?? "The request could not be sent.", "error");
 		} catch (error) {
-			dispatch({ type: "draft/status", tabId: activeTab.id, status: "reconciling", error: error.message });
+			if (error.status && error.status < 500) {
+				dispatch({ type: "draft/status", tabId: activeTab.id, executionId, status: "error", error: error.message });
+				toast(error.message, "error");
+				return;
+			}
+			dispatch({
+				type: "draft/status",
+				tabId: activeTab.id,
+				executionId,
+				status: "reconciling",
+				error: error.message,
+			});
 			startReconciliation(activeTab.id, executionId);
 		}
 	};
