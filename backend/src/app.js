@@ -18,47 +18,73 @@ import { LIMITS } from "./shared/utils/limits.js";
 const publicDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../public");
 
 function allowedOrigins() {
-    return (process.env.APP_ORIGINS || "http://localhost:3000,http://127.0.0.1:3000")
-        .split(",")
-        .map((value) => value.trim())
-        .filter(Boolean);
+	return (process.env.APP_ORIGINS || "http://localhost:3000,http://127.0.0.1:3000")
+		.split(",")
+		.map((value) => value.trim())
+		.filter(Boolean);
 }
 
 export function createApp() {
-    const app = express();
-    app.disable("x-powered-by");
-    const origins = allowedOrigins();
-    app.use(
-        cors({
-            credentials: false,
-            origin(origin, callback) {
-                if (!origin || origins.includes(origin)) return callback(null, true);
-                return callback(null, false);
-            },
-        }),
-    );
-    app.use((request, response, next) => {
-        response.set("Vary", "Origin");
-        next();
-    });
-    app.use(express.static(publicDirectory));
-    app.get("/api/v1/health", (request, response) => {
-        const database = mongoose.connection.readyState === 1 ? "connected" : "disconnected";
-        response.status(database === "connected" ? 200 : 503).json({ data: { status: database === "connected" ? "ok" : "degraded", database } });
-    });
+	const app = express();
+	app.disable("x-powered-by");
+	const origins = allowedOrigins();
+	app.use(
+		cors({
+			credentials: false,
+			origin(origin, callback) {
+				if (!origin || origins.includes(origin)) return callback(null, true);
+				return callback(null, false);
+			},
+		}),
+	);
+	app.use((request, response, next) => {
+		response.set("Vary", "Origin");
+		next();
+	});
+	app.use(express.static(publicDirectory));
+	app.get("/api/v1/health", (request, response) => {
+		const database = mongoose.connection.readyState === 1 ? "connected" : "disconnected";
+		response
+			.status(database === "connected" ? 200 : 503)
+			.json({ data: { status: database === "connected" ? "ok" : "degraded", database } });
+	});
 
-    app.use("/demo", express.json({ limit: LIMITS.jsonBodyExecution }), demoRouter);
+	app.use("/demo", express.json({ limit: LIMITS.jsonBodyExecution }), demoRouter);
 
-    app.use("/api/v1/auth", express.json({ limit: LIMITS.jsonBodyDefault }), authRouter);
-    app.use("/api/v1/profiles", express.json({ limit: LIMITS.jsonBodyDefault }), requireWorkspaceAuth, profileRouter);
+	app.use("/api/v1/auth", express.json({ limit: LIMITS.jsonBodyDefault }), authRouter);
+	app.use("/api/v1/profiles", express.json({ limit: LIMITS.jsonBodyDefault }), requireWorkspaceAuth, profileRouter);
 
-    app.use("/api/v1/preferences", express.json({ limit: LIMITS.jsonBodyEnvironment }), requireWorkspaceAuth, resolveProfileContext, preferenceRouter);
-    app.use("/api/v1/collections", express.json({ limit: LIMITS.jsonBodyCollection }), requireWorkspaceAuth, resolveProfileContext, collectionRouter);
-    app.use("/api/v1/environments", express.json({ limit: LIMITS.jsonBodyEnvironment }), requireWorkspaceAuth, resolveProfileContext, environmentRouter);
-    app.use("/api/v1/executions", express.json({ limit: LIMITS.jsonBodyExecution }), requireWorkspaceAuth, resolveProfileContext, executionRouter);
-    app.use("/api/v1/history", express.json({ limit: LIMITS.jsonBodyDefault }), requireWorkspaceAuth, resolveProfileContext, historyRouter);
+	app.use(
+		"/api/v1/preferences",
+		express.json({ limit: LIMITS.jsonBodyEnvironment }),
+		requireWorkspaceAuth,
+		resolveProfileContext,
+		preferenceRouter,
+	);
+	app.use(
+		"/api/v1/collections",
+		express.json({ limit: LIMITS.jsonBodyCollection }),
+		requireWorkspaceAuth,
+		resolveProfileContext,
+		collectionRouter,
+	);
+	app.use(
+		"/api/v1/environments",
+		express.json({ limit: LIMITS.jsonBodyEnvironment }),
+		requireWorkspaceAuth,
+		resolveProfileContext,
+		environmentRouter,
+	);
+	app.use(
+		"/api/v1/executions",
+		express.json({ limit: LIMITS.jsonBodyExecution }),
+		requireWorkspaceAuth,
+		resolveProfileContext,
+		executionRouter,
+	);
+	app.use("/api/v1/history", express.json({ limit: LIMITS.jsonBodyDefault }), requireWorkspaceAuth, resolveProfileContext, historyRouter);
 
-    app.use(notFoundHandler);
-    app.use(errorHandler);
-    return app;
+	app.use(notFoundHandler);
+	app.use(errorHandler);
+	return app;
 }

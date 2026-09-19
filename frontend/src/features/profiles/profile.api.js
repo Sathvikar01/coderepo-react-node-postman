@@ -1,7 +1,7 @@
 import { request } from "../../shared/api/client.js";
 
 export const profileApi = {
-    list: () => request("/profiles"),
-    preferences: () => request("/preferences"),
-    updatePreferences: (input) => request("/preferences", { method: "PUT", body: JSON.stringify(input) }),
+	list: () => request("/profiles"),
+	preferences: () => request("/preferences"),
+	updatePreferences: (input) => request("/preferences", { method: "PUT", body: JSON.stringify(input) }),
 };

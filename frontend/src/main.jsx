@@ -7,9 +7,9 @@ import { ErrorBoundary } from "./shared/components/ErrorBoundary.jsx";
 import "./styles.css";
 
 createRoot(document.getElementById("root")).render(
-    <StrictMode>
-        <ErrorBoundary>
-            <App />
-        </ErrorBoundary>
-    </StrictMode>,
+	<StrictMode>
+		<ErrorBoundary>
+			<App />
+		</ErrorBoundary>
+	</StrictMode>,
 );

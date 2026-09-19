@@ -1,5 +1,12 @@
 import { Router } from "express";
-import { createEnvironment, deleteEnvironment, getEnvironment, listEnvironments, listSecretAliases, updateEnvironment } from "./environment.controller.js";
+import {
+	createEnvironment,
+	deleteEnvironment,
+	getEnvironment,
+	listEnvironments,
+	listSecretAliases,
+	updateEnvironment,
+} from "./environment.controller.js";
 
 export const environmentRouter = Router();
 environmentRouter.get("/secret-aliases", listSecretAliases);

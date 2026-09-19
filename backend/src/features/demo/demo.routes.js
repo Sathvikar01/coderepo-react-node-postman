@@ -1,5 +1,17 @@
 import { Router } from "express";
-import { createOrder, datasetTokens, deleteOrder, echo, formatSamples, getOrder, gzip, listOrders, slow, statusCode, updateOrder } from "./demo.controller.js";
+import {
+	createOrder,
+	datasetTokens,
+	deleteOrder,
+	echo,
+	formatSamples,
+	getOrder,
+	gzip,
+	listOrders,
+	slow,
+	statusCode,
+	updateOrder,
+} from "./demo.controller.js";
 
 export const demoRouter = Router();
 demoRouter.get("/v1/tokens", datasetTokens);

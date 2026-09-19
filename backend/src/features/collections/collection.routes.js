@@ -1,5 +1,12 @@
 import { Router } from "express";
-import { createCollection, deleteCollection, duplicateCollection, getCollection, listCollections, updateCollection } from "./collection.controller.js";
+import {
+	createCollection,
+	deleteCollection,
+	duplicateCollection,
+	getCollection,
+	listCollections,
+	updateCollection,
+} from "./collection.controller.js";
 
 export const collectionRouter = Router();
 collectionRouter.get("/", listCollections);
