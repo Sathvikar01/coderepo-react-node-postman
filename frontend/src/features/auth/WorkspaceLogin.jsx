@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { TracerSymbol } from "../../shared/components/TracerBrand.jsx";
 
 export function WorkspaceLogin({ error = "", loading = false, onLogin = () => {} }) {
     const [email, setEmail] = useState("");
@@ -10,16 +11,16 @@ export function WorkspaceLogin({ error = "", loading = false, onLogin = () => {}
     return (
         <main className="workspace-login-page">
             <section aria-labelledby="workspace-login-title" className="workspace-login-card">
-                <div className="workspace-login-mark"><span className="brand-mark">RD</span></div>
+                <div className="workspace-login-mark"><span className="brand-mark"><TracerSymbol size={26} /></span></div>
                 <h1 id="workspace-login-title">Sign in</h1>
-                <p className="workspace-login-subtitle">to continue to Request Desk</p>
+                <p className="workspace-login-subtitle">to continue to Tracer</p>
                 <form onSubmit={submit}>
                     <div className="outlined-input">
-                        <input autoComplete="username" data-testid="email-input" disabled={loading} id="workspace-email" inputMode="email" placeholder=" " required type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+                        <input autoComplete="username" disabled={loading} id="workspace-email" inputMode="email" placeholder=" " required type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
                         <label htmlFor="workspace-email">Email</label>
                     </div>
                     <div className="outlined-input">
-                        <input autoComplete="off" data-testid="password-input" disabled={loading} id="workspace-password" name="password" placeholder=" " required type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
+                        <input autoComplete="off" disabled={loading} id="workspace-password" name="password" placeholder=" " required type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
                         <label htmlFor="workspace-password">Password</label>
                     </div>
                     {error && <p className="workspace-login-error" role="alert">{error}</p>}

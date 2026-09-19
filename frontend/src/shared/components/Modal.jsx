@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-export function Modal({ children, className = "", label = "Request Desk dialog", labelledBy, onClose }) {
+export function Modal({ children, className = "", label = "Tracer dialog", labelledBy, onClose }) {
     const reference = useRef(null);
     const closeReference = useRef(onClose);
     useEffect(() => {

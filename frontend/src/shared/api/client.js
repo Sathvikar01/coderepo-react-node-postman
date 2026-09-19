@@ -50,7 +50,7 @@ export async function request(path, options = {}) {
     const payload = contentType.includes("application/json") ? await response.json().catch(() => null) : null;
     if (!response.ok) {
         const code = payload?.error?.code;
-        const message = payload?.error?.message || `Request Desk returned ${response.status}.`;
+        const message = payload?.error?.message || `Tracer returned ${response.status}.`;
         if (response.status === 401 && ["AUTH_REQUIRED", "INVALID_TOKEN", "ACCOUNT_UNAVAILABLE"].includes(code)) {
             clearSession();
             window.dispatchEvent(new CustomEvent("request-desk-session-expired", { detail: message }));
@@ -61,6 +61,6 @@ export async function request(path, options = {}) {
         error.status = response.status;
         throw error;
     }
-    if (!payload || !("data" in payload)) throw new Error("Request Desk returned an invalid response.");
+    if (!payload || !("data" in payload)) throw new Error("Tracer returned an invalid response.");
     return payload.data;
 }

@@ -1,13 +1,14 @@
 import { MaterialIcon } from "../../shared/components/MaterialIcon.jsx";
+import { TracerSymbol } from "../../shared/components/TracerBrand.jsx";
 import { ProfileAvatar } from "./ProfileAvatar.jsx";
 
 export function ProfilePicker({ error = "", loading = false, onLogout, onRetry, onSelect, profiles = [], switchingFrom = null }) {
     return (
         <main className="profile-picker-page">
             <section aria-labelledby="profile-picker-title" className="profile-picker-card">
-                <div className="profile-picker-mark"><span className="brand-mark">RD</span></div>
+                <div className="profile-picker-mark"><span className="brand-mark"><TracerSymbol size={26} /></span></div>
                 <h1 id="profile-picker-title">Choose a profile</h1>
-                <p className="profile-picker-subtitle">to continue to Request Desk</p>
+                <p className="profile-picker-subtitle">to continue to Tracer</p>
                 {switchingFrom && <p className="profile-picker-current">Signed in as {switchingFrom.name}</p>}
                 {loading && (
                     <div className="profile-picker-status" role="status"><span className="profile-loader" />Loading profiles…</div>

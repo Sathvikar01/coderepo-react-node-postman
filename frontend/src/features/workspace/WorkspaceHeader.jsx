@@ -1,5 +1,6 @@
 import { MaterialIcon } from "../../shared/components/MaterialIcon.jsx";
 import { SelectMenu } from "../../shared/components/SelectMenu.jsx";
+import { TracerSymbol } from "../../shared/components/TracerBrand.jsx";
 import { ProfileAvatar } from "../profiles/ProfileAvatar.jsx";
 
 export function WorkspaceHeader({ account, environments, activeEnvironmentId, onEnvironmentChange, onOpenEnvironments, onLogout, onToggleSidebar, onToggleTheme, profile, theme }) {
@@ -13,9 +14,9 @@ export function WorkspaceHeader({ account, environments, activeEnvironmentId, on
                 <MaterialIcon size={22}>tune</MaterialIcon>
             </button>
             <div className="app-brand">
-                <span className="brand-mark">RD</span>
+                <span className="brand-mark"><TracerSymbol size={24} /></span>
                 <div>
-                    <strong>Request Desk</strong>
+                    <strong>Tracer</strong>
                     <br />
                     <small>HTTP workspace</small>
                 </div>

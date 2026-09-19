@@ -187,7 +187,7 @@ export function ResponseViewer({ onCopyUrl, result }) {
                 <div className="response-placeholder">
                     <MaterialIcon size={28}>error_outline</MaterialIcon>
                     <span>{errorMessage ?? "No HTTP response was produced for this send."}</span>
-                    {result.error?.code === "TARGET_BLOCKED" && <span className="field-hint">Request Desk blocks addresses that are not publicly routable. Only the seeded local demo target on 127.0.0.1:8000 is exempt.</span>}
+                    {result.error?.code === "TARGET_BLOCKED" && <span className="field-hint">Tracer blocks addresses that are not publicly routable. Only the seeded local demo target on 127.0.0.1:8000 is exempt.</span>}
                 </div>
             ) : (
                 <>

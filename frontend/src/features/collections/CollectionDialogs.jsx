@@ -40,7 +40,7 @@ export function SaveRequestDialog({ busy = false, collections, error = "", onCan
                             />
                         </div>
                     )}
-                    <p className="field-hint">Saving writes to the current collection revision. If someone else changed the collection, Request Desk keeps your draft and offers to reload or save as a copy.</p>
+                    <p className="field-hint">Saving writes to the current collection revision. If someone else changed the collection, Tracer keeps your draft and offers to reload or save as a copy.</p>
                     {error && <p className="dialog-error" role="alert">{error}</p>}
                 </div>
                 <footer>

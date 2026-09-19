@@ -2,28 +2,33 @@
 <html lang="en">
     <head>
         <script>
-            document.documentElement.dataset.theme = localStorage.getItem("request-desk-theme") === "light" ? "light" : "dark";
+            document.documentElement.dataset.theme = localStorage.getItem("tracer-theme") === "light" || localStorage.getItem("request-desk-theme") === "light" ? "light" : "dark";
         </script>
         <meta charset="UTF-8" />
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <meta name="theme-color" content="#131314" media="(prefers-color-scheme: dark)" />
-        <meta name="theme-color" content="#f8fafd" media="(prefers-color-scheme: light)" />
-        <title>Request Desk</title>
+        <meta name="theme-color" content="#0D1117" media="(prefers-color-scheme: dark)" />
+        <meta name="theme-color" content="#F5F7F4" media="(prefers-color-scheme: light)" />
+        <title>Tracer</title>
         <style>
             html, body, #root { width: 100%; min-width: 320px; min-height: 100%; margin: 0; }
-            body { background: #131314; }
-            html[data-theme="light"] body { background: #f8fafd; }
-            .initial-boot { display: grid; position: fixed; inset: 0; place-content: center; gap: 20px; background: #131314; color: #e3e3e3; font-family: Roboto, Arial, sans-serif; }
-            html[data-theme="light"] .initial-boot { background: #f8fafd; color: #3c4043; }
+            body { background: #0D1117; }
+            html[data-theme="light"] body { background: #F5F7F4; }
+            .initial-boot { display: grid; position: fixed; inset: 0; place-content: center; gap: 20px; background: #0D1117; color: #F5F7F4; font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+            html[data-theme="light"] .initial-boot { background: #F5F7F4; color: #10161D; }
             .initial-boot-brand { display: flex; align-items: center; gap: 12px; font-size: 22px; letter-spacing: 0.2px; }
-            .initial-boot-mark { display: grid; width: 40px; height: 40px; place-items: center; border-radius: 10px; background: #1a73e8; color: #fff; font-weight: 500; }
         </style>
     </head>
     <body>
         <div id="root">
-            <main class="initial-boot" role="status" aria-label="Opening Request Desk">
-                <div class="initial-boot-brand"><span class="initial-boot-mark">RD</span><strong>Request Desk</strong></div>
+            <main class="initial-boot" role="status" aria-label="Opening Tracer">
+                <div class="initial-boot-brand">
+                    <svg aria-hidden="true" width="34" height="34" viewBox="0 0 32 32">
+                        <path d="M3 20h6.5l4-11 6.5 18 4-11H29" fill="none" stroke="#63F5B5" stroke-linecap="round" stroke-linejoin="round" stroke-width="3.2" />
+                        <circle cx="29" cy="16" fill="#63F5B5" r="2.6" />
+                    </svg>
+                    <strong>Tracer</strong>
+                </div>
             </main>
         </div>
         <script type="module" src="/src/main.jsx"></script>

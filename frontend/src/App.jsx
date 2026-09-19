@@ -21,11 +21,12 @@ import { OUTCOME_LABELS } from "./shared/utils/format.js";
 import { applyTheme, readTheme } from "./shared/utils/theme.js";
 import { createDraftTab, createInitialState, findOpenTab, MAX_TABS, workspaceReducer } from "./features/workspace/workspace-reducer.js";
 import { WorkspaceHeader } from "./features/workspace/WorkspaceHeader.jsx";
+import { TracerSymbol } from "./shared/components/TracerBrand.jsx";
 
 function BootScreen() {
     return (
-        <main aria-label="Opening Request Desk" className="app-boot" role="status">
-            <div className="app-boot-brand"><span className="brand-mark">RD</span><strong>Request Desk</strong></div>
+        <main aria-label="Opening Tracer" className="app-boot" role="status">
+            <div className="app-boot-brand"><span className="brand-mark"><TracerSymbol size={26} /></span><strong>Tracer</strong></div>
             <div aria-hidden="true" className="app-boot-progress"><span /></div>
         </main>
     );
