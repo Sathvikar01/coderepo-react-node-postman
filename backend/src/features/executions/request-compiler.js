@@ -54,21 +54,28 @@ function interpolate(template, map, field, trace, missing) {
 function ensureHeaderSafety(name, value) {
 	const trimmed = name.trim();
 	if (!trimmed || !TOKEN.test(trimmed)) throw new AppError(400, "HEADER_INVALID", "Header names must be valid HTTP tokens.");
-	if (/[\r\n]/.test(value)) throw new AppError(400, "HEADER_INVALID", "Header values cannot contain line breaks.");
+	if (/[\r\n]/.test(String(value ?? ""))) throw new AppError(400, "HEADER_INVALID", "Header values cannot contain line breaks.");
+}
+
+function addHeader(headers, seen, name, value, { generated = false } = {}) {
+	ensureHeaderSafety(name, value);
+	const lower = name.toLowerCase();
+	if (MANAGED_TRANSPORT_HEADERS.has(lower))
+		throw new AppError(400, "HEADER_RESERVED", `The header "${name}" is managed by the transport.`);
+	if (seen.has(lower))
+		throw new AppError(400, generated ? "AUTH_CONFLICT" : "HEADER_INVALID", `The header "${name}" is defined more than once.`);
+	seen.add(lower);
+	headers.push({ name, value });
 }
 
 function mergeQuery(url, rows, missing, trace) {
 	const pairs = [];
 	url.searchParams.forEach((value, key) => pairs.push([key, value]));
-	const conflicts = new Set(pairs.map(([key]) => key.toLowerCase()));
 	for (const row of rows) {
 		if (!row.enabled) continue;
-		const name = interpolate(row.key, row._map, "query.key", trace, missing);
+		const name = String(row.key ?? "");
 		const value = interpolate(row.value, row._map, "query.value", trace, missing);
 		if (!name.trim()) continue;
-		if (conflicts.has(name.toLowerCase()))
-			throw new AppError(400, "QUERY_CONFLICT", `The query key "${name}" is defined more than once.`);
-		conflicts.add(name.toLowerCase());
 		pairs.push([name, value]);
 	}
 	return pairs;
@@ -93,7 +100,7 @@ function buildBody(body, map, missing, trace) {
 	const search = new URLSearchParams();
 	for (const row of body.rows) {
 		if (!row.enabled) continue;
-		const name = interpolate(row.key, map, "body.rows.key", trace, missing);
+		const name = String(row.key ?? "");
 		const value = interpolate(row.value, map, "body.rows.value", trace, missing);
 		if (!name.trim()) continue;
 		search.append(name, value);
@@ -141,53 +148,35 @@ export function compileRequest({ request, collection, environment, authOverride,
 	const pairs = mergeQuery(url, rows, missing, trace);
 	const headerRows = forRow(request.headers ?? []);
 	const body = buildBody(request.body, map, missing, trace);
-	const { auth, source } = { ...effectiveAuth(request, collection), ...(authOverride ? { auth: authOverride, source: "override" } : {}) };
+	const { auth, source } = authOverride ? { auth: authOverride, source: "override" } : effectiveAuth(request, collection);
 	const resolvedAuth = auth ?? { mode: "none" };
-	const authValues = authOverride ? { ...resolvedAuth } : resolvedAuth;
 	const headers = [];
-	const explicitHeaders = new Set();
+	const headerNames = new Set();
 	for (const row of headerRows) {
 		if (!row.enabled) continue;
-		const name = interpolate(row.key, map, "headers.key", trace, missing).trim();
+		const name = String(row.key ?? "").trim();
 		const value = interpolate(row.value, map, "headers.value", trace, missing);
-		ensureHeaderSafety(name, value);
-		if (MANAGED_TRANSPORT_HEADERS.has(name.toLowerCase()))
-			throw new AppError(400, "HEADER_RESERVED", `The header "${name}" is managed by the transport.`);
-		if (explicitHeaders.has(name.toLowerCase()))
-			throw new AppError(400, "HEADER_INVALID", `The header "${name}" is defined more than once.`);
-		explicitHeaders.add(name.toLowerCase());
-		headers.push({ name, value });
+		addHeader(headers, headerNames, name, value);
 	}
-	if (body.contentType && !explicitHeaders.has("content-type") && body.bytes)
-		headers.push({ name: "Content-Type", value: body.contentType });
-
-	const authHeaderNames = [];
+	if (body.contentType && !headerNames.has("content-type") && body.bytes)
+		addHeader(headers, headerNames, "Content-Type", body.contentType, { generated: true });
 	if (resolvedAuth.mode === "bearer") {
 		const token = interpolate(resolvedAuth.tokenTemplate, map, "auth.tokenTemplate", trace, missing);
-		authHeaderNames.push("Authorization");
-		headers.push({ name: "Authorization", value: `Bearer ${token}` });
+		addHeader(headers, headerNames, "Authorization", `Bearer ${token}`, { generated: true });
 		redaction.headerNames.add("authorization");
 		redaction.values.push(token);
 	} else if (resolvedAuth.mode === "basic") {
 		const username = interpolate(resolvedAuth.usernameTemplate, map, "auth.usernameTemplate", trace, missing);
 		const password = interpolate(resolvedAuth.passwordTemplate, map, "auth.passwordTemplate", trace, missing);
 		const encoded = Buffer.from(`${username}:${password}`, "utf8").toString("base64");
-		authHeaderNames.push("Authorization");
-		headers.push({ name: "Authorization", value: `Basic ${encoded}` });
+		addHeader(headers, headerNames, "Authorization", `Basic ${encoded}`, { generated: true });
 		redaction.headerNames.add("authorization");
 		redaction.values.push(encoded, `${username}:${password}`, encodeURIComponent(`${username}:${password}`), password);
 	} else if (resolvedAuth.mode === "apiKey") {
 		const key = resolvedAuth.key.trim();
 		const value = interpolate(resolvedAuth.valueTemplate, map, "auth.valueTemplate", trace, missing);
 		if (resolvedAuth.in === "header") {
-			ensureHeaderSafety(key, value);
-			if (explicitHeaders.has(key.toLowerCase()))
-				throw new AppError(
-					400,
-					"AUTH_CONFLICT",
-					`The generated API key header "${key}" conflicts with an explicit request header.`,
-				);
-			headers.push({ name: key, value });
+			addHeader(headers, headerNames, key, value, { generated: true });
 			redaction.headerNames.add(key.toLowerCase());
 		} else {
 			if (pairs.some(([name]) => name.toLowerCase() === key.toLowerCase()))
@@ -255,6 +244,7 @@ export function compileRequest({ request, collection, environment, authOverride,
 
 	return {
 		method: request.method,
+		authoredUrl: urlTemplate,
 		url: finalUrl,
 		headers,
 		body: body.bytes,
@@ -281,7 +271,14 @@ export function redactUrl(url, redaction) {
 				if (name.toLowerCase() === key) parsed.searchParams.set(name, "[REDACTED]");
 			}
 		}
-		return parsed.toString();
+		let output = parsed.toString();
+		for (const secret of redaction.values ?? []) {
+			if (!secret || secret.length < 3) continue;
+			for (const candidate of [secret, encodeURIComponent(secret)]) {
+				if (candidate) output = output.split(candidate).join("[REDACTED]");
+			}
+		}
+		return output;
 	} catch {
 		return url;
 	}

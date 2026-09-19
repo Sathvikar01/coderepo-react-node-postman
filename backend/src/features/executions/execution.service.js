@@ -29,6 +29,34 @@ function findRequest(collection, requestId) {
 	return collection?.requests?.find((request) => request.id === requestId) ?? null;
 }
 
+const REQUIRED_INPUT = "[REQUIRED_INPUT]";
+const VARIABLE_REFERENCE = /\{\{\s*[A-Za-z_][A-Za-z0-9_]*\s*\}\}/;
+
+function sanitizeAuthForHistory(auth) {
+	if (!auth || auth.mode === "none" || auth.mode === "inherit") return auth ?? { mode: "none" };
+	if (auth.mode === "bearer")
+		return { mode: "bearer", tokenTemplate: VARIABLE_REFERENCE.test(auth.tokenTemplate ?? "") ? auth.tokenTemplate : REQUIRED_INPUT };
+	if (auth.mode === "basic")
+		return {
+			mode: "basic",
+			usernameTemplate: VARIABLE_REFERENCE.test(auth.usernameTemplate ?? "") ? auth.usernameTemplate : REQUIRED_INPUT,
+			passwordTemplate: VARIABLE_REFERENCE.test(auth.passwordTemplate ?? "") ? auth.passwordTemplate : REQUIRED_INPUT,
+		};
+	if (auth.mode === "apiKey")
+		return {
+			mode: "apiKey",
+			key: auth.key,
+			valueTemplate: VARIABLE_REFERENCE.test(auth.valueTemplate ?? "") ? auth.valueTemplate : REQUIRED_INPUT,
+			in: auth.in,
+		};
+	return { mode: "none" };
+}
+
+function sanitizeRequestForHistory(request) {
+	if (!request) return request;
+	return { ...request, auth: sanitizeAuthForHistory(request.auth) };
+}
+
 export function terminalResult(record) {
 	return {
 		executionId: record.executionId,
@@ -68,7 +96,13 @@ export function createExecutionService({ registry = operationRegistry, transport
 				throw new AppError(404, "HISTORY_NOT_FOUND", "The requested history entry does not exist or has expired.");
 			return {
 				request: draftRequest ?? record.request,
-				collection: null,
+				collection: record.snapshot?.collectionDefaults
+					? {
+							name: record.snapshot.collectionDefaults.name,
+							variables: structuredClone(record.snapshot.collectionDefaults.variables ?? []),
+							auth: structuredClone(record.snapshot.collectionDefaults.auth ?? { mode: "none" }),
+						}
+					: null,
 				replay: record,
 				source: { type: "history", historyId: context.replayHistoryId },
 			};
@@ -159,8 +193,14 @@ export function createExecutionService({ registry = operationRegistry, transport
 			collectionDefaults: resolved.collection
 				? {
 						name: resolved.collection.name,
-						variables: (resolved.collection.variables ?? []).map((variable) => ({ key: variable.key, kind: variable.kind })),
-						auth: resolved.collection.auth,
+						variables: (resolved.collection.variables ?? []).map((variable) => ({
+							id: variable.id,
+							key: variable.key,
+							kind: variable.kind,
+							enabled: variable.enabled !== false,
+							...(variable.kind === "plain" ? { value: variable.value ?? "" } : { alias: variable.alias }),
+						})),
+						auth: sanitizeAuthForHistory(resolved.collection.auth),
 					}
 				: null,
 		};
@@ -175,7 +215,7 @@ export function createExecutionService({ registry = operationRegistry, transport
 				status: "running",
 				effectCertainty: "not_dispatched",
 				persistence: { state: "saved" },
-				request: effectiveRequest,
+				request: sanitizeRequestForHistory(effectiveRequest),
 				context: { tabId, draftVersion, source: resolved.source, environment: environment.source },
 				snapshot,
 				startedAt,
@@ -212,7 +252,6 @@ export function createExecutionService({ registry = operationRegistry, transport
 		};
 
 		const semanticFailure = async (code, message, details) => {
-			registry.release(executionId);
 			const persistence = await persist({
 				outcome: "validation_error",
 				effectCertainty: "not_dispatched",
@@ -221,6 +260,7 @@ export function createExecutionService({ registry = operationRegistry, transport
 				compileTrace: [],
 				warnings: [],
 			});
+			registry.release(executionId);
 			if (persistence.record) return { ...terminalResult(persistence.record), tabId, draftVersion };
 			return {
 				executionId,
@@ -241,7 +281,7 @@ export function createExecutionService({ registry = operationRegistry, transport
 
 		const secretValues = [];
 		const secrets = new Map();
-		for (const variable of environment.environment?.variables ?? []) {
+		for (const variable of resolved.collection?.variables ?? []) {
 			if (variable.enabled !== false && variable.kind === "secretRef" && variable.alias) {
 				const secret = environmentService.resolveSecretAlias(profileId, variable.alias);
 				if (secret) {
@@ -250,7 +290,7 @@ export function createExecutionService({ registry = operationRegistry, transport
 				}
 			}
 		}
-		for (const variable of resolved.collection?.variables ?? []) {
+		for (const variable of environment.environment?.variables ?? []) {
 			if (variable.enabled !== false && variable.kind === "secretRef" && variable.alias) {
 				const secret = environmentService.resolveSecretAlias(profileId, variable.alias);
 				if (secret) {
@@ -278,9 +318,39 @@ export function createExecutionService({ registry = operationRegistry, transport
 
 		let target;
 		try {
-			target = await targetPolicy.validate(compiled.url, { allowLocalDemo: true });
+			target = await targetPolicy.validate(compiled.url, { allowLocalDemo: true, authoredUrl: compiled.authoredUrl });
 		} catch (error) {
 			return semanticFailure(error.code ?? "TARGET_INVALID", error.message, error.details);
+		}
+
+		const remainingBeforeDispatch = deadlineAt - Date.now();
+		if (remainingBeforeDispatch <= 0) {
+			const persistence = await persist({
+				outcome: "timeout",
+				effectCertainty: "not_dispatched",
+				response: null,
+				error: { code: "TIMEOUT", message: "This execution exceeded its time budget before dispatch.", details: null },
+				persistence: { state: "saved" },
+				compileTrace: compiled.trace,
+				warnings: compiled.warnings ?? [],
+			});
+			registry.release(executionId);
+			if (persistence.record) return { ...terminalResult(persistence.record), tabId, draftVersion };
+			return {
+				executionId,
+				tabId,
+				draftVersion,
+				outcome: "timeout",
+				response: null,
+				error: { code: "TIMEOUT", message: "This execution exceeded its time budget before dispatch.", details: null },
+				effectCertainty: "not_dispatched",
+				persistence: persistence.persistence,
+				historyId: executionId,
+				startedAt,
+				finishedAt: new Date(),
+				compileTrace: compiled.trace,
+				warnings: compiled.warnings ?? [],
+			};
 		}
 
 		let dispatchStarted = false;
@@ -289,7 +359,7 @@ export function createExecutionService({ registry = operationRegistry, transport
 			method: compiled.method,
 			headers: compiled.headers,
 			body: compiled.body,
-			timeoutMs: Math.max(1, deadlineAt - Date.now()),
+			timeoutMs: remainingBeforeDispatch,
 			signal: controller.signal,
 			limits: {
 				captureBytes: LIMITS.captureBytes,
@@ -320,12 +390,15 @@ export function createExecutionService({ registry = operationRegistry, transport
 				});
 				response = buildResponseResult({ transport: result, capture, redaction: compiled.redaction, executedUrl, timeoutMs });
 			} catch (error) {
-				outcome = "decode_error";
-				errorPayload = { code: "DECODE_ERROR", message: error.message, details: null };
+				outcome = OUTCOME_BY_KIND[error?.kind] ?? "decode_error";
+				errorPayload = {
+					code: error?.kind ? error.kind.toUpperCase() : "DECODE_ERROR",
+					message: error.message,
+					details: error.details ?? null,
+				};
 			}
 		}
 
-		registry.release(executionId);
 		const finishedAt = new Date();
 		const warnings = [...(compiled.warnings ?? []), ...(response?.warnings ?? [])];
 		const persistence = await persist({
@@ -336,11 +409,12 @@ export function createExecutionService({ registry = operationRegistry, transport
 			persistence: { state: "saved" },
 			"snapshot.bytesSent": result.bytesSent ?? 0,
 			"snapshot.executedUrl": executedUrl,
-			"snapshot.effectiveAuth": compiled.authSource === "override" ? null : compiled.authTemplate,
+			"snapshot.effectiveAuth": compiled.authSource === "override" ? null : sanitizeAuthForHistory(compiled.authTemplate),
 			"snapshot.requestHeaders": compiled.headers.map((header) => header.name),
 			compileTrace: compiled.trace,
 			warnings,
 		});
+		registry.release(executionId);
 		if (persistence.record) return { ...terminalResult(persistence.record), tabId, draftVersion };
 		return {
 			executionId,
@@ -363,23 +437,26 @@ export function createExecutionService({ registry = operationRegistry, transport
 		send,
 		async status(profileId, executionId) {
 			registry.rateLimit(profileId, "status");
-			if (registry.isActive(executionId)) return { executionId, status: "running", effectCertainty: "may_have_reached_target" };
+			if (registry.isActive(profileId, executionId)) return { executionId, status: "running", effectCertainty: "may_have_reached_target" };
 			let record = await historyService.get(profileId, executionId);
 			if (record?.status === "running") {
 				await historyService.reconcileStale();
 				record = await historyService.get(profileId, executionId);
 			}
 			if (!record) throw new AppError(404, "EXECUTION_NOT_FOUND", "The requested execution does not exist.");
-			if (record.expired) throw new AppError(410, "RESULT_REMOVED", "The stored result for this execution has expired.");
+			if (record.expired || record.visible === false)
+				throw new AppError(410, "RESULT_REMOVED", "The stored result for this execution is no longer available.");
 			return { ...terminalResult(record), status: "terminal" };
 		},
 		async cancel(profileId, executionId) {
-			if (registry.isActive(executionId)) {
-				registry.requestCancel(executionId);
+			if (registry.isActive(profileId, executionId)) {
+				registry.requestCancel(profileId, executionId);
 				return { executionId, status: "cancelling" };
 			}
 			const record = await historyService.get(profileId, executionId);
 			if (!record) throw new AppError(404, "EXECUTION_NOT_FOUND", "The requested execution does not exist.");
+			if (record.expired || record.visible === false)
+				throw new AppError(410, "RESULT_REMOVED", "The stored result for this execution is no longer available.");
 			if (record.status === "running") {
 				await historyService.finalize(profileId, executionId, {
 					status: "terminal",

@@ -9,7 +9,9 @@ import {
 	deleteFolder,
 	duplicateFolder,
 	duplicateRequest,
+	moveFolder,
 	moveRequest,
+	moveRequestToFolder,
 	removeRequest,
 	renameFolder,
 	updateRequest,
@@ -26,6 +28,7 @@ import { profileApi } from "./features/profiles/profile.api.js";
 import { RequestBuilder } from "./features/requests/RequestBuilder.jsx";
 import { MaterialIcon } from "./shared/components/MaterialIcon.jsx";
 import {
+	clearProfileSession,
 	clearSession,
 	hasProfileToken,
 	hasSessionToken,
@@ -156,6 +159,7 @@ export default function App() {
 			const aggregates = await Promise.all(summaries.map((summary) => collectionApi.get(summary._id)));
 			setCollections(aggregates);
 			setEnvironments(environmentSummaries);
+			if (preferences.preferences?.theme) setTheme(preferences.preferences.theme);
 			dispatch({ type: "preferences/set", preferences: preferences.preferences });
 			setExecutionPolicy(preferences.executionPolicy ?? null);
 		} catch (error) {
@@ -275,7 +279,7 @@ export default function App() {
 			toast(error.message, "error");
 			return;
 		}
-		clearSession();
+		clearProfileSession();
 		resetWorkspaceState();
 	};
 
@@ -351,11 +355,14 @@ export default function App() {
 	const { reconcile: startReconciliation, cancel: cancelExecution } = useExecutionReconciliation({
 		dispatch,
 		onTerminal: useCallback(() => setHistoryRefresh((current) => current + 1), []),
-		onStatus: useCallback((tabId, status) => dispatch({ type: "draft/status", tabId, status, error: null }), [dispatch]),
+		onStatus: useCallback(
+			(tabId, status, executionId) => dispatch({ type: "draft/status", tabId, executionId, status, error: null }),
+			[dispatch],
+		),
 	});
 
 	const send = async () => {
-		if (!activeTab || activeTab.status === "running") return;
+		if (!activeTab || ["running", "reconciling"].includes(activeTab.status)) return;
 		const executionId = crypto.randomUUID();
 		dispatch({ type: "draft/dispatched", tabId: activeTab.id, executionId });
 		setAuthOverrides((current) => {
@@ -390,7 +397,18 @@ export default function App() {
 			setHistoryRefresh((current) => current + 1);
 			if (result.outcome === "validation_error") toast(result.error?.message ?? "The request could not be sent.", "error");
 		} catch (error) {
-			dispatch({ type: "draft/status", tabId: activeTab.id, status: "reconciling", error: error.message });
+			if (error.status && error.status < 500) {
+				dispatch({ type: "draft/status", tabId: activeTab.id, executionId, status: "error", error: error.message });
+				toast(error.message, "error");
+				return;
+			}
+			dispatch({
+				type: "draft/status",
+				tabId: activeTab.id,
+				executionId,
+				status: "reconciling",
+				error: error.message,
+			});
 			startReconciliation(activeTab.id, executionId);
 		}
 	};
@@ -447,6 +465,9 @@ export default function App() {
 			openDialog({ kind: "save-request", tabId: activeTab.id });
 			return;
 		}
+		const saveTabId = activeTab.id;
+		const saveDraftVersion = activeTab.draftVersion;
+		const saveRequest = structuredClone(activeTab.request);
 		setBusy(true);
 		try {
 			const result = await collectionApi.update(collection._id, collection.revision, {
@@ -455,13 +476,14 @@ export default function App() {
 				variables: collection.variables ?? [],
 				auth: collection.auth ?? { mode: "none" },
 				folders: collection.folders ?? [],
-				requests: updateRequest(collection, activeTab.request).requests,
+				requests: updateRequest(collection, saveRequest).requests,
 			});
 			setCollections((current) => current.map((item) => (item._id === result._id ? result : item)));
 			dispatch({
 				type: "draft/saved",
-				tabId: activeTab.id,
-				request: activeTab.request,
+				tabId: saveTabId,
+				request: saveRequest,
+				savedDraftVersion: saveDraftVersion,
 				collectionId: result._id,
 				collectionName: result.name,
 				collectionRevision: result.revision,
@@ -578,7 +600,6 @@ export default function App() {
 				context: replayContext(record, {
 					environmentId: state.activeEnvironmentId,
 					environmentRevision: activeEnvironmentRevision,
-					collectionExists: (id) => collections.some((item) => item._id === id),
 				}),
 			});
 			if (activeTab) dispatch({ type: "draft/inspect", tabId: activeTab.id, result });
@@ -685,6 +706,17 @@ export default function App() {
 				setBusy(false);
 			}
 		},
+		async saveCollectionDefaults(collection, payload) {
+			const ok = await runAggregateEdit(collection, (current) => ({
+				...current,
+				variables: payload.variables,
+				auth: payload.auth,
+			}));
+			if (ok) {
+				setDialog(null);
+				toast("Collection defaults saved.");
+			}
+		},
 		renameCollection(collection, name) {
 			return runAggregateEdit(collection, (current) => ({ ...current, name })).then((ok) => {
 				if (ok) toast("Collection renamed.");
@@ -718,6 +750,13 @@ export default function App() {
 				setBusy(false);
 			}
 		},
+		async deleteFolder(collection, folderId) {
+			const ok = await runAggregateEdit(collection, (item) => deleteFolder(item, folderId));
+			if (ok) {
+				setDialog(null);
+				toast("Folder deleted.");
+			}
+		},
 		reloadCollection,
 		saveAsNewRequest,
 	};
@@ -749,7 +788,13 @@ export default function App() {
 				onLogout={switchProfile}
 				onOpenEnvironments={() => openDialog({ kind: "environments" })}
 				onToggleSidebar={() => setSidebarOpen((current) => !current)}
-				onToggleTheme={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
+				onToggleTheme={() =>
+					setTheme((current) => {
+						const next = current === "dark" ? "light" : "dark";
+						savePreferences({ theme: next });
+						return next;
+					})
+				}
 			/>
 			<div className="app-body">
 				{sidebarOpen && <div aria-hidden="true" className="sidebar-scrim" onClick={() => setSidebarOpen(false)} />}
@@ -796,11 +841,19 @@ export default function App() {
 							collectionOrder={state.collectionOrder}
 							loading={loadingCollections}
 							onDeleteCollection={(collection) => openDialog({ kind: "delete-collection", collection })}
-							onDeleteFolder={(collection, folder) => runAggregateEdit(collection, (item) => deleteFolder(item, folder.id))}
+							onDeleteFolder={(collection, folder) =>
+								openDialog({
+									kind: "delete-folder",
+									collection,
+									folder,
+									message: `Delete "${folder.name}"? Requests inside it will move to the collection root.`,
+								})
+							}
 							onDeleteRequest={(collection, requestId) =>
 								runAggregateEdit(collection, (item) => removeRequest(item, requestId))
 							}
 							onDuplicateCollection={(collection) => openDialog({ kind: "duplicate-collection", collection })}
+							onEditCollection={(collection) => openDialog({ kind: "collection-settings", collection })}
 							onDuplicateFolder={(collection, folder) =>
 								runAggregateEdit(collection, (item) => duplicateFolder(item, folder.id)).then((ok) => {
 									if (ok) toast("Folder duplicated.");
@@ -811,8 +864,14 @@ export default function App() {
 									if (ok) toast("Request duplicated.");
 								})
 							}
+							onMoveFolder={(collection, folderId, delta) =>
+								runAggregateEdit(collection, (item) => moveFolder(item, folderId, delta))
+							}
 							onMoveRequest={(collection, requestId, delta) =>
 								runAggregateEdit(collection, (item) => moveRequest(item, requestId, delta))
+							}
+							onMoveRequestToFolder={(collection, requestId, folderId) =>
+								runAggregateEdit(collection, (item) => moveRequestToFolder(item, requestId, folderId))
 							}
 							onNewCollection={() => openDialog({ kind: "new-collection" })}
 							onNewFolder={(collection) => openDialog({ kind: "new-folder", collection })}
@@ -952,11 +1011,19 @@ export default function App() {
 								{activeTab.result ? (
 									<ResponseViewer
 										result={activeTab.result}
-										onCopyUrl={async (headers) => {
-											const location = headers.find((header) => header.name.toLowerCase() === "location")?.value;
-											if (location) {
-												await navigator.clipboard?.writeText(location);
+										onCopyUrl={async (response) => {
+											const location = response.headers.find((header) => header.name.toLowerCase() === "location")?.value;
+											if (!location) return;
+											try {
+												const resolved = new URL(location, response.executedUrl);
+												if (!["http:", "https:"].includes(resolved.protocol)) {
+													toast("This redirect is not an HTTP(S) URL.", "warning");
+													return;
+												}
+												await navigator.clipboard?.writeText(resolved.toString());
 												toast("Resolved URL copied.");
+											} catch {
+												toast("This redirect URL is invalid.", "warning");
 											}
 										}}
 									/>
@@ -1003,11 +1070,12 @@ export default function App() {
 						if (state.activeEnvironmentId === environmentId) savePreferences({ activeEnvironmentId: null });
 					}}
 					onSaved={(environment) => {
-						setEnvironments((current) =>
-							current.map((item) =>
-								item._id === environment._id ? { ...item, name: environment.name, revision: environment.revision } : item,
-							),
-						);
+						setEnvironments((current) => {
+							const summary = { _id: environment._id, name: environment.name, revision: environment.revision };
+							return current.some((item) => item._id === environment._id)
+								? current.map((item) => (item._id === environment._id ? { ...item, ...summary } : item))
+								: [...current, summary];
+						});
 						toast("Environment saved.");
 					}}
 					onSelect={(environmentId) => savePreferences({ activeEnvironmentId: environmentId })}

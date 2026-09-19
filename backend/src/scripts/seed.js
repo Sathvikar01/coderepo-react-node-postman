@@ -9,7 +9,7 @@ import { Collection } from "../features/collections/collection.model.js";
 import { Environment } from "../features/environments/environment.model.js";
 import { ExecutionHistory } from "../features/history/history.model.js";
 import { DemoOrder } from "../features/demo/demo-order.model.js";
-import { randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 
 dotenv.config({ quiet: true });
 const config = initConfig();
@@ -28,7 +28,12 @@ const ALEX_STAGING_ENV = id("e002");
 const JORDAN_LOCAL_ENV = id("e003");
 const JORDAN_STAGING_ENV = id("e004");
 
-const uuid = () => randomUUID();
+let uuidCounter = 0;
+const uuid = () => {
+	uuidCounter += 1;
+	const hash = createHash("sha256").update(`tracer-seed-${uuidCounter}`).digest("hex");
+	return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-8${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
+};
 const row = (key, value, enabled = true) => ({ id: uuid(), key, value, enabled });
 const variable = (key, value, enabled = true) => ({ id: uuid(), key, kind: "plain", value, enabled });
 const secretRef = (key, alias) => ({ id: uuid(), key, kind: "secretRef", alias, enabled: true });
@@ -115,52 +120,59 @@ function ordersRequests(baseUrl) {
 }
 
 function exampleRequests(examplesUrl) {
+	const request = (name, method, path, auth = { mode: "none" }, extras = {}) => ({
+		schemaVersion: 1,
+		id: uuid(),
+		folderId: null,
+		name,
+		method,
+		urlTemplate: `${examplesUrl}${path}`,
+		query: extras.query ?? [],
+		headers: extras.headers ?? [],
+		body: extras.body ?? { mode: "none" },
+		auth,
+		settings: { timeoutMs: extras.timeoutMs ?? 15000 },
+	});
 	return {
 		folders: [],
 		requests: [
-			{
-				schemaVersion: 1,
-				id: uuid(),
-				folderId: null,
-				name: "Echo request",
-				method: "POST",
-				urlTemplate: `${examplesUrl}/echo`,
-				query: [row("source", "request-desk")],
+			request("Bearer auth", "GET", "/auth/bearer", { mode: "bearer", tokenTemplate: "{{orders_token}}" }),
+			request("Basic auth", "GET", "/auth/basic", {
+				mode: "basic",
+				usernameTemplate: "{{demo_username}}",
+				passwordTemplate: "{{orders_token}}",
+			}),
+			request("API key header", "GET", "/auth/api-key-header", {
+				mode: "apiKey",
+				key: "X-API-Key",
+				valueTemplate: "{{orders_token}}",
+				in: "header",
+			}),
+			request("API key query", "GET", "/auth/api-key-query", {
+				mode: "apiKey",
+				key: "api_key",
+				valueTemplate: "{{orders_token}}",
+				in: "query",
+			}),
+			request("Echo request", "POST", "/examples/echo", { mode: "none" }, {
+				query: [row("source", "tracer")],
 				headers: [row("Content-Type", "application/json"), row("X-Demo", "echo")],
 				body: { mode: "json", text: '{\n  "hello": "{{customer_name}}"\n}' },
-				auth: { mode: "inherit" },
-				settings: { timeoutMs: 15000 },
-			},
-			{
-				schemaVersion: 1,
-				id: uuid(),
-				folderId: null,
-				name: "XML sample",
-				method: "GET",
-				urlTemplate: `${examplesUrl}/samples/xml`,
-				query: [],
-				headers: [],
-				body: { mode: "none" },
-				auth: { mode: "none" },
-				settings: { timeoutMs: 15000 },
-			},
-			{
-				schemaVersion: 1,
-				id: uuid(),
-				folderId: null,
-				name: "Slow response",
-				method: "GET",
-				urlTemplate: `${examplesUrl}/slow`,
-				query: [row("ms", "2500")],
-				headers: [],
-				body: { mode: "none" },
-				auth: { mode: "none" },
-				settings: { timeoutMs: 5000 },
-			},
+			}),
+			request("HEAD echo", "HEAD", "/examples/echo"),
+			request("404 status", "GET", "/examples/status/404"),
+			request("Delay 1000 ms", "GET", "/examples/delay/1000", { mode: "none" }, { timeoutMs: 5000 }),
+			request("Text response", "GET", "/examples/text"),
+			request("HTML response", "GET", "/examples/html"),
+			request("XML response", "GET", "/examples/xml"),
+			request("Invalid JSON", "GET", "/examples/invalid-json"),
+			request("Empty response", "GET", "/examples/empty"),
+			request("Gzip response", "GET", "/examples/compressed/gzip"),
+			request("Deflate response", "GET", "/examples/compressed/deflate"),
+			request("Brotli response", "GET", "/examples/compressed/br"),
 		],
 	};
 }
-
 function collectionDocument(ownerProfileId, collectionId, name, description, variables, auth, structure) {
 	return {
 		_id: collectionId,
@@ -188,6 +200,7 @@ function environmentDocument(ownerProfileId, environmentId, name, dataset) {
 			secretRef("orders_token", dataset === "local" ? "local_token" : "staging_token"),
 			variable("order_id", dataset === "local" ? "ord_0002" : "ord_0004"),
 			variable("customer_name", dataset === "local" ? "Ada Lovelace" : "Grace Hopper"),
+			variable("demo_username", "tracer"),
 		],
 		revision: 1,
 	};

@@ -186,3 +186,136 @@ export function RenameDialog({ busy = false, error = "", initialValue = "", labe
 		</Modal>
 	);
 }
+
+
+const blankCollectionVariable = () => ({ id: crypto.randomUUID(), key: "", kind: "plain", value: "", enabled: true });
+
+function CollectionVariablesEditor({ rows, onChange }) {
+	const update = (id, patch) => onChange(rows.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+	return (
+		<div className="kv-editor">
+			{rows.map((row) => (
+				<div className="variable-row" key={row.id}>
+					<input aria-label="Variable enabled" checked={row.enabled} type="checkbox" onChange={(event) => update(row.id, { enabled: event.target.checked })} />
+					<input aria-label="Variable name" placeholder="name" value={row.key} onChange={(event) => update(row.id, { key: event.target.value })} />
+					<SelectMenu
+						ariaLabel="Variable kind"
+						options={[{ value: "plain", label: "Value" }, { value: "secretRef", label: "Secret reference" }]}
+						value={row.kind}
+						onChange={(kind) =>
+							update(row.id, kind === "plain" ? { kind, value: row.value ?? "", alias: undefined } : { kind, value: undefined, alias: row.alias ?? "" })
+						}
+					/>
+					<input
+						aria-label={row.kind === "plain" ? "Variable value" : "Secret alias"}
+						placeholder={row.kind === "plain" ? "value" : "alias"}
+						value={row.kind === "plain" ? (row.value ?? "") : (row.alias ?? "")}
+						onChange={(event) =>
+							update(row.id, row.kind === "plain" ? { value: event.target.value } : { alias: event.target.value })
+						}
+					/>
+					<button className="icon-button small" aria-label="Remove variable" type="button" onClick={() => onChange(rows.filter((item) => item.id !== row.id))}>
+						×
+					</button>
+				</div>
+			))}
+			<button className="text-button" type="button" onClick={() => onChange([...rows, blankCollectionVariable()])}>
+				Add variable
+			</button>
+		</div>
+	);
+}
+
+function CollectionAuthEditor({ auth, onChange }) {
+	const setMode = (mode) =>
+		onChange(
+			mode === "bearer"
+				? { mode, tokenTemplate: "" }
+				: mode === "basic"
+					? { mode, usernameTemplate: "", passwordTemplate: "" }
+					: mode === "apiKey"
+						? { mode, key: "", valueTemplate: "", in: "header" }
+						: { mode: "none" },
+		);
+	return (
+		<div className="settings-grid">
+			<div className="field-row">
+				<label>Collection authentication</label>
+				<SelectMenu
+					ariaLabel="Collection authentication"
+					options={[
+						{ value: "none", label: "No auth" },
+						{ value: "bearer", label: "Bearer token" },
+						{ value: "basic", label: "Basic auth" },
+						{ value: "apiKey", label: "API key" },
+					]}
+					value={auth.mode}
+					onChange={setMode}
+				/>
+			</div>
+			{auth.mode === "bearer" && (
+				<input placeholder="{{token}}" value={auth.tokenTemplate ?? ""} onChange={(event) => onChange({ ...auth, tokenTemplate: event.target.value })} />
+			)}
+			{auth.mode === "basic" && (
+				<>
+					<input placeholder="{{username}}" value={auth.usernameTemplate ?? ""} onChange={(event) => onChange({ ...auth, usernameTemplate: event.target.value })} />
+					<input placeholder="{{password}}" value={auth.passwordTemplate ?? ""} onChange={(event) => onChange({ ...auth, passwordTemplate: event.target.value })} />
+				</>
+			)}
+			{auth.mode === "apiKey" && (
+				<>
+					<input placeholder="X-API-Key" value={auth.key ?? ""} onChange={(event) => onChange({ ...auth, key: event.target.value })} />
+					<input placeholder="{{api_key}}" value={auth.valueTemplate ?? ""} onChange={(event) => onChange({ ...auth, valueTemplate: event.target.value })} />
+					<SelectMenu
+						ariaLabel="API key placement"
+						options={[{ value: "header", label: "Header" }, { value: "query", label: "Query" }]}
+						value={auth.in ?? "header"}
+						onChange={(value) => onChange({ ...auth, in: value })}
+					/>
+				</>
+			)}
+			<p className="field-hint">Credential values must use variable references. Collection auth cannot inherit.</p>
+		</div>
+	);
+}
+
+export function CollectionSettingsDialog({ busy = false, collection, error = "", onCancel, onSave }) {
+	const [variables, setVariables] = useState(() => structuredClone(collection.variables ?? []));
+	const [auth, setAuth] = useState(() => structuredClone(collection.auth ?? { mode: "none" }));
+	return (
+		<Modal className="form-dialog-modal" label="Collection defaults" onClose={() => !busy && onCancel()}>
+			<section className="form-dialog">
+				<h2>{collection.name} defaults</h2>
+				<div className="form-dialog-body">
+					<h3>Variables</h3>
+					<CollectionVariablesEditor rows={variables} onChange={setVariables} />
+					<h3>Authentication</h3>
+					<CollectionAuthEditor auth={auth} onChange={setAuth} />
+					{error && <p className="dialog-error" role="alert">{error}</p>}
+				</div>
+				<footer>
+					<button className="text-button" disabled={busy} type="button" onClick={onCancel}>Cancel</button>
+					<button
+						className="primary-button"
+						disabled={busy}
+						type="button"
+						onClick={() =>
+							onSave({
+								variables: variables.map((row) => ({
+									id: row.id,
+									key: row.key.trim(),
+									kind: row.kind,
+									enabled: row.enabled,
+									...(row.kind === "plain" ? { value: row.value ?? "" } : { alias: row.alias?.trim() ?? "" }),
+								})),
+								auth,
+							})
+						}
+					>
+						{busy ? "Saving…" : "Save defaults"}
+					</button>
+				</footer>
+			</section>
+		</Modal>
+	);
+}

@@ -56,9 +56,9 @@ export function createOperationRegistry() {
 			active.set(executionId, { profileId, controller, startedAt: Date.now(), cancelRequested: false });
 			return controller;
 		},
-		requestCancel(executionId) {
+		requestCancel(profileId, executionId) {
 			const entry = active.get(executionId);
-			if (!entry) return false;
+			if (!entry || entry.profileId !== profileId) return false;
 			entry.cancelRequested = true;
 			entry.controller.abort();
 			return true;
@@ -66,8 +66,13 @@ export function createOperationRegistry() {
 		release(executionId) {
 			active.delete(executionId);
 		},
-		isActive: (executionId) => active.has(executionId),
-		isCancelRequested: (executionId) => active.get(executionId)?.cancelRequested === true,
+		isActive(profileId, executionId) {
+			return active.get(executionId)?.profileId === profileId;
+		},
+		isCancelRequested(profileId, executionId) {
+			const entry = active.get(executionId);
+			return entry?.profileId === profileId && entry.cancelRequested === true;
+		},
 	};
 }
 

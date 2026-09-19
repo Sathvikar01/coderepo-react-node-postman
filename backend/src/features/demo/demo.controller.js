@@ -1,7 +1,7 @@
-import { gzipSync } from "node:zlib";
+import { brotliCompressSync, deflateSync, gzipSync } from "node:zlib";
 import { z } from "zod";
 import { AppError } from "../../shared/errors/app-error.js";
-import { datasetToken, demoService, requireTargetAuth } from "./demo.service.js";
+import { datasetToken, demoService, matchesAnyDemoToken, requireTargetAuth } from "./demo.service.js";
 
 const statusSchema = z.enum(["pending", "paid", "shipped", "cancelled"]);
 const itemSchema = z
@@ -176,4 +176,99 @@ export function datasetTokens(request, response) {
 			hint: "Demo target tokens are generated locally by setup.sh and shown to the signed-in profile as secret references.",
 		},
 	});
+}
+
+
+export function authExample(request, response, next) {
+	try {
+		const kind = request.params.kind;
+		let candidate = "";
+		if (kind === "bearer") {
+			const authorization = request.get("authorization") || "";
+			if (!authorization.startsWith("Bearer ")) throw new AppError(401, "TARGET_AUTH_REQUIRED", "Bearer authentication is required.");
+			candidate = authorization.slice(7).trim();
+		} else if (kind === "basic") {
+			const authorization = request.get("authorization") || "";
+			if (!authorization.startsWith("Basic ")) throw new AppError(401, "TARGET_AUTH_REQUIRED", "Basic authentication is required.");
+			let decoded = "";
+			try {
+				decoded = Buffer.from(authorization.slice(6).trim(), "base64").toString("utf8");
+			} catch {
+				throw new AppError(401, "TARGET_AUTH_INVALID", "The Basic credential is invalid.");
+			}
+			const colon = decoded.indexOf(":");
+			if (colon === -1 || decoded.slice(0, colon) !== "tracer")
+				throw new AppError(401, "TARGET_AUTH_INVALID", "The Basic credential is invalid.");
+			candidate = decoded.slice(colon + 1);
+		} else if (kind === "api-key-header") {
+			candidate = request.get("x-api-key") || "";
+		} else if (kind === "api-key-query") {
+			candidate = String(request.query.api_key || "");
+		} else {
+			throw new AppError(404, "AUTH_EXAMPLE_NOT_FOUND", "The requested authentication example does not exist.");
+		}
+		if (!matchesAnyDemoToken(candidate)) throw new AppError(401, "TARGET_AUTH_INVALID", "The target credential is not valid.");
+		response.json({ data: { authenticated: true, kind } });
+	} catch (error) {
+		next(error);
+	}
+}
+
+export function exampleEcho(request, response) {
+	const raw = request.rawHeaders;
+	const headers = [];
+	for (let index = 0; index < raw.length; index += 2) headers.push({ name: raw[index], value: raw[index + 1] });
+	if (request.method === "HEAD") return response.status(200).end();
+	response.json({ data: { method: request.method, query: request.query, headers, body: request.body ?? null } });
+}
+
+export function exampleStatus(request, response, next) {
+	try {
+		const code = Number.parseInt(request.params.code, 10);
+		if (![200, 201, 204, 400, 401, 403, 404, 409, 422, 429, 500, 503].includes(code))
+			throw new AppError(400, "STATUS_INVALID", "This demo exposes only the documented status fixtures.");
+		if (code === 204) return response.status(204).end();
+		response.status(code).json({ data: { code } });
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function exampleDelay(request, response) {
+	const ms = Math.min(Math.max(Number.parseInt(request.params.ms, 10) || 0, 0), 30000);
+	await new Promise((resolve) => setTimeout(resolve, ms));
+	response.json({ data: { waitedMs: ms } });
+}
+
+export function exampleText(request, response) {
+	response.type("text/plain").send("Tracer demo target\nline two\nline three\n");
+}
+
+export function exampleHtml(request, response) {
+	response.type("text/html").send("<!doctype html><html><body><h1>Tracer</h1><p>Safe source fixture.</p></body></html>");
+}
+
+export function exampleXml(request, response) {
+	response.type("application/xml").send('<?xml version="1.0"?><orders><order id="ord_0001"><customer>Ada</customer></order></orders>');
+}
+
+export function exampleInvalidJson(request, response) {
+	response.set("Content-Type", "application/json").send('{"invalid":');
+}
+
+export function exampleEmpty(request, response) {
+	response.status(204).end();
+}
+
+export function compressedExample(request, response, next) {
+	try {
+		const kind = request.params.kind;
+		const payload = Buffer.from(JSON.stringify({ data: { kind, padding: "tracer".repeat(400) } }), "utf8");
+		const encoded =
+			kind === "gzip" ? gzipSync(payload) : kind === "deflate" ? deflateSync(payload) : kind === "br" ? brotliCompressSync(payload) : null;
+		if (!encoded) throw new AppError(404, "COMPRESSION_NOT_FOUND", "The requested compression fixture does not exist.");
+		response.set("Content-Encoding", kind).set("Content-Type", "application/json").send(encoded);
+	} catch (error) {
+		next(error);
+	}
 }

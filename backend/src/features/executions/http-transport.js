@@ -86,6 +86,7 @@ function connectSocket(target, { signal, connectTimeoutMs }) {
 
 const NO_BODY_STATUS = new Set([204, 304]);
 const MAX_INFORMATIONAL = 5;
+const MAX_CHUNK_LINE_BYTES = 8192;
 
 export async function performRequest({ target, method, headers, body, timeoutMs, signal, limits, onDispatch }) {
 	const startedAt = Date.now();
@@ -243,7 +244,11 @@ export async function performRequest({ target, method, headers, body, timeoutMs,
 					if (chunked) {
 						if (chunkState === "size") {
 							const lineEnd = pending.indexOf("\r\n");
-							if (lineEnd === -1) return;
+							if (lineEnd === -1) {
+								if (pending.length > MAX_CHUNK_LINE_BYTES)
+									fail(new TransportError("decode_error", "The chunk metadata exceeded the allowed size."));
+								return;
+							}
 							const sizeLine = pending.subarray(0, lineEnd).toString("latin1").split(";")[0].trim();
 							if (!/^[0-9a-fA-F]+$/.test(sizeLine)) {
 								fail(new TransportError("decode_error", "The target returned an invalid chunked body."));
@@ -271,6 +276,10 @@ export async function performRequest({ target, method, headers, body, timeoutMs,
 							continue;
 						}
 						if (pending.length < 2) return;
+						if (pending[0] !== 13 || pending[1] !== 10) {
+							fail(new TransportError("decode_error", "The target returned an invalid chunk delimiter."));
+							return;
+						}
 						pending = pending.subarray(2);
 						chunkState = "size";
 						continue;
@@ -312,6 +321,7 @@ export async function performRequest({ target, method, headers, body, timeoutMs,
 		}
 
 		socket.on("data", (chunk) => {
+			if (firstByteMs === null) firstByteMs = Date.now() - startedAt;
 			pending = pending.length ? Buffer.concat([pending, chunk]) : chunk;
 			pump();
 		});
@@ -319,7 +329,19 @@ export async function performRequest({ target, method, headers, body, timeoutMs,
 			fail(new TransportError("network_error", `The connection failed (${error.code || error.message}).`, { code: error.code })),
 		);
 		socket.once("close", () => {
-			if (!settled) fail(new TransportError("network_error", "The target closed the connection before the response completed."));
+			if (settled) return;
+			try {
+				pump();
+			} catch (error) {
+				fail(error);
+				return;
+			}
+			if (settled) return;
+			if (phase === "body" && !chunked && remaining === null) {
+				finish(null);
+				return;
+			}
+			fail(new TransportError("network_error", "The target closed the connection before the response completed."));
 		});
 		onDispatch?.();
 		socket.write(requestBytes);

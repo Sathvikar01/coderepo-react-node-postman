@@ -45,6 +45,7 @@ export function useExecutionReconciliation({ dispatch, onTerminal, onStatus }) {
 						dispatch({
 							type: "draft/status",
 							tabId,
+							executionId,
 							status: "error",
 							error: "The application connection dropped before this send was recorded. It is unknown whether the target was reached.",
 						});
@@ -59,6 +60,7 @@ export function useExecutionReconciliation({ dispatch, onTerminal, onStatus }) {
 				dispatch({
 					type: "draft/status",
 					tabId,
+					executionId,
 					status: "error",
 					error: "This send is still unconfirmed. Check History for the recorded outcome, or send again with a new request.",
 				});
@@ -91,7 +93,7 @@ export function useExecutionReconciliation({ dispatch, onTerminal, onStatus }) {
 					timers.current.set(executionId, setTimeout(retry, 500 * attempt));
 					return;
 				}
-				onStatus?.(tabId, "running");
+				onStatus?.(tabId, "running", executionId);
 			};
 			retry();
 		},

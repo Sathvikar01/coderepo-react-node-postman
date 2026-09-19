@@ -13,7 +13,7 @@ function decodeCursor(raw) {
 		throw new AppError(400, "CURSOR_INVALID", "The history cursor is not valid.");
 	}
 	const startedAt = new Date(parsed?.startedAt);
-	if (Number.isNaN(startedAt.getTime()) || typeof parsed?.id !== "string")
+	if (Number.isNaN(startedAt.getTime()) || typeof parsed?.id !== "string" || !/^[a-f\d]{24}$/i.test(parsed.id))
 		throw new AppError(400, "CURSOR_INVALID", "The history cursor is not valid.");
 	return { startedAt, id: parsed.id };
 }

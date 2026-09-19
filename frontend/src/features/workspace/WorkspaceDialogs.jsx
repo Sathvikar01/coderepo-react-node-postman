@@ -1,5 +1,5 @@
 import { ConfirmationDialog } from "../../shared/components/ConfirmationDialog.jsx";
-import { NewCollectionDialog, RenameDialog, SaveRequestDialog } from "../collections/CollectionDialogs.jsx";
+import { CollectionSettingsDialog, NewCollectionDialog, RenameDialog, SaveRequestDialog } from "../collections/CollectionDialogs.jsx";
 
 // Renders whichever workspace dialog is currently open. All state and side effects stay
 // with the caller; this component only maps dialog.kind to the right surface.
@@ -14,8 +14,26 @@ export function WorkspaceDialogs({ actions, collections, dialog, dialogError, bu
 				collections={collections}
 				error={dialogError}
 				onCancel={onClose}
-				onSave={(payload) => actions.saveAsNewRequest(payload, draftRequest, dialog.tabId ?? activeTab?.id ?? null)}
+				onSave={(payload) =>
+					actions.saveAsNewRequest(
+						payload,
+						draftRequest,
+						Object.prototype.hasOwnProperty.call(dialog, "tabId") ? dialog.tabId : (activeTab?.id ?? null),
+					)
+				}
 				request={draftRequest}
+			/>
+		);
+	}
+
+	if (dialog.kind === "collection-settings") {
+		return (
+			<CollectionSettingsDialog
+				busy={busy}
+				collection={dialog.collection}
+				error={dialogError}
+				onCancel={onClose}
+				onSave={(payload) => actions.saveCollectionDefaults(dialog.collection, payload)}
 			/>
 		);
 	}
@@ -116,6 +134,20 @@ export function WorkspaceDialogs({ actions, collections, dialog, dialogError, bu
 						Reload
 					</button>
 				}
+			/>
+		);
+	}
+
+
+	if (dialog.kind === "delete-folder") {
+		return (
+			<ConfirmationDialog
+				busy={busy}
+				confirmLabel="Delete folder"
+				message={dialog.message}
+				onCancel={onClose}
+				onConfirm={() => actions.deleteFolder(dialog.collection, dialog.folder.id)}
+				title="Delete folder"
 			/>
 		);
 	}

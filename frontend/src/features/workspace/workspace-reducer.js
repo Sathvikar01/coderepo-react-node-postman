@@ -10,7 +10,7 @@ const EMPTY_REQUEST = () => ({
 	query: [],
 	headers: [],
 	body: { mode: "none" },
-	auth: { mode: "inherit" },
+	auth: { mode: "none" },
 	settings: { timeoutMs: 15000 },
 });
 
@@ -79,21 +79,29 @@ export function workspaceReducer(state, action) {
 				draftVersion: tab.draftVersion + 1,
 			}));
 		case "draft/saved":
-			return updateTab(state, action.tabId, (tab) => ({
-				...tab,
-				name: action.request.name,
-				request: structuredClone(action.request),
-				baseRequest: structuredClone(action.request),
-				collectionId: action.collectionId,
-				collectionName: action.collectionName,
-				collectionRevision: action.collectionRevision,
-				replayHistoryId: null,
-				dirty: false,
-			}));
+			return updateTab(state, action.tabId, (tab) => {
+				const savedRequest = structuredClone(action.request);
+				const editedSinceSave =
+					action.savedDraftVersion !== undefined && tab.draftVersion !== action.savedDraftVersion;
+				return {
+					...tab,
+					name: editedSinceSave ? tab.request.name : savedRequest.name,
+					request: editedSinceSave ? tab.request : savedRequest,
+					baseRequest: savedRequest,
+					collectionId: action.collectionId,
+					collectionName: action.collectionName,
+					collectionRevision: action.collectionRevision,
+					replayHistoryId: null,
+					dirty: editedSinceSave,
+				};
+			});
 		case "draft/replay":
 			return updateTab(state, action.tabId, (tab) => ({ ...tab, replayHistoryId: action.replayHistoryId }));
 		case "draft/status":
-			return updateTab(state, action.tabId, (tab) => ({ ...tab, status: action.status, error: action.error ?? null }));
+			return updateTab(state, action.tabId, (tab) => {
+				if (action.executionId && tab.executionId && action.executionId !== tab.executionId) return tab;
+				return { ...tab, status: action.status, error: action.error ?? null };
+			});
 		case "draft/dispatched":
 			return updateTab(state, action.tabId, (tab) => ({
 				...tab,

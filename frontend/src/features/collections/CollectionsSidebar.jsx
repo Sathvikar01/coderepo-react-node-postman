@@ -6,7 +6,7 @@ function methodClass(method) {
 	return `method-tag ${(method || "").toLowerCase()}`;
 }
 
-function RequestRow({ active, onDelete, onDuplicate, onMove, onOpen, request }) {
+function RequestRow({ active, folders, onDelete, onDuplicate, onMove, onMoveToFolder, onOpen, request }) {
 	return (
 		<div className={`tree-row ${active ? "active" : ""}`}>
 			<span style={{ width: 26 }} />
@@ -21,6 +21,20 @@ function RequestRow({ active, onDelete, onDuplicate, onMove, onOpen, request }) 
 						{ icon: "arrow_drop_down", label: "Move down", onSelect: () => onMove(request.id, 1) },
 						{ separator: true },
 						{ icon: "content_copy", label: "Duplicate", onSelect: () => onDuplicate(request.id) },
+						{ separator: true },
+						{
+							disabled: !request.folderId,
+							icon: "drive_file_move",
+							label: "Move to collection root",
+							onSelect: () => onMoveToFolder(request.id, null),
+						},
+						...folders
+							.filter((folder) => folder.id !== request.folderId)
+							.map((folder) => ({
+								icon: "drive_file_move",
+								label: `Move to ${folder.name}`,
+								onSelect: () => onMoveToFolder(request.id, folder.id),
+							})),
 						{ separator: true },
 						{ danger: true, icon: "delete", label: "Delete request", onSelect: () => onDelete(request.id) },
 					]}
@@ -42,8 +56,11 @@ export function CollectionsSidebar({
 	onDeleteRequest,
 	onDuplicateCollection,
 	onDuplicateFolder,
+	onEditCollection,
 	onDuplicateRequest,
+	onMoveFolder,
 	onMoveRequest,
+	onMoveRequestToFolder,
 	onNewCollection,
 	onNewFolder,
 	onOpenCollection,
@@ -133,6 +150,7 @@ export function CollectionsSidebar({
 												},
 												{ separator: true },
 												{ icon: "add", label: "New folder", onSelect: () => onNewFolder(collection) },
+												{ icon: "tune", label: "Edit defaults", onSelect: () => onEditCollection(collection) },
 												{ icon: "edit", label: "Rename", onSelect: () => onRenameCollection(collection) },
 												{
 													icon: "content_copy",
@@ -165,6 +183,19 @@ export function CollectionsSidebar({
 														<Menu
 															items={[
 																{
+																	disabled: folders.findIndex((item) => item.id === folder.id) === 0,
+																	icon: "arrow_drop_up",
+																	label: "Move folder up",
+																	onSelect: () => onMoveFolder(collection, folder.id, -1),
+																},
+																{
+																	disabled: folders.findIndex((item) => item.id === folder.id) === folders.length - 1,
+																	icon: "arrow_drop_down",
+																	label: "Move folder down",
+																	onSelect: () => onMoveFolder(collection, folder.id, 1),
+																},
+																{ separator: true },
+																{
 																	icon: "content_copy",
 																	label: "Duplicate folder",
 																	onSelect: () => onDuplicateFolder(collection, folder),
@@ -192,11 +223,13 @@ export function CollectionsSidebar({
 														.map((request) => (
 															<RequestRow
 																active={activeRequestId === request.id}
+																folders={folders}
 																key={request.id}
 																request={request}
 																onDelete={(id) => onDeleteRequest(collection, id)}
 																onDuplicate={(id) => onDuplicateRequest(collection, id)}
 																onMove={(id, delta) => onMoveRequest(collection, id, delta)}
+																onMoveToFolder={(id, folderId) => onMoveRequestToFolder(collection, id, folderId)}
 																onOpen={(item) => onOpenRequest(collection, item)}
 															/>
 														))}
@@ -209,11 +242,13 @@ export function CollectionsSidebar({
 										{rootRequests.map((request) => (
 											<RequestRow
 												active={activeRequestId === request.id}
+												folders={folders}
 												key={request.id}
 												request={request}
 												onDelete={(id) => onDeleteRequest(collection, id)}
 												onDuplicate={(id) => onDuplicateRequest(collection, id)}
 												onMove={(id, delta) => onMoveRequest(collection, id, delta)}
+												onMoveToFolder={(id, folderId) => onMoveRequestToFolder(collection, id, folderId)}
 												onOpen={(item) => onOpenRequest(collection, item)}
 											/>
 										))}

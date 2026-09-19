@@ -47,14 +47,15 @@ function isRejectedHostname(hostname) {
 
 export function createTargetPolicy({ resolver = dnsResolver } = {}) {
 	return {
-		async validate(rawUrl, { allowLocalDemo = false } = {}) {
+		async validate(rawUrl, { allowLocalDemo = false, authoredUrl = null } = {}) {
 			const raw = String(rawUrl ?? "").trim();
-			if (!raw) throw new AppError(400, "URL_INVALID", "Provide an absolute HTTP or HTTPS URL.");
-			const rawHost = rawHostOf(raw);
-			const rawPath = raw.replace(/^[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/?#]*/, "").split(/[?#]/)[0] ?? "";
+			const authored = String(authoredUrl ?? raw).trim();
+			if (!raw || !authored) throw new AppError(400, "URL_INVALID", "Provide an absolute HTTP or HTTPS URL.");
+			const rawHost = rawHostOf(authored);
+			const rawPath = authored.replace(/^[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/?#]*/, "").split(/[?#]/)[0] ?? "";
 			if (/(^|\/)\.\.?(\/|$)|%2e|%2f|%5c|\\/i.test(rawPath))
 				throw new AppError(400, "TARGET_BLOCKED", "Dot segments and encoded path separators are not permitted.");
-			if (raw.includes("@")) throw new AppError(400, "URL_USERINFO", "URLs cannot contain user information.");
+			if (authored.includes("@")) throw new AppError(400, "URL_USERINFO", "URLs cannot contain user information.");
 			if (isAmbiguousNumericHost(rawHost))
 				throw new AppError(400, "URL_AMBIGUOUS_HOST", "Provide the host as a dotted-decimal address or a DNS name.");
 			if (rawHost.includes("%")) throw new AppError(400, "URL_INVALID", "Zone identifiers are not supported.");

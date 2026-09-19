@@ -16,12 +16,9 @@ export function materializeReplayRequest(record) {
 	return request;
 }
 
-export function replayContext(record, { environmentId = null, environmentRevision = undefined, collectionExists = () => false } = {}) {
-	const sourceCollectionId = record?.snapshot?.source?.collectionId ?? null;
+export function replayContext(record, { environmentId = null, environmentRevision = undefined } = {}) {
 	return {
-		...(sourceCollectionId && collectionExists(sourceCollectionId)
-			? { collectionId: sourceCollectionId, requestId: record.request?.id ?? null }
-			: {}),
+		replayHistoryId: record?.executionId ?? record?.historyId,
 		...(environmentId ? { environmentId, environmentRevision } : {}),
 	};
 }
