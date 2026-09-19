@@ -19,8 +19,8 @@ function BodyPanel({ response }) {
 		if (!canPretty) return null;
 		if (media.includes("json") || /^\s*[[{]/.test(text)) {
 			try {
-				JSON.parse(text);
-				return { kind: "json" };
+				const parsed = JSON.parse(text);
+				return { kind: "json", value: JSON.stringify(parsed, null, 2) };
 			} catch {
 				return null;
 			}
@@ -210,7 +210,7 @@ export function ResponseViewer({ onCopyUrl, result }) {
 					{errorMessage && <span className="field-hint">{errorMessage}</span>}
 				</div>
 				{status !== null && status >= 300 && status < 400 && (
-					<button className="button" type="button" onClick={() => onCopyUrl(response.headers)}>
+					<button className="button" type="button" onClick={() => onCopyUrl(response)}>
 						<MaterialIcon size={18}>content_copy</MaterialIcon>
 						<span className="button-label">Copy resolved URL</span>
 					</button>
