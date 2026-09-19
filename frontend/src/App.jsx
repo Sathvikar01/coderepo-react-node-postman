@@ -706,6 +706,17 @@ export default function App() {
 				setBusy(false);
 			}
 		},
+		async saveCollectionDefaults(collection, payload) {
+			const ok = await runAggregateEdit(collection, (current) => ({
+				...current,
+				variables: payload.variables,
+				auth: payload.auth,
+			}));
+			if (ok) {
+				setDialog(null);
+				toast("Collection defaults saved.");
+			}
+		},
 		renameCollection(collection, name) {
 			return runAggregateEdit(collection, (current) => ({ ...current, name })).then((ok) => {
 				if (ok) toast("Collection renamed.");
@@ -842,6 +853,7 @@ export default function App() {
 								runAggregateEdit(collection, (item) => removeRequest(item, requestId))
 							}
 							onDuplicateCollection={(collection) => openDialog({ kind: "duplicate-collection", collection })}
+							onEditCollection={(collection) => openDialog({ kind: "collection-settings", collection })}
 							onDuplicateFolder={(collection, folder) =>
 								runAggregateEdit(collection, (item) => duplicateFolder(item, folder.id)).then((ok) => {
 									if (ok) toast("Folder duplicated.");
