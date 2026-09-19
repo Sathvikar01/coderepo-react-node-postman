@@ -10,7 +10,7 @@ import { fingerprintKeyId, fingerprintOf } from "../history/fingerprint.js";
 import { operationRegistry } from "./active-registry.js";
 import { performRequest } from "./http-transport.js";
 import { captureBody } from "./response-capture.js";
-import { buildResponseResult } from "./response-normalizer.js";
+import { buildResponseResult, truncateBodyForHistory } from "./response-normalizer.js";
 import { compileRequest, redactUrl } from "./request-compiler.js";
 import { createTargetPolicy } from "./target-policy.js";
 
@@ -84,14 +84,44 @@ export function persistenceFrom(record) {
 	};
 }
 
-export function createExecutionService({ registry = operationRegistry, transport = performRequest, policy = null } = {}) {
+function raceBudget(promise, { deadlineAt, signal }) {
+	const start = () => {
+		if (signal?.aborted) return { state: "cancelled" };
+		if (deadlineAt - Date.now() <= 0) return { state: "timeout" };
+		return null;
+	};
+	const immediate = start();
+	if (immediate) return Promise.resolve(immediate);
+	return new Promise((resolve) => {
+		let done = false;
+		const cleanup = () => {
+			clearTimeout(timer);
+			signal?.removeEventListener("abort", onAbort);
+		};
+		const settle = (result) => {
+			if (done) return;
+			done = true;
+			cleanup();
+			resolve(result);
+		};
+		const timer = setTimeout(() => settle({ state: "timeout" }), Math.max(1, deadlineAt - Date.now()));
+		const onAbort = () => settle({ state: "cancelled" });
+		signal?.addEventListener("abort", onAbort, { once: true });
+		promise.then(
+			(value) => settle({ state: "ok", value }),
+			(error) => settle({ state: "error", error }),
+		);
+	});
+}
+
+export function createExecutionService({ registry = operationRegistry, transport = performRequest, policy = null, history = historyService } = {}) {
 	const targetPolicy = policy ?? createTargetPolicy();
 
 	async function resolveRequestContext(profileId, context, draftRequest) {
 		if (context.collectionId && context.replayHistoryId)
 			throw new AppError(400, "CONTEXT_CONFLICT", "Collection and history replay contexts cannot be combined.");
 		if (context.replayHistoryId) {
-			const record = await historyService.get(profileId, context.replayHistoryId);
+			const record = await history.get(profileId, context.replayHistoryId);
 			if (!record || record.expired)
 				throw new AppError(404, "HISTORY_NOT_FOUND", "The requested history entry does not exist or has expired.");
 			return {
@@ -172,7 +202,7 @@ export function createExecutionService({ registry = operationRegistry, transport
 			},
 		});
 
-		const existing = await historyService.get(profileId, executionId);
+		const existing = await history.get(profileId, executionId);
 		if (existing?.expired) throw new AppError(410, "RESULT_REMOVED", "The stored result for this execution has expired.");
 		if (existing) {
 			if (existing.fingerprint !== fingerprint)
@@ -206,7 +236,7 @@ export function createExecutionService({ registry = operationRegistry, transport
 		};
 
 		try {
-			await historyService.admit({
+			await history.admit({
 				ownerProfileId: profileId,
 				executionId,
 				fingerprint,
@@ -223,7 +253,7 @@ export function createExecutionService({ registry = operationRegistry, transport
 		} catch (error) {
 			registry.release(executionId);
 			if (error?.code === 11000) {
-				const winner = await historyService.get(profileId, executionId);
+				const winner = await history.get(profileId, executionId);
 				if (winner?.status === "running") throw new AppError(409, "EXECUTION_RUNNING", "This execution is already running.");
 				if (winner && winner.fingerprint !== fingerprint)
 					throw new AppError(409, "EXECUTION_ID_CONFLICT", "This execution identifier is already used with different input.");
@@ -237,7 +267,7 @@ export function createExecutionService({ registry = operationRegistry, transport
 			let finalized = null;
 			try {
 				finalized = await Promise.race([
-					historyService.finalize(profileId, executionId, { status: "terminal", finishedAt: new Date(), expiresAt, ...update }),
+					history.finalize(profileId, executionId, { status: "terminal", finishedAt: new Date(), expiresAt, ...update }),
 					new Promise((_, reject) =>
 						setTimeout(() => reject(new Error("finalize timeout")), getConfig().execution.finalizeTimeoutMs),
 					),
@@ -246,19 +276,23 @@ export function createExecutionService({ registry = operationRegistry, transport
 				finalized = null;
 			}
 			if (finalized) return { persistence: persistenceFrom(finalized), record: finalized };
-			const current = await historyService.get(profileId, executionId).catch(() => null);
+			const current = await history.get(profileId, executionId).catch(() => null);
 			if (current && current.status === "terminal") return { persistence: persistenceFrom(current), record: current };
 			return { persistence: persistenceFrom(null), record: null };
 		};
 
-		const semanticFailure = async (code, message, details) => {
+		const preDispatchFailure = async (outcome, code, message, details, compiledResult = null) => {
+			const compileTrace = compiledResult?.trace ?? [];
+			const warnings = compiledResult?.warnings ?? [];
+			const error = { code, message, details: details ?? null };
 			const persistence = await persist({
-				outcome: "validation_error",
+				outcome,
 				effectCertainty: "not_dispatched",
-				error: { code, message, details: details ?? null },
+				response: null,
+				error,
 				persistence: { state: "saved" },
-				compileTrace: [],
-				warnings: [],
+				compileTrace,
+				warnings,
 			});
 			registry.release(executionId);
 			if (persistence.record) return { ...terminalResult(persistence.record), tabId, draftVersion };
@@ -266,18 +300,21 @@ export function createExecutionService({ registry = operationRegistry, transport
 				executionId,
 				tabId,
 				draftVersion,
-				outcome: "validation_error",
+				outcome,
 				response: null,
-				error: { code, message, details: details ?? null },
+				error,
 				effectCertainty: "not_dispatched",
 				persistence: persistence.persistence,
 				historyId: executionId,
 				startedAt,
 				finishedAt: new Date(),
-				compileTrace: [],
-				warnings: [],
+				compileTrace,
+				warnings,
 			};
 		};
+
+		const semanticFailure = (code, message, details) =>
+			preDispatchFailure("validation_error", code, message, details);
 
 		const secretValues = [];
 		const secrets = new Map();
@@ -316,42 +353,21 @@ export function createExecutionService({ registry = operationRegistry, transport
 
 		const executedUrl = redactUrl(compiled.url, compiled.redaction);
 
-		let target;
-		try {
-			target = await targetPolicy.validate(compiled.url, { allowLocalDemo: true, authoredUrl: compiled.authoredUrl });
-		} catch (error) {
-			return semanticFailure(error.code ?? "TARGET_INVALID", error.message, error.details);
-		}
+		const validation = await raceBudget(
+			targetPolicy.validate(compiled.url, { allowLocalDemo: true, authoredUrl: compiled.authoredUrl }),
+			{ deadlineAt, signal: controller.signal },
+		);
+		if (validation.state === "timeout")
+			return preDispatchFailure("timeout", "TIMEOUT", "This execution exceeded its time budget before dispatch.", null, compiled);
+		if (validation.state === "cancelled")
+			return preDispatchFailure("cancelled", "CANCELLED", "This execution was cancelled before dispatch.", null, compiled);
+		if (validation.state === "error")
+			return semanticFailure(validation.error.code ?? "TARGET_INVALID", validation.error.message, validation.error.details);
+		const target = validation.value;
 
 		const remainingBeforeDispatch = deadlineAt - Date.now();
-		if (remainingBeforeDispatch <= 0) {
-			const persistence = await persist({
-				outcome: "timeout",
-				effectCertainty: "not_dispatched",
-				response: null,
-				error: { code: "TIMEOUT", message: "This execution exceeded its time budget before dispatch.", details: null },
-				persistence: { state: "saved" },
-				compileTrace: compiled.trace,
-				warnings: compiled.warnings ?? [],
-			});
-			registry.release(executionId);
-			if (persistence.record) return { ...terminalResult(persistence.record), tabId, draftVersion };
-			return {
-				executionId,
-				tabId,
-				draftVersion,
-				outcome: "timeout",
-				response: null,
-				error: { code: "TIMEOUT", message: "This execution exceeded its time budget before dispatch.", details: null },
-				effectCertainty: "not_dispatched",
-				persistence: persistence.persistence,
-				historyId: executionId,
-				startedAt,
-				finishedAt: new Date(),
-				compileTrace: compiled.trace,
-				warnings: compiled.warnings ?? [],
-			};
-		}
+		if (remainingBeforeDispatch <= 0)
+			return preDispatchFailure("timeout", "TIMEOUT", "This execution exceeded its time budget before dispatch.", null, compiled);
 
 		let dispatchStarted = false;
 		const result = await transport({
@@ -387,6 +403,8 @@ export function createExecutionService({ registry = operationRegistry, transport
 					limits: { decodedBytes: LIMITS.decodedBytes },
 					method: compiled.method,
 					status: result.state.status,
+					signal: controller.signal,
+					deadlineAt,
 				});
 				response = buildResponseResult({ transport: result, capture, redaction: compiled.redaction, executedUrl, timeoutMs });
 			} catch (error) {
@@ -404,7 +422,7 @@ export function createExecutionService({ registry = operationRegistry, transport
 		const persistence = await persist({
 			outcome,
 			effectCertainty,
-			response,
+			response: truncateBodyForHistory(response),
 			error: errorPayload,
 			persistence: { state: "saved" },
 			"snapshot.bytesSent": result.bytesSent ?? 0,
@@ -438,10 +456,10 @@ export function createExecutionService({ registry = operationRegistry, transport
 		async status(profileId, executionId) {
 			registry.rateLimit(profileId, "status");
 			if (registry.isActive(profileId, executionId)) return { executionId, status: "running", effectCertainty: "may_have_reached_target" };
-			let record = await historyService.get(profileId, executionId);
+			let record = await history.get(profileId, executionId);
 			if (record?.status === "running") {
-				await historyService.reconcileStale();
-				record = await historyService.get(profileId, executionId);
+				await history.reconcileStale();
+				record = await history.get(profileId, executionId);
 			}
 			if (!record) throw new AppError(404, "EXECUTION_NOT_FOUND", "The requested execution does not exist.");
 			if (record.expired || record.visible === false)
@@ -453,12 +471,12 @@ export function createExecutionService({ registry = operationRegistry, transport
 				registry.requestCancel(profileId, executionId);
 				return { executionId, status: "cancelling" };
 			}
-			const record = await historyService.get(profileId, executionId);
+			const record = await history.get(profileId, executionId);
 			if (!record) throw new AppError(404, "EXECUTION_NOT_FOUND", "The requested execution does not exist.");
 			if (record.expired || record.visible === false)
 				throw new AppError(410, "RESULT_REMOVED", "The stored result for this execution is no longer available.");
 			if (record.status === "running") {
-				await historyService.finalize(profileId, executionId, {
+				await history.finalize(profileId, executionId, {
 					status: "terminal",
 					outcome: "interrupted",
 					effectCertainty: "may_have_reached_target",
@@ -466,7 +484,7 @@ export function createExecutionService({ registry = operationRegistry, transport
 					expiresAt: new Date(Date.now() + RETENTION_MS()),
 					persistence: { state: "saved" },
 				});
-				const updated = await historyService.get(profileId, executionId);
+				const updated = await history.get(profileId, executionId);
 				if (!updated) throw new AppError(404, "EXECUTION_NOT_FOUND", "The requested execution does not exist.");
 				return { ...terminalResult(updated), status: "terminal" };
 			}

@@ -1,5 +1,6 @@
 import { AppError } from "../../shared/errors/app-error.js";
 import { LIMITS, utf8Bytes } from "../../shared/utils/limits.js";
+import { METHODS } from "../../shared/utils/schemas.js";
 
 const PLACEHOLDER = /\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/g;
 const MANAGED_TRANSPORT_HEADERS = new Set([
@@ -126,6 +127,8 @@ function effectiveAuth(request, collection) {
 
 export function compileRequest({ request, collection, environment, authOverride, secrets = new Map() }) {
 	const map = variableMap(collection, environment, secrets);
+	const method = String(request?.method ?? "").toUpperCase();
+	if (!METHODS.includes(method)) throw new AppError(400, "METHOD_INVALID", "Choose a supported HTTP method.");
 	const missing = Object.assign(new Set(), { fields: new Set() });
 	const trace = [];
 	const warnings = [];
@@ -243,7 +246,7 @@ export function compileRequest({ request, collection, environment, authOverride,
 	}
 
 	return {
-		method: request.method,
+		method,
 		authoredUrl: urlTemplate,
 		url: finalUrl,
 		headers,

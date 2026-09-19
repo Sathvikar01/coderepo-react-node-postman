@@ -88,3 +88,77 @@ describe("target policy", () => {
 		).rejects.toMatchObject({ code: "TARGET_BLOCKED" });
 	});
 });
+
+describe("target policy DNS adversaries", () => {
+	test("fails closed when any answer in a mixed DNS reply is denied", async () => {
+		const mixed = createTargetPolicy({
+			resolver: pinnedResolver([
+				{ address: "93.184.216.34", family: 4 },
+				{ address: "10.0.0.5", family: 4 },
+			]),
+		});
+		await expect(mixed.validate("https://mixed.example.com/")).rejects.toMatchObject({ code: "TARGET_BLOCKED", details: { address: "10.0.0.5" } });
+
+		const deniedFirst = createTargetPolicy({
+			resolver: pinnedResolver([
+				{ address: "127.0.0.1", family: 4 },
+				{ address: "93.184.216.34", family: 4 },
+			]),
+		});
+		await expect(deniedFirst.validate("https://mixed.example.com/")).rejects.toMatchObject({ code: "TARGET_BLOCKED" });
+
+		const v6Mixed = createTargetPolicy({
+			resolver: pinnedResolver([
+				{ address: "2606:4700:4700::1111", family: 6 },
+				{ address: "fd00::1", family: 6 },
+			]),
+		});
+		await expect(v6Mixed.validate("https://mixed.example.com/")).rejects.toMatchObject({ code: "TARGET_BLOCKED" });
+	});
+
+	test("picks the first of several public answers and never consults DNS for literals", async () => {
+		let calls = 0;
+		const resolver = {
+			async resolve() {
+				calls += 1;
+				return [
+					{ address: "93.184.216.34", family: 4 },
+					{ address: "1.1.1.1", family: 4 },
+				];
+			},
+		};
+		const multi = createTargetPolicy({ resolver });
+		const target = await multi.validate("https://multi.example.com/");
+		expect(calls).toBe(1);
+		expect(target.ip).toBe("93.184.216.34");
+
+		const literal = await multi.validate("http://93.184.216.34/");
+		expect(calls).toBe(1);
+		expect(literal.isIpLiteral).toBe(true);
+	});
+
+	test("rejects empty DNS answers", async () => {
+		const empty = createTargetPolicy({ resolver: pinnedResolver([]) });
+		await expect(empty.validate("https://empty.example.com/")).rejects.toMatchObject({ code: "TARGET_UNRESOLVED", statusCode: 502 });
+	});
+
+	test("rejects alternate numeric spellings that the URL parser would normalize", async () => {
+		const spellings = ["http://2130706433/", "http://017700000001/", "http://0x7f000001/", "http://0177.0.0.1/"];
+		for (const url of spellings) {
+			await expect(policy.validate(url)).rejects.toMatchObject({ code: "URL_AMBIGUOUS_HOST" });
+		}
+		await expect(policy.validate("http://127.1/")).rejects.toMatchObject({ code: "TARGET_BLOCKED" });
+		await expect(policy.validate("http://0x7f.0.0.1/")).rejects.toMatchObject({ code: "TARGET_BLOCKED" });
+	});
+
+	test("rejects encoded path separators and dot segments in the authored URL", async () => {
+		for (const authored of [
+			"https://example.com/a/%2e%2e/b",
+			"https://example.com/a/%2f/b",
+			"https://example.com/a/%5C/b",
+			"https://example.com/a\\b",
+		]) {
+			await expect(policy.validate("https://example.com/", { authoredUrl: authored })).rejects.toMatchObject({ code: "TARGET_BLOCKED" });
+		}
+	});
+});

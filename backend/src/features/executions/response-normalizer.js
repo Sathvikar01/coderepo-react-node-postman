@@ -2,6 +2,20 @@ import { LIMITS } from "../../shared/utils/limits.js";
 
 const SENSITIVE_HEADERS = new Set(["authorization", "proxy-authorization", "cookie", "set-cookie", "x-api-key"]);
 
+function historyBodyLimit(encoding) {
+	return encoding === "base64" ? LIMITS.historyBodyBytes - (LIMITS.historyBodyBytes % 4) : LIMITS.historyBodyBytes;
+}
+
+function capTextForHistory(value, encoding) {
+	const limit = historyBodyLimit(encoding);
+	if (encoding !== "base64") {
+		const bytes = Buffer.from(value, "utf8");
+		if (bytes.length <= limit) return value;
+		return new TextDecoder("utf-8").decode(bytes.subarray(0, limit), { stream: true });
+	}
+	return value.length <= limit ? value : value.slice(0, limit);
+}
+
 export function redactText(text, secretValues) {
 	let output = String(text ?? "");
 	for (const secret of secretValues) {
@@ -34,12 +48,6 @@ export function buildResponseResult({ transport, capture, redaction, executedUrl
 			body.omittedReason = "sensitive";
 		}
 	}
-	if (body.value.length > LIMITS.historyBodyBytes) {
-		const limit = body.encoding === "base64" ? LIMITS.historyBodyBytes - (LIMITS.historyBodyBytes % 4) : LIMITS.historyBodyBytes;
-		body.value = body.value.slice(0, limit);
-		body.truncated = true;
-		body.omittedReason = "retention";
-	}
 	const warnings = [...capture.warnings];
 	if (transport.truncated)
 		warnings.push({
@@ -58,9 +66,26 @@ export function buildResponseResult({ transport, capture, redaction, executedUrl
 			receivedBodyBytes: transport.encodedBytes,
 			decodedBodyBytes: capture.decodedBodyBytes,
 			capturedBodyBytes: Math.min(transport.encodedBytes, LIMITS.captureBytes),
-			persistedBodyBytes: Buffer.byteLength(body.value ?? "", "utf8"),
+			persistedBodyBytes: Buffer.byteLength(capTextForHistory(body.value ?? "", body.encoding ?? "utf8"), "utf8"),
 		},
 		timeoutMs,
 		warnings,
+	};
+}
+
+export function truncateBodyForHistory(response) {
+	const body = response?.body;
+	if (!body) return response;
+	const capped = capTextForHistory(body.value ?? "", body.encoding ?? "utf8");
+	if (capped === body.value) return response;
+	const historyBody = { ...body, value: capped, truncated: true, omittedReason: "history_limit", historyBodyTruncated: true };
+	return {
+		...response,
+		body: historyBody,
+		size: { ...response.size, persistedBodyBytes: Buffer.byteLength(capped, "utf8") },
+		warnings: [
+			...(response.warnings ?? []),
+			{ code: "HISTORY_LIMIT", message: `Only the first ${LIMITS.historyBodyBytes} bytes of this body are kept in history.` },
+		],
 	};
 }

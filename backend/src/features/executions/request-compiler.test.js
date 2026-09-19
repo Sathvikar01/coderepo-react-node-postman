@@ -332,4 +332,60 @@ describe("request compiler", () => {
 			compileRequest({ request: baseRequest({ urlTemplate: "http://example.com/orders" }), collection: null, environment: null }),
 		).toThrow(expect.objectContaining({ code: "INHERIT_WITHOUT_COLLECTION" }));
 	});
+
+	test("normalizes a supported method and rejects anything that is not an HTTP token", () => {
+		const compiled = compileRequest({
+			request: baseRequest({ method: "patch", urlTemplate: "http://example.com/orders", auth: { mode: "none" } }),
+			collection: null,
+			environment: null,
+		});
+		expect(compiled.method).toBe("PATCH");
+
+		for (const method of ["GET / HTTP/1.1\r\nHost: evil", "TRACE", "", "CONNECT"]) {
+			expect(() =>
+				compileRequest({
+					request: baseRequest({ method, urlTemplate: "http://example.com/orders", auth: { mode: "none" } }),
+					collection: null,
+					environment: null,
+				}),
+			).toThrow(expect.objectContaining({ code: "METHOD_INVALID" }));
+		}
+	});
+
+	test("preserves enabled query order and duplicates while dropping disabled rows", () => {
+		const compiled = compileRequest({
+			request: baseRequest({
+				urlTemplate: "http://example.com/orders?first=1",
+				query: [
+					{ id: "q1", key: "status", value: "open", enabled: true },
+					{ id: "q2", key: "skip", value: "no", enabled: false },
+					{ id: "q3", key: "status", value: "closed", enabled: true },
+				],
+				auth: { mode: "none" },
+			}),
+			collection: null,
+			environment: null,
+		});
+		expect(compiled.url).toBe("http://example.com/orders?first=1&status=open&status=closed");
+	});
+
+	test("preserves header order and casing for the transport", () => {
+		const compiled = compileRequest({
+			request: baseRequest({
+				urlTemplate: "http://example.com/orders",
+				headers: [
+					{ id: "h1", key: "X-First", value: "one", enabled: true },
+					{ id: "h2", key: "x-second", value: "two", enabled: true },
+					{ id: "h3", key: "X-Skipped", value: "no", enabled: false },
+				],
+				auth: { mode: "none" },
+			}),
+			collection: null,
+			environment: null,
+		});
+		expect(compiled.headers).toEqual([
+			{ name: "X-First", value: "one" },
+			{ name: "x-second", value: "two" },
+		]);
+	});
 });
