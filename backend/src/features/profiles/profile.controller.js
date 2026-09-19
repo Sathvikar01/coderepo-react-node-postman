@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getConfig } from "../../shared/config/index.js";
+import { LIMITS } from "../../shared/utils/limits.js";
 import { profileService, preferenceService } from "./profile.service.js";
 
 const preferenceSchema = z
@@ -20,13 +21,13 @@ export function executionPolicy() {
         maxTimeoutMs: execution.maxTimeoutMs,
         defaultTimeoutMs: execution.defaultTimeoutMs,
         maxConcurrentPerProfile: execution.maxConcurrentPerProfile,
-        maxOpenTabs: 10,
+        maxOpenTabs: LIMITS.openTabs,
     };
 }
 
 export async function listProfiles(request, response, next) {
     try {
-        response.json({ data: await profileService.list() });
+        response.json({ data: await profileService.list(request.account) });
     } catch (error) {
         next(error);
     }

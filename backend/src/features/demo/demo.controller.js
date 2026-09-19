@@ -1,3 +1,4 @@
+import { gzipSync } from "node:zlib";
 import { z } from "zod";
 import { AppError } from "../../shared/errors/app-error.js";
 import { datasetToken, demoService, requireTargetAuth } from "./demo.service.js";
@@ -96,7 +97,12 @@ export async function slow(request, response, next) {
 
 export function gzip(request, response, next) {
     try {
-        response.json({ data: { note: "Responses are compressed by the server when the client accepts it.", padding: "request-desk".repeat(200) } });
+        const payload = Buffer.from(JSON.stringify({ data: { note: "This response is gzip-compressed when the client accepts it.", padding: "request-desk".repeat(400) } }), "utf8");
+        if (!String(request.get("accept-encoding") || "").includes("gzip")) {
+            response.type("application/json").send(payload);
+            return;
+        }
+        response.set("Content-Encoding", "gzip").set("Content-Type", "application/json").send(gzipSync(payload));
     } catch (error) {
         next(error);
     }

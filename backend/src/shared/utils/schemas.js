@@ -115,9 +115,3 @@ export const collectionAggregateSchema = z
         });
     });
 
-export function collectionSizeErrors(collection) {
-    const errors = [];
-    const jsonBytes = utf8Bytes(JSON.stringify(collection));
-    if (jsonBytes > LIMITS.collectionJsonBytes) errors.push({ limit: LIMITS.collectionJsonBytes, actual: jsonBytes, unit: "bytes", scope: "collection-json" });
-    return errors;
-}

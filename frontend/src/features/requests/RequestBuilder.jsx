@@ -121,9 +121,10 @@ function BodyEditor({ body, onChange }) {
     );
 }
 
-export function RequestBuilder({ authOverride, collectionAuth, draftVersion, environments, hasCollection, onCancel, onChange, onOverrideChange, onSave, onSend, request, running, savedName }) {
+export function RequestBuilder({ authOverride, collectionAuth, draftVersion, environments, executionPolicy, hasCollection, onCancel, onChange, onOverrideChange, onSave, onSend, request, running, savedName }) {
     const [section, setSection] = useState("params");
     const disabledBody = ["GET", "HEAD"].includes(request.method);
+    const timeoutBounds = { min: executionPolicy?.minTimeoutMs ?? 100, max: executionPolicy?.maxTimeoutMs ?? 30000 };
     const sections = [
         { id: "params", label: "Params", badge: countEnabled(request.query) },
         { id: "headers", label: "Headers", badge: countEnabled(request.headers) },
@@ -190,16 +191,16 @@ export function RequestBuilder({ authOverride, collectionAuth, draftVersion, env
                             <label htmlFor="request-timeout">Timeout (ms)</label>
                             <input
                                 id="request-timeout"
-                                max="30000"
-                                min="100"
+                                max={timeoutBounds.max}
+                                min={timeoutBounds.min}
                                 step="100"
                                 type="number"
                                 value={request.settings.timeoutMs}
-                                onChange={(event) => onChange({ settings: { ...request.settings, timeoutMs: Math.min(30000, Math.max(100, Number(event.target.value) || 100)) } })}
+                                onChange={(event) => onChange({ settings: { ...request.settings, timeoutMs: Math.min(timeoutBounds.max, Math.max(timeoutBounds.min, Number(event.target.value) || timeoutBounds.min)) } })}
                             />
                         </div>
                         <p className="field-hint">
-                            Bounds: 100–30,000 ms. Draft version {draftVersion}. {hasCollection ? "Saved sends freeze the collection revision." : "This request is not attached to a collection yet."} Environment variables resolve at send time from the active environment and collection defaults.
+                            Bounds: {timeoutBounds.min.toLocaleString()}–{timeoutBounds.max.toLocaleString()} ms. Draft version {draftVersion}. {hasCollection ? "Saved sends freeze the collection revision." : "This request is not attached to a collection yet."} Environment variables resolve at send time from the active environment and collection defaults.
                         </p>
                         <p className="field-hint">{environments.length} environment{environments.length === 1 ? "" : "s"} available in this profile.</p>
                     </div>

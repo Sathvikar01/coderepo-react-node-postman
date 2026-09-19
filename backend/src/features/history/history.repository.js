@@ -29,9 +29,9 @@ export const historyRepository = {
             .limit(200)
             .lean(),
     trimBodies: (ids) => ExecutionHistory.updateMany({ _id: { $in: ids } }, { $set: { "response.body.value": "", "response.body.truncated": true, "response.body.omittedReason": "retention" } }),
-    markRunningInterrupted: (instanceId, expiresAt) =>
+    markRunningInterrupted: (expiresAt) =>
         ExecutionHistory.updateMany(
-            { status: "running", instanceId },
+            { status: "running" },
             { $set: { status: "terminal", outcome: "interrupted", effectCertainty: "may_have_reached_target", finishedAt: new Date(), expiresAt, persistence: { state: "saved" } } },
         ),
     markStaleRunningInterrupted: (cutoff, expiresAt) =>
@@ -51,6 +51,4 @@ export const historyRepository = {
             { ownerProfileId, visible: true, status: "terminal", finishedAt: { $lte: cutoff } },
             { $set: { visible: false, request: { name: null, method: null }, snapshot: {}, response: null, error: null } },
         ),
-    deleteAll: () => ExecutionHistory.deleteMany({}),
-    insertMany: (items) => ExecutionHistory.insertMany(items),
 };

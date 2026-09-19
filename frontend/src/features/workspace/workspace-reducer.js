@@ -1,7 +1,6 @@
 export const MAX_TABS = 10;
 
-const EMPTY_REQUEST = () => ({
-    schemaVersion: 1,
+const EMPTY_REQUEST = () => ({    schemaVersion: 1,
     id: crypto.randomUUID(),
     folderId: null,
     name: "Untitled request",
@@ -18,12 +17,13 @@ export function createInitialState() {
     return {
         tabs: [],
         activeTabId: null,
-        collections: {},
-        environments: {},
         activeEnvironmentId: null,
         collectionOrder: [],
-        responseView: "pretty",
     };
+}
+
+export function findOpenTab(tabs, candidate) {
+    return tabs.find((tab) => tab.request.id === candidate.request.id && tab.collectionId === candidate.collectionId) ?? null;
 }
 
 export function createDraftTab({ collectionId = null, collectionName = null, collectionRevision = null, folderId = null, request = null } = {}) {
@@ -42,10 +42,8 @@ export function createDraftTab({ collectionId = null, collectionName = null, col
         draftVersion: 1,
         executionId: null,
         status: "idle",
-        result: null,
         error: null,
         startedAt: null,
-        authOverride: null,
     };
 }
 
@@ -56,9 +54,6 @@ function updateTab(state, tabId, updater) {
 export function workspaceReducer(state, action) {
     switch (action.type) {
         case "draft/open": {
-            const existing = state.tabs.find((tab) => action.tab.collectionId && tab.request.id === action.tab.request.id && tab.collectionId === action.tab.collectionId);
-            if (existing) return { ...state, activeTabId: existing.id };
-            if (state.tabs.length >= MAX_TABS) return state;
             return { ...state, tabs: [...state.tabs, action.tab], activeTabId: action.tab.id };
         }
         case "draft/focus":
@@ -89,32 +84,18 @@ export function workspaceReducer(state, action) {
         case "draft/replay":
             return updateTab(state, action.tabId, (tab) => ({ ...tab, replayHistoryId: action.replayHistoryId }));
         case "draft/status":
-            return updateTab(state, action.tabId, (tab) => ({ ...tab, status: action.status, error: action.error ?? null, authOverride: action.status === "idle" ? null : tab.authOverride }));
+            return updateTab(state, action.tabId, (tab) => ({ ...tab, status: action.status, error: action.error ?? null }));
         case "draft/dispatched":
             return updateTab(state, action.tabId, (tab) => ({ ...tab, executionId: action.executionId, status: "running", error: null, startedAt: Date.now() }));
         case "draft/result":
             return updateTab(state, action.tabId, (tab) => {
                 if (action.executionId && tab.executionId && action.executionId !== tab.executionId) return tab;
-                return { ...tab, status: action.result.outcome === "cancelled" ? "cancelled" : "settled", result: action.result, error: action.result.error ?? null };
+                return { ...tab, status: action.result.outcome === "cancelled" ? "cancelled" : "settled", error: action.result.error ?? null };
             });
-        case "collection/loaded":
-            return { ...state, collections: { ...state.collections, [action.collection._id]: action.collection } };
-        case "collection/removed": {
-            const collections = { ...state.collections };
-            delete collections[action.collectionId];
-            return { ...state, collections };
-        }
-        case "environment/loaded":
-            return { ...state, environments: { ...state.environments, [action.environment._id]: action.environment } };
-        case "environment/removed": {
-            const environments = { ...state.environments };
-            delete environments[action.environmentId];
-            return { ...state, environments, activeEnvironmentId: state.activeEnvironmentId === action.environmentId ? null : state.activeEnvironmentId };
-        }
         case "environment/select":
             return { ...state, activeEnvironmentId: action.environmentId };
         case "preferences/set":
-            return { ...state, activeEnvironmentId: action.preferences.activeEnvironmentId ?? null, collectionOrder: action.preferences.collectionOrder ?? [], responseView: action.preferences.responseView ?? "pretty" };
+            return { ...state, activeEnvironmentId: action.preferences.activeEnvironmentId ?? null, collectionOrder: action.preferences.collectionOrder ?? [] };
         case "session/clear":
             return createInitialState();
         default:

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AppError } from "../../shared/errors/app-error.js";
 import { METHODS } from "../../shared/utils/schemas.js";
 import { historyService } from "./history.service.js";
 
@@ -26,7 +27,7 @@ export async function getHistoryEntry(request, response, next) {
     try {
         const record = await historyService.get(request.profileId, request.params.executionId);
         if (!record || record.expired) {
-            throw Object.assign(new Error("The requested history entry does not exist."), { statusCode: 404, code: "HISTORY_NOT_FOUND" });
+            throw new AppError(404, "HISTORY_NOT_FOUND", "The requested history entry does not exist.");
         }
         response.json({ data: record });
     } catch (error) {

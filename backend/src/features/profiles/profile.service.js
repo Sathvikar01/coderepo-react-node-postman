@@ -4,8 +4,17 @@ import { collectionRepository } from "../collections/collection.repository.js";
 import { environmentRepository } from "../environments/environment.repository.js";
 import { preferenceRepository, profileRepository } from "./profile.repository.js";
 
+export function filterAuthorizedProfiles(profiles, allowedProfileIds) {
+    if (!allowedProfileIds) return profiles;
+    const allowed = new Set(allowedProfileIds.map(String));
+    return profiles.filter((profile) => allowed.has(String(profile._id)));
+}
+
 export const profileService = {
-    list: () => profileRepository.list(),
+    async list(account) {
+        const profiles = await profileRepository.list();
+        return filterAuthorizedProfiles(profiles, account?.allowedProfileIds);
+    },
     findProfileById: (id) => profileRepository.findById(id),
 };
 

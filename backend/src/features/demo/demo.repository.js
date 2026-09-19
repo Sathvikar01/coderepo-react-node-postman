@@ -9,6 +9,4 @@ export const demoRepository = {
     create: (input) => DemoOrder.create(input),
     update: (dataset, id, input) => DemoOrder.findOneAndUpdate({ dataset, id }, { $set: input }, { new: true, runValidators: true }).lean(),
     remove: (dataset, id) => DemoOrder.findOneAndDelete({ dataset, id }).lean(),
-    deleteAll: () => DemoOrder.deleteMany({}),
-    insertMany: (items) => DemoOrder.insertMany(items),
 };

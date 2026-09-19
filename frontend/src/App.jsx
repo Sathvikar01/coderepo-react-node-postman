@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { WorkspaceLogin } from "./features/auth/WorkspaceLogin.jsx";
 import { authApi } from "./features/auth/auth.api.js";
 import { NewCollectionDialog, RenameDialog, SaveRequestDialog } from "./features/collections/CollectionDialogs.jsx";
@@ -19,7 +19,7 @@ import { MaterialIcon } from "./shared/components/MaterialIcon.jsx";
 import { clearSession, hasProfileToken, hasSessionToken, readStoredProfileId, setProfileToken, setSessionToken, setStoredProfileId } from "./shared/api/client.js";
 import { OUTCOME_LABELS } from "./shared/utils/format.js";
 import { applyTheme, readTheme } from "./shared/utils/theme.js";
-import { createDraftTab, createInitialState, workspaceReducer } from "./features/workspace/workspace-reducer.js";
+import { createDraftTab, createInitialState, findOpenTab, MAX_TABS, workspaceReducer } from "./features/workspace/workspace-reducer.js";
 import { WorkspaceHeader } from "./features/workspace/WorkspaceHeader.jsx";
 
 function BootScreen() {
@@ -52,7 +52,10 @@ export default function App() {
     const [historyRefresh, setHistoryRefresh] = useState(0);
     const [liveResult, setLiveResult] = useState(null);
     const [authOverrides, setAuthOverrides] = useState({});
+    const [executionPolicy, setExecutionPolicy] = useState(null);
     const reconcileTimers = useRef({});
+    const toastTimers = useRef(new Set());
+    const maxTabs = executionPolicy?.maxOpenTabs ?? MAX_TABS;
 
     const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId) ?? null;
     const activeCollection = activeTab?.collectionId ? collections.find((collection) => collection._id === activeTab.collectionId) ?? null : null;
@@ -60,8 +63,34 @@ export default function App() {
     const toast = useCallback((message, tone = "info") => {
         const id = crypto.randomUUID();
         setToasts((current) => [...current, { id, message, tone }]);
-        setTimeout(() => setToasts((current) => current.filter((item) => item.id !== id)), 5200);
+        const timer = setTimeout(() => {
+            toastTimers.current.delete(timer);
+            setToasts((current) => current.filter((item) => item.id !== id));
+        }, 5200);
+        toastTimers.current.add(timer);
     }, []);
+
+    useEffect(() => () => {
+        toastTimers.current.forEach((timer) => clearTimeout(timer));
+        Object.values(reconcileTimers.current).forEach((timer) => clearTimeout(timer));
+    }, []);
+
+    const openDraftTab = useCallback(
+        (tab) => {
+            const existing = findOpenTab(state.tabs, tab);
+            if (existing) {
+                dispatch({ type: "draft/focus", tabId: existing.id });
+                return true;
+            }
+            if (state.tabs.length >= maxTabs) {
+                toast(`Close a request tab before opening another. This workspace allows ${maxTabs} open requests.`, "warning");
+                return false;
+            }
+            dispatch({ type: "draft/open", tab });
+            return true;
+        },
+        [maxTabs, state.tabs, toast],
+    );
 
     useEffect(() => {
         applyTheme(theme);
@@ -87,9 +116,8 @@ export default function App() {
             const aggregates = await Promise.all(summaries.map((summary) => collectionApi.get(summary._id)));
             setCollections(aggregates);
             setEnvironments(environmentSummaries);
-            aggregates.forEach((collection) => dispatch({ type: "collection/loaded", collection }));
-            environmentSummaries.forEach((environment) => dispatch({ type: "environment/loaded", environment: { ...environment, variables: [] } }));
             dispatch({ type: "preferences/set", preferences: preferences.preferences });
+            setExecutionPolicy(preferences.executionPolicy ?? null);
         } catch (error) {
             toast(error.message, "error");
         } finally {
@@ -207,7 +235,6 @@ export default function App() {
     const openCollection = useCallback(async (summary) => {
         try {
             const aggregate = await collectionApi.get(summary._id);
-            dispatch({ type: "collection/loaded", collection: aggregate });
             setCollections((current) => current.map((item) => (item._id === aggregate._id ? aggregate : item)));
             return aggregate;
         } catch (error) {
@@ -217,10 +244,7 @@ export default function App() {
     }, [toast]);
 
     const openRequest = (collection, request) => {
-        dispatch({
-            type: "draft/open",
-            tab: createDraftTab({ collectionId: collection._id, collectionName: collection.name, collectionRevision: collection.revision, request }),
-        });
+        openDraftTab(createDraftTab({ collectionId: collection._id, collectionName: collection.name, collectionRevision: collection.revision, request }));
         setSidebarOpen(false);
     };
 
@@ -238,6 +262,8 @@ export default function App() {
         dispatch({ type: "draft/close", tabId });
     };
 
+    const activeEnvironmentRevision = state.activeEnvironmentId ? environments.find((environment) => environment._id === state.activeEnvironmentId)?.revision : undefined;
+
     const send = async () => {
         if (!activeTab || activeTab.status === "running") return;
         const executionId = crypto.randomUUID();
@@ -249,7 +275,7 @@ export default function App() {
             request: activeTab.request,
             context: {
                 ...(activeTab.collectionId ? { collectionId: activeTab.collectionId, requestId: activeTab.request.id, collectionRevision: activeTab.collectionRevision } : {}),
-                ...(state.activeEnvironmentId ? { environmentId: state.activeEnvironmentId, environmentRevision: state.environments[state.activeEnvironmentId]?.revision } : {}),
+                ...(state.activeEnvironmentId ? { environmentId: state.activeEnvironmentId, environmentRevision: activeEnvironmentRevision } : {}),
                 ...(activeTab.replayHistoryId ? { replayHistoryId: activeTab.replayHistoryId } : {}),
             },
             ...(authOverrides[activeTab.id] ? { authOverride: authOverrides[activeTab.id] } : {}),
@@ -426,13 +452,16 @@ export default function App() {
         try {
             const record = await historyApi.get(executionId);
             if (reopen) {
-                const request = record.request ?? record.snapshot?.request;
-                if (!request) {
-                    toast("This history entry does not contain a reusable request.", "error");
+                if (!record.request?.schemaVersion) {
+                    toast("This history entry was recorded before replayable request snapshots and cannot be reopened.", "error");
                     return;
                 }
-                dispatch({ type: "draft/open", tab: createDraftTab({ request }) });
-                dispatch({ type: "draft/replay", tabId: state.tabs[state.tabs.length - 1]?.id, replayHistoryId: executionId }).valueOf?.();
+                const request = structuredClone(record.request);
+                const effectiveAuth = record.snapshot?.effectiveAuth;
+                if (request.auth?.mode === "inherit" && effectiveAuth && effectiveAuth.mode !== "inherit") request.auth = structuredClone(effectiveAuth);
+                const tab = createDraftTab({ request });
+                if (!openDraftTab(tab)) return;
+                dispatch({ type: "draft/replay", tabId: tab.id, replayHistoryId: executionId });
                 toast("Opened a copy from history. Editing it does not change the saved request.");
                 setSidebarOpen(false);
                 return;
@@ -446,8 +475,9 @@ export default function App() {
                 persistence: record.persistence,
                 startedAt: record.startedAt,
                 finishedAt: record.finishedAt,
-                compileTrace: [],
-                warnings: [],
+                compileTrace: record.compileTrace ?? [],
+                warnings: record.warnings ?? [],
+                historyId: record.executionId,
                 fromHistory: true,
             });
             setSidebarOpen(false);
@@ -457,12 +487,16 @@ export default function App() {
     };
 
     const resendHistoryEntry = async (executionId) => {
-        const record = await historyApi.get(executionId);
-        const request = record.request ?? record.snapshot?.request;
-        if (!request) return;
-        const executionIdNew = crypto.randomUUID();
         try {
-            const result = await executionApi.send({ executionId: executionIdNew, tabId: "history", draftVersion: 1, request, context: { ...(record.snapshot?.source?.collectionId ? { collectionId: record.snapshot.source.collectionId } : {}), ...(state.activeEnvironmentId ? { environmentId: state.activeEnvironmentId, environmentRevision: state.environments[state.activeEnvironmentId]?.revision } : {}) } });
+            const record = await historyApi.get(executionId);
+            if (!record.request?.schemaVersion) {
+                toast("This history entry was recorded before replayable request snapshots and cannot be resent.", "error");
+                return;
+            }
+            const request = structuredClone(record.request);
+            const effectiveAuth = record.snapshot?.effectiveAuth;
+            if (request.auth?.mode === "inherit" && effectiveAuth && effectiveAuth.mode !== "inherit") request.auth = structuredClone(effectiveAuth);
+            const result = await executionApi.send({ executionId: crypto.randomUUID(), tabId: "history", draftVersion: 1, request, context: { ...(state.activeEnvironmentId ? { environmentId: state.activeEnvironmentId, environmentRevision: activeEnvironmentRevision } : {}) } });
             setLiveResult(result);
             setHistoryRefresh((current) => current + 1);
             toast(`Resent as a new execution (${OUTCOME_LABELS[result.outcome] ?? result.outcome}).`);
@@ -503,9 +537,8 @@ export default function App() {
     });
 
     const activeCollectionAuth = activeCollection?.auth ?? null;
-    const bootstrappingView = useMemo(() => bootstrapping, [bootstrapping]);
 
-    if (bootstrappingView) return <BootScreen />;
+    if (bootstrapping) return <BootScreen />;
     if (!account) return <WorkspaceLogin error={authError} loading={loginBusy} onLogin={login} />;
     if (!profile) return <ProfilePicker error={authError} loading={!profiles} onLogout={signOut} onRetry={async () => setProfiles(await profileApi.list())} onSelect={chooseProfile} profiles={profiles ?? []} switchingFrom={null} />;
 
@@ -527,7 +560,6 @@ export default function App() {
                         try {
                             await collectionApi.remove(dialog.collection._id, dialog.collection.revision);
                             setCollections((current) => current.filter((item) => item._id !== dialog.collection._id));
-                            dispatch({ type: "collection/removed", collectionId: dialog.collection._id });
                             setDialog(null);
                             toast("Collection deleted.");
                         } catch (error) {
@@ -670,7 +702,18 @@ export default function App() {
                             onDelete={deleteHistoryEntry}
                             onOpen={openHistoryEntry}
                             onResend={resendHistoryEntry}
-                            onSaveAs={(executionId) => historyApi.get(executionId).then((record) => { setDialog({ kind: "save-request", tabId: null, request: record.request }); }).catch((error) => toast(error.message, "error"))}
+                            onSaveAs={(executionId) =>
+                                historyApi
+                                    .get(executionId)
+                                    .then((record) => {
+                                        if (!record.request?.schemaVersion) {
+                                            toast("This history entry was recorded before replayable request snapshots and cannot be saved.", "error");
+                                            return;
+                                        }
+                                        setDialog({ kind: "save-request", tabId: null, request: structuredClone(record.request) });
+                                    })
+                                    .catch((error) => toast(error.message, "error"))
+                            }
                         />
                     )}
                 </aside>
@@ -688,7 +731,7 @@ export default function App() {
                                 </div>
                             ))}
                         </div>
-                        <button aria-label="New request" className="icon-button" type="button" onClick={() => dispatch({ type: "draft/open", tab: createDraftTab() })}>
+                        <button aria-label="New request" className="icon-button" type="button" onClick={() => openDraftTab(createDraftTab())}>
                             <MaterialIcon size={20}>add</MaterialIcon>
                         </button>
                     </div>
@@ -699,11 +742,12 @@ export default function App() {
                                 collectionAuth={activeCollectionAuth}
                                 draftVersion={activeTab.draftVersion}
                                 environments={environments}
+                                executionPolicy={executionPolicy}
                                 hasCollection={Boolean(activeTab.collectionId)}
                                 request={activeTab.request}
                                 running={activeTab.status === "running"}
                                 savedName={activeTab.collectionName}
-                                onCancel={() => { dispatch({ type: "draft/open", tab: createDraftTab() }); }}
+                                onCancel={() => { openDraftTab(createDraftTab()); }}
                                 onChange={updateDraft}
                                 onOverrideChange={(override) => setAuthOverrides((current) => ({ ...current, [activeTab.id]: override }))}
                                 onSave={saveDraft}
@@ -729,7 +773,7 @@ export default function App() {
                             <h2>Start a request</h2>
                             <p>Open a saved request from a collection, or create a scratch request to explore the seeded local demo target at <code>http://127.0.0.1:8000/demo/v1</code>.</p>
                             <div>
-                                <button className="primary-button" type="button" onClick={() => dispatch({ type: "draft/open", tab: createDraftTab() })}>New request</button>
+                                <button className="primary-button" type="button" onClick={() => openDraftTab(createDraftTab())}>New request</button>
                             </div>
                         </section>
                     )}
@@ -740,8 +784,8 @@ export default function App() {
                 <EnvironmentsDrawer
                     activeEnvironmentId={state.activeEnvironmentId}
                     onClose={() => setDialog(null)}
-                    onDeleted={(environmentId) => { setEnvironments((current) => current.filter((item) => item._id !== environmentId)); dispatch({ type: "environment/removed", environmentId }); if (state.activeEnvironmentId === environmentId) savePreferences({ activeEnvironmentId: null }); }}
-                    onSaved={(environment) => { setEnvironments((current) => current.map((item) => (item._id === environment._id ? { ...item, name: environment.name, revision: environment.revision } : item))); dispatch({ type: "environment/loaded", environment }); toast("Environment saved."); }}
+                    onDeleted={(environmentId) => { setEnvironments((current) => current.filter((item) => item._id !== environmentId)); if (state.activeEnvironmentId === environmentId) savePreferences({ activeEnvironmentId: null }); }}
+                    onSaved={(environment) => { setEnvironments((current) => current.map((item) => (item._id === environment._id ? { ...item, name: environment.name, revision: environment.revision } : item))); toast("Environment saved."); }}
                     onSelect={(environmentId) => savePreferences({ activeEnvironmentId: environmentId })}
                 />
             )}

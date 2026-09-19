@@ -74,7 +74,7 @@ export const historyService = {
     async recoverInterrupted(instanceId) {
         const { retentionDays } = getConfig().execution;
         const expiresAt = new Date(Date.now() + retentionDays * 24 * 60 * 60 * 1000);
-        return historyRepository.markRunningInterrupted(instanceId, expiresAt);
+        return historyRepository.markRunningInterrupted(expiresAt);
     },
     async reconcileStale() {
         const { staleRunningMs, retentionDays } = getConfig().execution;

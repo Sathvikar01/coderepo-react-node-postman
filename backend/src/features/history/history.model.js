@@ -16,6 +16,8 @@ const historySchema = new mongoose.Schema(
         snapshot: { type: mongoose.Schema.Types.Mixed, required: true },
         response: { type: mongoose.Schema.Types.Mixed, default: null },
         error: { type: mongoose.Schema.Types.Mixed, default: null },
+        compileTrace: { type: [mongoose.Schema.Types.Mixed], default: [] },
+        warnings: { type: [mongoose.Schema.Types.Mixed], default: [] },
         startedAt: { type: Date, required: true },
         finishedAt: { type: Date, default: null },
         expiresAt: { type: Date, default: null },

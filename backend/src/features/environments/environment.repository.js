@@ -15,6 +15,4 @@ export const environmentRepository = {
             { new: true, runValidators: true },
         ).lean(),
     removeWithRevision: (id, ownerProfileId, expectedRevision) => Environment.findOneAndDelete({ _id: id, ownerProfileId, revision: expectedRevision }).lean(),
-    deleteAll: () => Environment.deleteMany({}),
-    insertMany: (items) => Environment.insertMany(items),
 };

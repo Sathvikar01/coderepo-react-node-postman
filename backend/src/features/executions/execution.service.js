@@ -35,14 +35,16 @@ export function terminalResult(record) {
         finishedAt: record.finishedAt ?? null,
         request: record.request ?? null,
         snapshot: record.snapshot ?? null,
+        compileTrace: record.compileTrace ?? [],
+        warnings: record.warnings ?? [],
+        historyId: record.executionId,
         visible: record.visible !== false,
     };
 }
 
-function previewUrl(request) {
-    const base = request?.urlTemplate ?? "";
-    if (!base.includes("?")) return base;
-    return base;
+export function persistenceFrom(record) {
+    if (record) return { state: "saved" };
+    return { state: "unknown", warning: "The result was selected but its final record could not be confirmed within the finalization budget." };
 }
 
 export function createExecutionService({ registry = operationRegistry, transport = performRequest, policy = null } = {}) {
@@ -108,7 +110,7 @@ export function createExecutionService({ registry = operationRegistry, transport
         const deadlineAt = Date.now() + timeoutMs;
 
         const snapshot = {
-            displayUrl: previewUrl(effectiveRequest),
+            displayUrl: effectiveRequest.urlTemplate,
             source: resolved.source,
             environment: environment.source,
             collectionDefaults: resolved.collection
@@ -126,7 +128,7 @@ export function createExecutionService({ registry = operationRegistry, transport
                 status: "running",
                 effectCertainty: "not_dispatched",
                 persistence: { state: "saved" },
-                request: { id: effectiveRequest.id, name: effectiveRequest.name, method: effectiveRequest.method, urlTemplate: effectiveRequest.urlTemplate, folderId: effectiveRequest.folderId ?? null },
+                request: effectiveRequest,
                 context: { tabId, draftVersion, source: resolved.source, environment: environment.source },
                 snapshot,
                 startedAt,
@@ -144,21 +146,26 @@ export function createExecutionService({ registry = operationRegistry, transport
 
         const persist = async (update) => {
             const expiresAt = new Date(Date.now() + RETENTION_MS());
+            let finalized = null;
             try {
-                await Promise.race([
+                finalized = await Promise.race([
                     historyService.finalize(profileId, executionId, { status: "terminal", finishedAt: new Date(), expiresAt, ...update }),
                     new Promise((_, reject) => setTimeout(() => reject(new Error("finalize timeout")), getConfig().execution.finalizeTimeoutMs)),
                 ]);
-                return true;
             } catch {
-                return false;
+                finalized = null;
             }
+            if (finalized) return { ...persistenceFrom(finalized), record: finalized };
+            const current = await historyService.get(profileId, executionId).catch(() => null);
+            if (current && current.status === "terminal") return { ...persistenceFrom(current), record: current };
+            return { ...persistenceFrom(null), record: null };
         };
 
         const semanticFailure = async (code, message, details) => {
             registry.release(executionId);
-            await persist({ outcome: "validation_error", effectCertainty: "not_dispatched", error: { code, message, details: details ?? null }, persistence: { state: "saved" } });
-            return { executionId, tabId, draftVersion, outcome: "validation_error", response: null, error: { code, message, details: details ?? null }, effectCertainty: "not_dispatched", persistence: { state: "saved" }, historyId: executionId, startedAt, finishedAt: new Date(), compileTrace: [] };
+            const persistence = await persist({ outcome: "validation_error", effectCertainty: "not_dispatched", error: { code, message, details: details ?? null }, persistence: { state: "saved" }, compileTrace: [], warnings: [] });
+            if (persistence.record) return { ...terminalResult(persistence.record), tabId, draftVersion };
+            return { executionId, tabId, draftVersion, outcome: "validation_error", response: null, error: { code, message, details: details ?? null }, effectCertainty: "not_dispatched", persistence, historyId: executionId, startedAt, finishedAt: new Date(), compileTrace: [], warnings: [] };
         };
 
         const secretValues = [];
@@ -183,6 +190,8 @@ export function createExecutionService({ registry = operationRegistry, transport
         } catch (error) {
             return semanticFailure(error.code ?? "VALIDATION_ERROR", error.message, error.details);
         }
+
+        const executedUrl = redactUrl(compiled.url, compiled.redaction);
 
         let target;
         try {
@@ -213,7 +222,7 @@ export function createExecutionService({ registry = operationRegistry, transport
         } else {
             try {
                 const capture = await captureBody({ encoded: result.encoded, headers: result.state.headers, limits: { decodedBytes: LIMITS.decodedBytes }, method: compiled.method, status: result.state.status });
-                response = buildResponseResult({ transport: result, capture, redaction: compiled.redaction, executedUrl: redactUrl(compiled.url, compiled.redaction), timeoutMs });
+                response = buildResponseResult({ transport: result, capture, redaction: compiled.redaction, executedUrl, timeoutMs });
             } catch (error) {
                 outcome = "decode_error";
                 errorPayload = { code: "DECODE_ERROR", message: error.message, details: null };
@@ -222,15 +231,21 @@ export function createExecutionService({ registry = operationRegistry, transport
 
         registry.release(executionId);
         const finishedAt = new Date();
-        const persisted = await persist({
+        const warnings = [...(compiled.warnings ?? []), ...((response?.warnings) ?? [])];
+        const persistence = await persist({
             outcome,
             effectCertainty,
             response,
             error: errorPayload,
             persistence: { state: "saved" },
             "snapshot.bytesSent": result.bytesSent ?? 0,
+            "snapshot.executedUrl": executedUrl,
+            "snapshot.effectiveAuth": compiled.authSource === "override" ? null : compiled.authTemplate,
+            "snapshot.requestHeaders": compiled.headers.map((header) => header.name),
+            compileTrace: compiled.trace,
+            warnings,
         });
-        const persistence = persisted ? { state: "saved" } : { state: "unknown", warning: "The result was selected but its final record could not be confirmed within the finalization budget." };
+        if (persistence.record) return { ...terminalResult(persistence.record), tabId, draftVersion };
         return {
             executionId,
             tabId,
@@ -244,7 +259,7 @@ export function createExecutionService({ registry = operationRegistry, transport
             startedAt,
             finishedAt,
             compileTrace: compiled.trace,
-            warnings: [...(compiled.warnings ?? []), ...((response?.warnings) ?? [])],
+            warnings,
         };
     }
 
@@ -272,6 +287,7 @@ export function createExecutionService({ registry = operationRegistry, transport
             if (record.status === "running") {
                 await historyService.finalize(profileId, executionId, { status: "terminal", outcome: "interrupted", effectCertainty: "may_have_reached_target", finishedAt: new Date(), expiresAt: new Date(Date.now() + RETENTION_MS()), persistence: { state: "saved" } });
                 const updated = await historyService.get(profileId, executionId);
+                if (!updated) throw new AppError(404, "EXECUTION_NOT_FOUND", "The requested execution does not exist.");
                 return { ...terminalResult(updated), status: "terminal" };
             }
             return { ...terminalResult(record), status: "terminal" };

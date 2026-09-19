@@ -56,8 +56,6 @@ export function createOperationRegistry() {
         },
         isActive: (executionId) => active.has(executionId),
         isCancelRequested: (executionId) => active.get(executionId)?.cancelRequested === true,
-        activeCount: () => active.size,
-        activeIds: () => [...active.keys()],
     };
 }
 

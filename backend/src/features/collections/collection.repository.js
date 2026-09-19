@@ -16,6 +16,4 @@ export const collectionRepository = {
             { new: true, runValidators: true },
         ).lean(),
     removeWithRevision: (id, ownerProfileId, expectedRevision) => Collection.findOneAndDelete({ _id: id, ownerProfileId, revision: expectedRevision }).lean(),
-    deleteAll: () => Collection.deleteMany({}),
-    insertMany: (items) => Collection.insertMany(items),
 };

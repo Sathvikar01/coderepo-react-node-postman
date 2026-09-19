@@ -21,10 +21,11 @@ export function buildResponseResult({ transport, capture, redaction, executedUrl
     const body = { ...capture.body };
     if (body.encoding === "utf8") body.value = redactText(body.value, redaction.values);
     if (body.value.length > LIMITS.historyBodyBytes) {
-        body.value = body.value.slice(0, LIMITS.historyBodyBytes);
+        const limit = body.encoding === "base64" ? LIMITS.historyBodyBytes - (LIMITS.historyBodyBytes % 4) : LIMITS.historyBodyBytes;
+        body.value = body.value.slice(0, limit);
         body.truncated = true;
-    }
-    const warnings = [...capture.warnings];
+        body.omittedReason = "retention";
+    }    const warnings = [...capture.warnings];
     if (transport.truncated) warnings.push({ code: "CAPTURE_LIMIT", message: `Only the first ${LIMITS.captureBytes} bytes of the response body were captured.` });
     return {
         status: transport.state.status,
@@ -38,7 +39,7 @@ export function buildResponseResult({ transport, capture, redaction, executedUrl
             receivedBodyBytes: transport.encodedBytes,
             decodedBodyBytes: capture.decodedBodyBytes,
             capturedBodyBytes: Math.min(transport.encodedBytes, LIMITS.captureBytes),
-            persistedBodyBytes: Buffer.byteLength(body.encoding === "base64" ? "" : body.value, "utf8"),
+            persistedBodyBytes: Buffer.byteLength(body.value ?? "", "utf8"),
         },
         timeoutMs,
         warnings,

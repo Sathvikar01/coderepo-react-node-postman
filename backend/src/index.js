@@ -3,7 +3,6 @@ import { createApp } from "./app.js";
 import { connectDatabase, disconnectDatabase } from "./shared/config/database.js";
 import { initConfig } from "./shared/config/index.js";
 import { historyService } from "./features/history/history.service.js";
-import { INSTANCE_ID } from "./features/executions/execution.service.js";
 
 dotenv.config({ quiet: true });
 
@@ -11,7 +10,7 @@ const config = initConfig();
 const HOST = "0.0.0.0";
 
 await connectDatabase(config.mongodbUri);
-await historyService.recoverInterrupted(INSTANCE_ID);
+await historyService.recoverInterrupted();
 
 const server = createApp().listen(config.port, HOST, () => {
     console.log(`Request Desk API running on port ${config.port}`);

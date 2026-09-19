@@ -1,5 +1,4 @@
 import { AppError } from "../../shared/errors/app-error.js";
-import { getConfig } from "../../shared/config/index.js";
 import { demoRepository } from "./demo.repository.js";
 
 const DATASETS = new Set(["local", "staging"]);
@@ -51,9 +50,4 @@ async function nextOrderId(dataset) {
     const orders = await demoRepository.list(dataset);
     const highest = orders.reduce((max, order) => Math.max(max, Number.parseInt(order.id.replace(/\D/g, ""), 10) || 0), 0);
     return `ord_${String(highest + 1).padStart(4, "0")}`;
-}
-
-export function configSummary() {
-    const { allowedDemoDatabase, databaseName } = getConfig();
-    return { allowedDemoDatabase, databaseName };
 }
