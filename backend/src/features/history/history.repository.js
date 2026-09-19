@@ -16,7 +16,13 @@ export const historyRepository = {
 		).lean();
 	},
 	async list(ownerProfileId, { limit, method, outcome, q, cursor }) {
-		const filter = { ownerProfileId, visible: true, ...(method ? { "request.method": method } : {}), ...(outcome ? { outcome } : {}) };
+		const filter = {
+			ownerProfileId,
+			visible: true,
+			$or: [{ expiresAt: { $gt: new Date() } }, { expiresAt: null }, { expiresAt: { $exists: false } }],
+			...(method ? { "request.method": method } : {}),
+			...(outcome ? { outcome } : {}),
+		};
 		if (q) {
 			const pattern = escapeRegex(q);
 			filter.$and = [
