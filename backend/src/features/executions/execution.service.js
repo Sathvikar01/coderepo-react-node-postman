@@ -432,7 +432,8 @@ export function createExecutionService({ registry = operationRegistry, transport
 				record = await historyService.get(profileId, executionId);
 			}
 			if (!record) throw new AppError(404, "EXECUTION_NOT_FOUND", "The requested execution does not exist.");
-			if (record.expired) throw new AppError(410, "RESULT_REMOVED", "The stored result for this execution has expired.");
+			if (record.expired || record.visible === false)
+				throw new AppError(410, "RESULT_REMOVED", "The stored result for this execution is no longer available.");
 			return { ...terminalResult(record), status: "terminal" };
 		},
 		async cancel(profileId, executionId) {
@@ -442,6 +443,8 @@ export function createExecutionService({ registry = operationRegistry, transport
 			}
 			const record = await historyService.get(profileId, executionId);
 			if (!record) throw new AppError(404, "EXECUTION_NOT_FOUND", "The requested execution does not exist.");
+			if (record.expired || record.visible === false)
+				throw new AppError(410, "RESULT_REMOVED", "The stored result for this execution is no longer available.");
 			if (record.status === "running") {
 				await historyService.finalize(profileId, executionId, {
 					status: "terminal",
