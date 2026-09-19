@@ -87,6 +87,7 @@ export function workspaceReducer(state, action) {
 				collectionId: action.collectionId,
 				collectionName: action.collectionName,
 				collectionRevision: action.collectionRevision,
+				replayHistoryId: null,
 				dirty: false,
 			}));
 		case "draft/replay":
@@ -111,8 +112,13 @@ export function workspaceReducer(state, action) {
 					error: action.result.error ?? null,
 				};
 			});
-		case "draft/clear-result":
-			return updateTab(state, action.tabId, (tab) => ({ ...tab, result: null }));
+		case "draft/inspect":
+			return updateTab(state, action.tabId, (tab) => ({
+				...tab,
+				status: "settled",
+				result: action.result,
+				error: action.result.error ?? null,
+			}));
 		case "environment/select":
 			return { ...state, activeEnvironmentId: action.environmentId };
 		case "preferences/set":

@@ -205,10 +205,10 @@ export function createExecutionService({ registry = operationRegistry, transport
 			} catch {
 				finalized = null;
 			}
-			if (finalized) return { ...persistenceFrom(finalized), record: finalized };
+			if (finalized) return { persistence: persistenceFrom(finalized), record: finalized };
 			const current = await historyService.get(profileId, executionId).catch(() => null);
-			if (current && current.status === "terminal") return { ...persistenceFrom(current), record: current };
-			return { ...persistenceFrom(null), record: null };
+			if (current && current.status === "terminal") return { persistence: persistenceFrom(current), record: current };
+			return { persistence: persistenceFrom(null), record: null };
 		};
 
 		const semanticFailure = async (code, message, details) => {
@@ -230,7 +230,7 @@ export function createExecutionService({ registry = operationRegistry, transport
 				response: null,
 				error: { code, message, details: details ?? null },
 				effectCertainty: "not_dispatched",
-				persistence,
+				persistence: persistence.persistence,
 				historyId: executionId,
 				startedAt,
 				finishedAt: new Date(),
@@ -350,7 +350,7 @@ export function createExecutionService({ registry = operationRegistry, transport
 			response,
 			error: errorPayload,
 			effectCertainty,
-			persistence,
+			persistence: persistence.persistence,
 			historyId: executionId,
 			startedAt,
 			finishedAt,

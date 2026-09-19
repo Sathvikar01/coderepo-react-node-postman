@@ -223,17 +223,6 @@ pre,
 .tracer-symbol {
 	display: block;
 }
-.tracer-logo {
-	display: inline-flex;
-	align-items: center;
-	gap: 10px;
-}
-.tracer-logo strong {
-	color: var(--ink-strong);
-	font-size: 16px;
-	font-weight: 600;
-	letter-spacing: 0.2px;
-}
 
 .workspace-login-page,
 .profile-picker-page {

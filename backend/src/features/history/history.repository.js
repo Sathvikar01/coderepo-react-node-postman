@@ -50,6 +50,8 @@ export const historyRepository = {
 			{ _id: { $in: ids } },
 			{ $set: { "response.body.value": "", "response.body.truncated": true, "response.body.omittedReason": "retention" } },
 		),
+	// Startup recovery runs before this process accepts traffic, so every running record
+	// belongs to a dead process. Horizontal multi-instance deployment is not supported.
 	markRunningInterrupted: (expiresAt) =>
 		ExecutionHistory.updateMany(
 			{ status: "running" },

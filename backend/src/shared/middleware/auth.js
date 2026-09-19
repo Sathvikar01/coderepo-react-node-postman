@@ -1,4 +1,4 @@
-﻿import { AppError } from "../errors/app-error.js";
+import { AppError } from "../errors/app-error.js";
 import { authService } from "../../features/auth/auth.service.js";
 
 export async function requireWorkspaceAuth(request, response, next) {

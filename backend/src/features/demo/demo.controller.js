@@ -1,4 +1,4 @@
-﻿import { gzipSync } from "node:zlib";
+import { gzipSync } from "node:zlib";
 import { z } from "zod";
 import { AppError } from "../../shared/errors/app-error.js";
 import { datasetToken, demoService, requireTargetAuth } from "./demo.service.js";

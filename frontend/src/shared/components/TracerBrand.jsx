@@ -14,12 +14,3 @@ export function TracerSymbol({ size = 32, tone = "brand" }) {
 		</svg>
 	);
 }
-
-export function TracerLogo({ size = 30 }) {
-	return (
-		<span className="tracer-logo">
-			<TracerSymbol size={size} />
-			<strong>Tracer</strong>
-		</span>
-	);
-}

@@ -615,7 +615,7 @@ export default function App() {
 				historyId: record.executionId,
 				fromHistory: true,
 			};
-			if (activeTab) dispatch({ type: "draft/result", tabId: activeTab.id, executionId, result: inspected });
+			if (activeTab) dispatch({ type: "draft/inspect", tabId: activeTab.id, result: inspected });
 			else setLiveResult(inspected);
 			setSidebarOpen(false);
 		} catch (error) {
@@ -634,18 +634,21 @@ export default function App() {
 			const effectiveAuth = record.snapshot?.effectiveAuth;
 			if (request.auth?.mode === "inherit" && effectiveAuth && effectiveAuth.mode !== "inherit")
 				request.auth = structuredClone(effectiveAuth);
+			const sourceCollectionId = record.snapshot?.source?.collectionId ?? null;
+			const collectionStillExists = sourceCollectionId && collections.some((item) => item._id === sourceCollectionId);
 			const result = await executionApi.send({
 				executionId: crypto.randomUUID(),
 				tabId: "history",
 				draftVersion: 1,
 				request,
 				context: {
+					...(collectionStillExists ? { collectionId: sourceCollectionId, requestId: record.request.id } : {}),
 					...(state.activeEnvironmentId
 						? { environmentId: state.activeEnvironmentId, environmentRevision: activeEnvironmentRevision }
 						: {}),
 				},
 			});
-			if (activeTab) dispatch({ type: "draft/result", tabId: activeTab.id, result });
+			if (activeTab) dispatch({ type: "draft/inspect", tabId: activeTab.id, result });
 			else setLiveResult(result);
 			setHistoryRefresh((current) => current + 1);
 			toast(`Resent as a new execution (${OUTCOME_LABELS[result.outcome] ?? result.outcome}).`);
@@ -1039,7 +1042,7 @@ export default function App() {
 							{state.tabs.map((tab) => (
 								<div
 									aria-selected={tab.id === state.activeTabId}
-									className={`request-tab ${tab.id === state.activeTabId ? "" : ""}`}
+									className="request-tab"
 									key={tab.id}
 									role="tab"
 									tabIndex={tab.id === state.activeTabId ? 0 : -1}

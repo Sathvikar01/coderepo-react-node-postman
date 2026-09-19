@@ -13,27 +13,27 @@ await connectDatabase(config.mongodbUri);
 await historyService.recoverInterrupted();
 
 const server = createApp().listen(config.port, HOST, () => {
-    console.log(`Request Desk API running on port ${config.port}`);
-    console.log(`Environment: ${config.nodeEnv}`);
+	console.log(`Request Desk API running on port ${config.port}`);
+	console.log(`Environment: ${config.nodeEnv}`);
 });
 
 const maintenance = setInterval(async () => {
-    try {
-        await historyService.reconcileStale();
-        await historyService.retentionPass();
-    } catch (error) {
-        console.error(`Maintenance pass failed: ${error.message}`);
-    }
+	try {
+		await historyService.reconcileStale();
+		await historyService.retentionPass();
+	} catch (error) {
+		console.error(`Maintenance pass failed: ${error.message}`);
+	}
 }, 60000);
 maintenance.unref();
 
 async function shutdown(signal) {
-    console.log(`${signal} received; closing the Request Desk API.`);
-    clearInterval(maintenance);
-    server.close(async () => {
-        await disconnectDatabase();
-        process.exit(0);
-    });
+	console.log(`${signal} received; closing the Request Desk API.`);
+	clearInterval(maintenance);
+	server.close(async () => {
+		await disconnectDatabase();
+		process.exit(0);
+	});
 }
 
 process.on("SIGINT", () => shutdown("SIGINT"));

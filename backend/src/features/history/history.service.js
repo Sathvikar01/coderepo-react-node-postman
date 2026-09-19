@@ -79,7 +79,7 @@ export const historyService = {
 		const cutoff = new Date();
 		return historyRepository.hideTerminalBefore(ownerProfileId, cutoff);
 	},
-	async recoverInterrupted(instanceId) {
+	async recoverInterrupted() {
 		const { retentionDays } = getConfig().execution;
 		const expiresAt = new Date(Date.now() + retentionDays * 24 * 60 * 60 * 1000);
 		return historyRepository.markRunningInterrupted(expiresAt);

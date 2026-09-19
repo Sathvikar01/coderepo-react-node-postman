@@ -1,4 +1,4 @@
-﻿import mongoose from "mongoose";
+import mongoose from "mongoose";
 import { AppError } from "../errors/app-error.js";
 import { profileService } from "../../features/profiles/profile.service.js";
 
