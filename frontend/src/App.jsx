@@ -582,7 +582,6 @@ export default function App() {
 				context: replayContext(record, {
 					environmentId: state.activeEnvironmentId,
 					environmentRevision: activeEnvironmentRevision,
-					collectionExists: (id) => collections.some((item) => item._id === id),
 				}),
 			});
 			if (activeTab) dispatch({ type: "draft/inspect", tabId: activeTab.id, result });
