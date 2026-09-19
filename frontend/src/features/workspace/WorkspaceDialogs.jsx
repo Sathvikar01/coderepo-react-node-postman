@@ -14,7 +14,13 @@ export function WorkspaceDialogs({ actions, collections, dialog, dialogError, bu
 				collections={collections}
 				error={dialogError}
 				onCancel={onClose}
-				onSave={(payload) => actions.saveAsNewRequest(payload, draftRequest, dialog.tabId ?? activeTab?.id ?? null)}
+				onSave={(payload) =>
+					actions.saveAsNewRequest(
+						payload,
+						draftRequest,
+						Object.prototype.hasOwnProperty.call(dialog, "tabId") ? dialog.tabId : (activeTab?.id ?? null),
+					)
+				}
 				request={draftRequest}
 			/>
 		);
