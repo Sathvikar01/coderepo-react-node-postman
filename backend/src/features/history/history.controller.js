@@ -46,8 +46,8 @@ export async function deleteHistoryEntry(request, response, next) {
 
 export async function clearHistory(request, response, next) {
 	try {
-		const result = await historyService.clear(request.profileId);
-		response.json({ data: { cleared: result.modifiedCount ?? 0 } });
+		await historyService.clear(request.profileId);
+		response.status(204).send();
 	} catch (error) {
 		next(error);
 	}
