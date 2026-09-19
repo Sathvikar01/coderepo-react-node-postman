@@ -73,7 +73,7 @@ function BodyPanel({ response }) {
 			{view === "raw" ? (
 				<RawView search={search} text={text} />
 			) : pretty?.kind === "json" ? (
-				<JsonTree text={text} />
+				search.trim() ? <RawView search={search} text={pretty.value} /> : <JsonTree text={text} />
 			) : pretty?.kind === "text" ? (
 				<RawView search={search} text={pretty.value} />
 			) : (
