@@ -10,7 +10,7 @@ const EMPTY_REQUEST = () => ({
 	query: [],
 	headers: [],
 	body: { mode: "none" },
-	auth: { mode: "inherit" },
+	auth: { mode: "none" },
 	settings: { timeoutMs: 15000 },
 });
 
