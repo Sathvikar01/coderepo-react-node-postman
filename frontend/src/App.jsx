@@ -447,6 +447,9 @@ export default function App() {
 			openDialog({ kind: "save-request", tabId: activeTab.id });
 			return;
 		}
+		const saveTabId = activeTab.id;
+		const saveDraftVersion = activeTab.draftVersion;
+		const saveRequest = structuredClone(activeTab.request);
 		setBusy(true);
 		try {
 			const result = await collectionApi.update(collection._id, collection.revision, {
@@ -455,13 +458,14 @@ export default function App() {
 				variables: collection.variables ?? [],
 				auth: collection.auth ?? { mode: "none" },
 				folders: collection.folders ?? [],
-				requests: updateRequest(collection, activeTab.request).requests,
+				requests: updateRequest(collection, saveRequest).requests,
 			});
 			setCollections((current) => current.map((item) => (item._id === result._id ? result : item)));
 			dispatch({
 				type: "draft/saved",
-				tabId: activeTab.id,
-				request: activeTab.request,
+				tabId: saveTabId,
+				request: saveRequest,
+				savedDraftVersion: saveDraftVersion,
 				collectionId: result._id,
 				collectionName: result.name,
 				collectionRevision: result.revision,
