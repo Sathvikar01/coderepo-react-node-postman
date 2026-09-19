@@ -311,13 +311,43 @@ export function createExecutionService({ registry = operationRegistry, transport
 			return semanticFailure(error.code ?? "TARGET_INVALID", error.message, error.details);
 		}
 
+		const remainingBeforeDispatch = deadlineAt - Date.now();
+		if (remainingBeforeDispatch <= 0) {
+			const persistence = await persist({
+				outcome: "timeout",
+				effectCertainty: "not_dispatched",
+				response: null,
+				error: { code: "TIMEOUT", message: "This execution exceeded its time budget before dispatch.", details: null },
+				persistence: { state: "saved" },
+				compileTrace: compiled.trace,
+				warnings: compiled.warnings ?? [],
+			});
+			registry.release(executionId);
+			if (persistence.record) return { ...terminalResult(persistence.record), tabId, draftVersion };
+			return {
+				executionId,
+				tabId,
+				draftVersion,
+				outcome: "timeout",
+				response: null,
+				error: { code: "TIMEOUT", message: "This execution exceeded its time budget before dispatch.", details: null },
+				effectCertainty: "not_dispatched",
+				persistence: persistence.persistence,
+				historyId: executionId,
+				startedAt,
+				finishedAt: new Date(),
+				compileTrace: compiled.trace,
+				warnings: compiled.warnings ?? [],
+			};
+		}
+
 		let dispatchStarted = false;
 		const result = await transport({
 			target,
 			method: compiled.method,
 			headers: compiled.headers,
 			body: compiled.body,
-			timeoutMs: Math.max(1, deadlineAt - Date.now()),
+			timeoutMs: remainingBeforeDispatch,
 			signal: controller.signal,
 			limits: {
 				captureBytes: LIMITS.captureBytes,
