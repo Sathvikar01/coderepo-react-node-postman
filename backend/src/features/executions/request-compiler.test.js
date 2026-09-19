@@ -95,7 +95,7 @@ describe("request compiler", () => {
 				method: "POST",
 				urlTemplate: "http://example.com/orders",
 				query: [{ id: "q1", key: "{{field}}", value: "{{value}}", enabled: true }],
-				headers: [{ id: "h1", key: "X-{{field}}", value: "{{value}}", enabled: true }],
+				headers: [{ id: "h1", key: "X-Field", value: "{{value}}", enabled: true }],
 				body: { mode: "urlencoded", rows: [{ id: "b1", key: "{{field}}", value: "{{value}}", enabled: true }] },
 				auth: { mode: "none" },
 			}),
@@ -109,8 +109,28 @@ describe("request compiler", () => {
 			},
 		});
 		expect(compiled.url).toContain("%7B%7Bfield%7D%7D=resolved");
-		expect(compiled.headers).toContainEqual({ name: "X-{{field}}", value: "resolved" });
+		expect(compiled.headers).toContainEqual({ name: "X-Field", value: "resolved" });
 		expect(compiled.body.toString("utf8")).toBe("%7B%7Bfield%7D%7D=resolved");
+	});
+
+	test("rejects placeholder-bearing header names instead of interpolating them", () => {
+		expect(() =>
+			compileRequest({
+				request: baseRequest({
+					urlTemplate: "http://example.com/orders",
+					headers: [{ id: "h1", key: "X-{{field}}", value: "{{value}}", enabled: true }],
+					auth: { mode: "none" },
+				}),
+				collection: null,
+				environment: {
+					name: "Test",
+					variables: [
+						{ id: "f", key: "field", kind: "plain", value: "real", enabled: true },
+						{ id: "v", key: "value", kind: "plain", value: "resolved", enabled: true },
+					],
+				},
+			}),
+		).toThrow(expect.objectContaining({ code: "HEADER_INVALID" }));
 	});
 
 	test("rejects transport-managed and duplicate headers", () => {
