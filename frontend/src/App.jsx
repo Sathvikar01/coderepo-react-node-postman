@@ -1021,11 +1021,12 @@ export default function App() {
 						if (state.activeEnvironmentId === environmentId) savePreferences({ activeEnvironmentId: null });
 					}}
 					onSaved={(environment) => {
-						setEnvironments((current) =>
-							current.map((item) =>
-								item._id === environment._id ? { ...item, name: environment.name, revision: environment.revision } : item,
-							),
-						);
+						setEnvironments((current) => {
+							const summary = { _id: environment._id, name: environment.name, revision: environment.revision };
+							return current.some((item) => item._id === environment._id)
+								? current.map((item) => (item._id === environment._id ? { ...item, ...summary } : item))
+								: [...current, summary];
+						});
 						toast("Environment saved.");
 					}}
 					onSelect={(environmentId) => savePreferences({ activeEnvironmentId: environmentId })}
