@@ -27,10 +27,14 @@ export function readStoredProfileId() {
 	return localStorage.getItem(PROFILE_ID_KEY) || "";
 }
 
-export function clearSession() {
-	setSessionToken("");
+export function clearProfileSession() {
 	setProfileToken("");
 	setStoredProfileId("");
+}
+
+export function clearSession() {
+	setSessionToken("");
+	clearProfileSession();
 }
 
 export const hasSessionToken = () => Boolean(sessionToken || profileToken);
