@@ -98,7 +98,10 @@ export function workspaceReducer(state, action) {
 		case "draft/replay":
 			return updateTab(state, action.tabId, (tab) => ({ ...tab, replayHistoryId: action.replayHistoryId }));
 		case "draft/status":
-			return updateTab(state, action.tabId, (tab) => ({ ...tab, status: action.status, error: action.error ?? null }));
+			return updateTab(state, action.tabId, (tab) => {
+				if (action.executionId && tab.executionId && action.executionId !== tab.executionId) return tab;
+				return { ...tab, status: action.status, error: action.error ?? null };
+			});
 		case "draft/dispatched":
 			return updateTab(state, action.tabId, (tab) => ({
 				...tab,
