@@ -100,7 +100,12 @@ code, pre, .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", M
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { border: 3px solid transparent; border-radius: 8px; background: var(--scrollbar); background-clip: padding-box; }
 ::-webkit-scrollbar-track { background: transparent; }
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+    .toast { animation: none; }
+    .send-button:not(.cancel):active { transform: none; }
+    .sidebar { transition: none; }
+}
 
 /* Boot and auth surfaces */
 .app-boot { display: grid; position: fixed; z-index: 1000; inset: 0; place-content: center; gap: 20px; background: var(--surface-muted); color: var(--ink-strong); }
@@ -169,7 +174,7 @@ code, pre, .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", M
 
 /* Collections tree */
 .tree { display: flex; flex-direction: column; gap: 1px; }
-.tree-row { display: flex; position: relative; align-items: center; gap: 6px; min-height: 34px; padding: 0 6px 0 4px; border-radius: 8px; color: var(--ink); font-size: 13px; }
+.tree-row { display: flex; position: relative; align-items: center; gap: 6px; min-height: 34px; padding: 0 6px 0 4px; border-radius: 8px; color: var(--ink); font-size: 13px; transition: background-color 100ms ease-out; }
 .tree-row:hover { background: var(--hover); }
 .tree-row.active { background: var(--blue-tint); color: var(--ink-strong); }
 .tree-toggle { display: grid; width: 26px; height: 26px; flex: none; place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--muted); }
@@ -224,8 +229,10 @@ code, pre, .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", M
 .send-button:hover:not(:disabled) { background: var(--blue-hover); }
 .send-button:disabled { cursor: not-allowed; opacity: 0.6; }
 .send-button.cancel { background: var(--danger-container); color: var(--danger-ink); }
+.send-button:not(.cancel):active { transform: scale(0.97); }
+.send-button { transition: transform 120ms ease-out, background-color 120ms ease-out; }
 .request-editor-tabs { display: flex; gap: 2px; margin-top: 6px; border-bottom: 1px solid var(--divider); }
-.editor-tab { padding: 10px 12px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font-size: 13px; }
+.editor-tab { padding: 10px 12px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font-size: 13px; transition: color 120ms ease-out, border-color 120ms ease-out; }
 .editor-tab:hover { color: var(--ink-strong); }
 .editor-tab[aria-selected="true"] { border-bottom-color: var(--blue); color: var(--blue); font-weight: 500; }
 .editor-tab .badge { margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: var(--field-active); color: var(--muted); font-size: 11px; }
@@ -307,7 +314,7 @@ code, pre, .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", M
 
 /* History */
 .history-list { display: flex; flex-direction: column; gap: 4px; }
-.history-item { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1px solid transparent; border-radius: 10px; background: transparent; text-align: left; }
+.history-item { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1px solid transparent; border-radius: 10px; background: transparent; text-align: left; transition: background-color 100ms ease-out, border-color 100ms ease-out; }
 .history-item:hover { border-color: var(--border); background: var(--hover); }
 .history-item.active { border-color: var(--blue-tint); background: var(--blue-tint); }
 .history-item-top { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }

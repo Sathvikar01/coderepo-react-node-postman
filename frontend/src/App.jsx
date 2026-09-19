@@ -57,6 +57,7 @@ export default function App() {
     const [authOverrides, setAuthOverrides] = useState({});
     const [executionPolicy, setExecutionPolicy] = useState(null);
     const tabs = useRovingTabs();
+    const sidebarTabs = useRovingTabs();
     const splitContainer = useRef(null);
     const split = useSplitPane(splitContainer);
     const reconcileTimers = useRef({});
@@ -662,13 +663,13 @@ export default function App() {
                 onToggleTheme={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
             />
             <div className="app-body">
-                {sidebarOpen && <div className="sidebar-scrim" onClick={() => setSidebarOpen(false)} />}
-                <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
-                    <div aria-label="Sidebar sections" className="sidebar-tabs" role="tablist">
-                        <button aria-selected={sidebarTab === "collections"} className="sidebar-tab" role="tab" type="button" onClick={() => setSidebarTab("collections")}>
+                {sidebarOpen && <div aria-hidden="true" className="sidebar-scrim" onClick={() => setSidebarOpen(false)} />}
+                <aside aria-label="Workspace panel" className={`sidebar ${sidebarOpen ? "open" : ""}`} onKeyDown={(event) => { if (event.key === "Escape" && sidebarOpen) { setSidebarOpen(false); event.currentTarget.querySelector(".sidebar-tab")?.focus(); } }}>
+                    <div aria-label="Sidebar sections" className="sidebar-tabs" onKeyDown={sidebarTabs.onKeyDown} ref={sidebarTabs.listRef} role="tablist">
+                        <button aria-selected={sidebarTab === "collections"} className="sidebar-tab" role="tab" tabIndex={sidebarTab === "collections" ? 0 : -1} type="button" onClick={() => setSidebarTab("collections")}>
                             <MaterialIcon size={18}>folder_open</MaterialIcon> Collections
                         </button>
-                        <button aria-selected={sidebarTab === "history"} className="sidebar-tab" role="tab" type="button" onClick={() => setSidebarTab("history")}>
+                        <button aria-selected={sidebarTab === "history"} className="sidebar-tab" role="tab" tabIndex={sidebarTab === "history" ? 0 : -1} type="button" onClick={() => setSidebarTab("history")}>
                             <MaterialIcon size={18}>history</MaterialIcon> History
                         </button>
                     </div>
@@ -760,10 +761,10 @@ export default function App() {
                                     onSave={saveDraft}
                                     onSend={activeTab.status === "running" ? cancel : send}
                                 />
-                                {activeTab.status === "reconciling" && (
-                                    <div className="status-banner warning"><span className="spinner" />Checking whether this send was recorded before the connection dropped…</div>
-                                )}
-                                {activeTab.dirty && <div className="status-banner"><MaterialIcon size={16}>edit</MaterialIcon>Unsaved changes. Ctrl/Cmd+S saves into the collection.</div>}
+                            {activeTab.status === "reconciling" && (
+                                <div className="status-banner warning" role="status"><span className="spinner" />Checking whether this send was recorded before the connection dropped…</div>
+                            )}
+                            {activeTab.dirty && <div className="status-banner" role="status"><MaterialIcon size={16}>edit</MaterialIcon>Unsaved changes. Ctrl/Cmd+S saves into the collection.</div>}
                             </div>
                             <div
                                 aria-label="Resize request and response panes"
