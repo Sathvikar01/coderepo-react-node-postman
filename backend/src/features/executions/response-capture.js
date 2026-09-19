@@ -105,16 +105,14 @@ export async function captureBody({ encoded, headers, limits, method, status }) 
 		decoded = result.buffer;
 		exceeded = result.exceeded;
 		if (exceeded)
-			warnings.push({
-				code: "DECODED_LIMIT",
-				message: `The decoded body exceeded ${limits.decodedBytes} bytes and was truncated for display.`,
+			throw new TransportError("size_limit", `The decoded response body exceeded ${limits.decodedBytes} bytes.`, {
+				decodedBytes: result.size,
+				limit: limits.decodedBytes,
 			});
 	} else if (decoded.length > limits.decodedBytes) {
-		decoded = decoded.subarray(0, limits.decodedBytes);
-		exceeded = true;
-		warnings.push({
-			code: "DECODED_LIMIT",
-			message: `The decoded body exceeded ${limits.decodedBytes} bytes and was truncated for display.`,
+		throw new TransportError("size_limit", `The decoded response body exceeded ${limits.decodedBytes} bytes.`, {
+			decodedBytes: decoded.length,
+			limit: limits.decodedBytes,
 		});
 	}
 	const looksTextual = TEXTUAL.test(mediaType) || mediaType === "";
