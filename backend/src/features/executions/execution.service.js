@@ -278,7 +278,7 @@ export function createExecutionService({ registry = operationRegistry, transport
 
 		let target;
 		try {
-			target = await targetPolicy.validate(compiled.url, { allowLocalDemo: true });
+			target = await targetPolicy.validate(compiled.url, { allowLocalDemo: true, authoredUrl: compiled.authoredUrl });
 		} catch (error) {
 			return semanticFailure(error.code ?? "TARGET_INVALID", error.message, error.details);
 		}
