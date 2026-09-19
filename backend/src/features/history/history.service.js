@@ -1,6 +1,7 @@
 import { AppError } from "../../shared/errors/app-error.js";
 import { getConfig } from "../../shared/config/index.js";
 import { LIMITS } from "../../shared/utils/limits.js";
+import { profileRepository } from "../profiles/profile.repository.js";
 import { historyRepository } from "./history.repository.js";
 
 function decodeCursor(raw) {
@@ -91,12 +92,8 @@ export const historyService = {
 		return historyRepository.markStaleRunningInterrupted(cutoff, expiresAt);
 	},
 	async retentionPass() {
-		const seen = new Set();
-		const collections = await import("../collections/collection.model.js");
-		const profiles = await collections.Collection.distinct("ownerProfileId");
+		const profiles = await profileRepository.listIds();
 		for (const profileId of profiles) {
-			if (seen.has(String(profileId))) continue;
-			seen.add(String(profileId));
 			const excess = await historyRepository.selectBodyCandidates(profileId, getConfig().execution.retainedBodyRecords);
 			if (excess.length > 0) await historyRepository.trimBodies(excess.map((item) => item._id));
 		}

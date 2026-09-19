@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import { AppError } from "../../shared/errors/app-error.js";
 import { demoRepository } from "./demo.repository.js";
 
@@ -7,13 +8,22 @@ export function datasetToken(dataset) {
 	return dataset === "staging" ? process.env.DEMO_STAGING_TOKEN : process.env.DEMO_LOCAL_TOKEN;
 }
 
+// Constant-time comparison using node:crypto only. Both values are hashed to a fixed
+// 32-byte digest first, so timingSafeEqual always receives equal-length buffers and
+// neither the length nor the content of the expected token can leak through timing.
+function tokensMatch(candidate, expected) {
+	if (!expected || !candidate) return false;
+	const candidateDigest = createHash("sha256").update(candidate, "utf8").digest();
+	const expectedDigest = createHash("sha256").update(expected, "utf8").digest();
+	return timingSafeEqual(candidateDigest, expectedDigest);
+}
+
 export function requireTargetAuth(request, dataset) {
 	if (!DATASETS.has(dataset)) throw new AppError(404, "DATASET_NOT_FOUND", "The requested demo dataset does not exist.");
 	const authorization = request.get("authorization") || "";
 	if (!authorization.startsWith("Bearer ")) throw new AppError(401, "TARGET_AUTH_REQUIRED", "This demo target requires a bearer token.");
 	const token = authorization.slice(7).trim();
-	const expected = datasetToken(dataset);
-	if (!expected || token !== expected)
+	if (!tokensMatch(token, datasetToken(dataset)))
 		throw new AppError(401, "TARGET_AUTH_INVALID", "The bearer token is not valid for this demo dataset.");
 }
 

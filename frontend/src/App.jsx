@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { WorkspaceLogin } from "./features/auth/WorkspaceLogin.jsx";
 import { authApi } from "./features/auth/auth.api.js";
-import { NewCollectionDialog, RenameDialog, SaveRequestDialog } from "./features/collections/CollectionDialogs.jsx";
 import { CollectionsSidebar } from "./features/collections/CollectionsSidebar.jsx";
 import { collectionApi } from "./features/collections/collection.api.js";
 import {
@@ -21,10 +20,10 @@ import { executionApi } from "./features/executions/execution.api.js";
 import { ResponseViewer } from "./features/executions/ResponseViewer.jsx";
 import { HistoryPanel } from "./features/history/HistoryPanel.jsx";
 import { historyApi } from "./features/history/history.api.js";
+import { materializeReplayRequest, replayContext } from "./features/history/history-replay.js";
 import { ProfilePicker } from "./features/profiles/ProfilePicker.jsx";
 import { profileApi } from "./features/profiles/profile.api.js";
 import { RequestBuilder } from "./features/requests/RequestBuilder.jsx";
-import { ConfirmationDialog } from "./shared/components/ConfirmationDialog.jsx";
 import { MaterialIcon } from "./shared/components/MaterialIcon.jsx";
 import {
 	clearSession,
@@ -38,6 +37,8 @@ import {
 import { OUTCOME_LABELS } from "./shared/utils/format.js";
 import { applyTheme, readTheme } from "./shared/utils/theme.js";
 import { createDraftTab, createInitialState, findOpenTab, MAX_TABS, workspaceReducer } from "./features/workspace/workspace-reducer.js";
+import { useExecutionReconciliation } from "./features/workspace/useExecutionReconciliation.js";
+import { WorkspaceDialogs } from "./features/workspace/WorkspaceDialogs.jsx";
 import { WorkspaceHeader } from "./features/workspace/WorkspaceHeader.jsx";
 import { TracerSymbol } from "./shared/components/TracerBrand.jsx";
 import { useRovingTabs } from "./shared/hooks/useRovingTabs.js";
@@ -85,7 +86,6 @@ export default function App() {
 	const sidebarTabs = useRovingTabs();
 	const splitContainer = useRef(null);
 	const split = useSplitPane(splitContainer);
-	const reconcileTimers = useRef({});
 	const toastTimers = useRef(new Set());
 	const maxTabs = executionPolicy?.maxOpenTabs ?? MAX_TABS;
 
@@ -107,7 +107,6 @@ export default function App() {
 	useEffect(
 		() => () => {
 			toastTimers.current.forEach((timer) => clearTimeout(timer));
-			Object.values(reconcileTimers.current).forEach((timer) => clearTimeout(timer));
 		},
 		[],
 	);
@@ -254,8 +253,6 @@ export default function App() {
 		setDialogError("");
 		setSidebarOpen(false);
 		setHistoryRefresh(0);
-		Object.values(reconcileTimers.current).forEach((timer) => clearTimeout(timer));
-		reconcileTimers.current = {};
 	}, []);
 
 	const signOut = async () => {
@@ -351,6 +348,12 @@ export default function App() {
 		? environments.find((environment) => environment._id === state.activeEnvironmentId)?.revision
 		: undefined;
 
+	const { reconcile: startReconciliation, cancel: cancelExecution } = useExecutionReconciliation({
+		dispatch,
+		onTerminal: useCallback(() => setHistoryRefresh((current) => current + 1), []),
+		onStatus: useCallback((tabId, status) => dispatch({ type: "draft/status", tabId, status, error: null }), [dispatch]),
+	});
+
 	const send = async () => {
 		if (!activeTab || activeTab.status === "running") return;
 		const executionId = crypto.randomUUID();
@@ -392,70 +395,9 @@ export default function App() {
 		}
 	};
 
-	const startReconciliation = (tabId, executionId) => {
-		let attempts = 0;
-		const finish = () => {
-			delete reconcileTimers.current[executionId];
-		};
-		const poll = async () => {
-			attempts += 1;
-			try {
-				const record = await executionApi.status(executionId);
-				if (record.status === "terminal") {
-					dispatch({ type: "draft/result", tabId, executionId, result: record });
-					setHistoryRefresh((current) => current + 1);
-					finish();
-					return;
-				}
-			} catch (error) {
-				if (error.code === "EXECUTION_NOT_FOUND" && attempts > 4) {
-					dispatch({
-						type: "draft/status",
-						tabId,
-						status: "error",
-						error: "The application connection dropped before this send was recorded. It is unknown whether the target was reached.",
-					});
-					finish();
-					return;
-				}
-			}
-			if (attempts < 10) {
-				reconcileTimers.current[executionId] = setTimeout(poll, Math.min(400 * attempts, 3000));
-				return;
-			}
-			dispatch({
-				type: "draft/status",
-				tabId,
-				status: "error",
-				error: "This send is still unconfirmed. Check History for the recorded outcome, or send again with a new request.",
-			});
-			finish();
-		};
-		poll();
-	};
-
 	const cancel = async () => {
 		if (!activeTab?.executionId) return;
-		let attempt = 0;
-		const request = async () => {
-			attempt += 1;
-			try {
-				const result = await executionApi.cancel(activeTab.executionId);
-				if (result.status === "terminal") {
-					dispatch({ type: "draft/result", tabId: activeTab.id, executionId: activeTab.executionId, result });
-					setHistoryRefresh((current) => current + 1);
-					return;
-				}
-			} catch (error) {
-				if (error.code === "EXECUTION_NOT_FOUND" && attempt < 3) {
-					setTimeout(request, 250 * attempt);
-					return;
-				}
-			}
-			if (attempt < 4) setTimeout(request, 500 * attempt);
-			else dispatch({ type: "draft/status", tabId: activeTab.id, status: "running", error: null });
-		};
-		request();
+		await cancelExecution(activeTab.id, activeTab.executionId);
 	};
 
 	const applyAggregate = async (collection, aggregate, { keepDraft = false, successMessage } = {}) => {
@@ -586,14 +528,11 @@ export default function App() {
 		try {
 			const record = await historyApi.get(executionId);
 			if (reopen) {
-				if (!record.request?.schemaVersion) {
+				const request = materializeReplayRequest(record);
+				if (!request) {
 					toast("This history entry was recorded before replayable request snapshots and cannot be reopened.", "error");
 					return;
 				}
-				const request = structuredClone(record.request);
-				const effectiveAuth = record.snapshot?.effectiveAuth;
-				if (request.auth?.mode === "inherit" && effectiveAuth && effectiveAuth.mode !== "inherit")
-					request.auth = structuredClone(effectiveAuth);
 				const tab = createDraftTab({ request });
 				if (!openDraftTab(tab)) return;
 				dispatch({ type: "draft/replay", tabId: tab.id, replayHistoryId: executionId });
@@ -626,27 +565,21 @@ export default function App() {
 	const resendHistoryEntry = async (executionId) => {
 		try {
 			const record = await historyApi.get(executionId);
-			if (!record.request?.schemaVersion) {
+			const request = materializeReplayRequest(record);
+			if (!request) {
 				toast("This history entry was recorded before replayable request snapshots and cannot be resent.", "error");
 				return;
 			}
-			const request = structuredClone(record.request);
-			const effectiveAuth = record.snapshot?.effectiveAuth;
-			if (request.auth?.mode === "inherit" && effectiveAuth && effectiveAuth.mode !== "inherit")
-				request.auth = structuredClone(effectiveAuth);
-			const sourceCollectionId = record.snapshot?.source?.collectionId ?? null;
-			const collectionStillExists = sourceCollectionId && collections.some((item) => item._id === sourceCollectionId);
 			const result = await executionApi.send({
 				executionId: crypto.randomUUID(),
 				tabId: "history",
 				draftVersion: 1,
 				request,
-				context: {
-					...(collectionStillExists ? { collectionId: sourceCollectionId, requestId: record.request.id } : {}),
-					...(state.activeEnvironmentId
-						? { environmentId: state.activeEnvironmentId, environmentRevision: activeEnvironmentRevision }
-						: {}),
-				},
+				context: replayContext(record, {
+					environmentId: state.activeEnvironmentId,
+					environmentRevision: activeEnvironmentRevision,
+					collectionExists: (id) => collections.some((item) => item._id === id),
+				}),
 			});
 			if (activeTab) dispatch({ type: "draft/inspect", tabId: activeTab.id, result });
 			else setLiveResult(result);
@@ -708,207 +641,98 @@ export default function App() {
 			/>
 		);
 
-	const dialogNode = (() => {
-		if (!dialog) return null;
-		if (dialog.kind === "save-request") {
-			const draftRequest = dialog.request ?? activeTab?.request;
-			return (
-				<SaveRequestDialog
-					busy={busy}
-					collections={collections}
-					error={dialogError}
-					onCancel={() => setDialog(null)}
-					onSave={(payload) => saveAsNewRequest(payload, draftRequest, dialog.tabId ?? activeTab?.id ?? null)}
-					request={draftRequest}
-				/>
-			);
-		}
-		if (dialog.kind === "delete-collection") {
-			return (
-				<ConfirmationDialog
-					busy={busy}
-					confirmLabel="Delete collection"
-					message={`Delete "${dialog.collection.name}" and its ${dialog.collection.requests?.length ?? 0} saved request(s)? History entries are kept because they store their own snapshots.`}
-					onCancel={() => setDialog(null)}
-					onConfirm={async () => {
-						setBusy(true);
-						try {
-							await collectionApi.remove(dialog.collection._id, dialog.collection.revision);
-							setCollections((current) => current.filter((item) => item._id !== dialog.collection._id));
-							setDialog(null);
-							toast("Collection deleted.");
-						} catch (error) {
-							setDialogError(error.message);
-						} finally {
-							setBusy(false);
-						}
-					}}
-					title="Delete collection"
-				/>
-			);
-		}
-		if (dialog.kind === "duplicate-collection") {
-			return (
-				<RenameDialog
-					busy={busy}
-					error={dialogError}
-					initialValue={`${dialog.collection.name} copy`}
-					label="New collection name"
-					title="Duplicate collection"
-					onCancel={() => setDialog(null)}
-					onSubmit={async (name) => {
-						setBusy(true);
-						try {
-							await collectionApi.duplicate(dialog.collection._id, dialog.collection.revision, name);
-							const summaries = await collectionApi.list();
-							const aggregates = await Promise.all(summaries.map((summary) => collectionApi.get(summary._id)));
-							setCollections(aggregates);
-							setDialog(null);
-							toast("Collection duplicated.");
-						} catch (error) {
-							setDialogError(error.message);
-						} finally {
-							setBusy(false);
-						}
-					}}
-				/>
-			);
-		}
-		if (dialog.kind === "new-collection") {
-			return (
-				<NewCollectionDialog
-					busy={busy}
-					error={dialogError}
-					onCancel={() => setDialog(null)}
-					onSubmit={async ({ name, description }) => {
-						setBusy(true);
-						try {
-							const created = await collectionApi.create({ name, description });
-							const aggregate = await collectionApi.get(created._id);
-							setCollections((current) => [...current, aggregate]);
-							savePreferences({ collectionOrder: [...state.collectionOrder, aggregate._id] });
-							setDialog(null);
-							toast("Collection created.");
-						} catch (error) {
-							setDialogError(error.message);
-						} finally {
-							setBusy(false);
-						}
-					}}
-				/>
-			);
-		}
-		if (dialog.kind === "rename-collection") {
-			return (
-				<RenameDialog
-					busy={busy}
-					error={dialogError}
-					initialValue={dialog.collection.name}
-					label="Collection name"
-					title="Rename collection"
-					onCancel={() => setDialog(null)}
-					onSubmit={(name) =>
-						runAggregateEdit(dialog.collection, (collection) => ({ ...collection, name })).then((ok) => {
-							if (ok) toast("Collection renamed.");
-						})
-					}
-				/>
-			);
-		}
-		if (dialog.kind === "new-folder") {
-			return (
-				<RenameDialog
-					busy={busy}
-					error={dialogError}
-					initialValue=""
-					label="Folder name"
-					title="New folder"
-					onCancel={() => setDialog(null)}
-					onSubmit={(name) =>
-						runAggregateEdit(dialog.collection, (collection) => addFolder(collection, name).aggregate).then((ok) => {
-							if (ok) toast("Folder created.");
-						})
-					}
-				/>
-			);
-		}
-		if (dialog.kind === "rename-folder") {
-			return (
-				<RenameDialog
-					busy={busy}
-					error={dialogError}
-					initialValue={dialog.folder.name}
-					label="Folder name"
-					title="Rename folder"
-					onCancel={() => setDialog(null)}
-					onSubmit={(name) =>
-						runAggregateEdit(dialog.collection, (collection) => renameFolder(collection, dialog.folder.id, name))
-					}
-				/>
-			);
-		}
-		if (dialog.kind === "conflict") {
-			const collection = collections.find((item) => item._id === dialog.collectionId) ?? dialog.collection;
-			return (
-				<ConfirmationDialog
-					busy={busy}
-					confirmLabel="Save as a copy"
-					message="This collection changed since it was loaded. Reload the latest revision to continue editing, or save your draft as a new request."
-					onCancel={() => setDialog(null)}
-					onConfirm={() => {
-						openDialog({ kind: "save-request", tabId: dialog.tabId });
-					}}
-					title="Collection changed"
-					error={dialogError}
-					extraFooter={
-						<button className="text-button" type="button" onClick={() => reloadCollection(collection._id)}>
-							Reload
-						</button>
-					}
-				/>
-			);
-		}
-		if (dialog.kind === "close-tab") {
-			return (
-				<ConfirmationDialog
-					busy={false}
-					confirmLabel="Discard and close"
-					message={dialog.message}
-					onCancel={() => setDialog(null)}
-					onConfirm={() => {
-						dispatch({ type: "draft/close", tabId: dialog.tabId });
-						setDialog(null);
-					}}
-					title={dialog.title}
-				/>
-			);
-		}
-		if (dialog.kind === "clear-history") {
-			return (
-				<ConfirmationDialog
-					busy={busy}
-					confirmLabel="Clear history"
-					message="Visible history entries are hidden and their stored bodies removed. Execution receipts stay until they expire so duplicates are never re-sent."
-					onCancel={() => setDialog(null)}
-					onConfirm={async () => {
-						setBusy(true);
-						try {
-							await historyApi.clear();
-							setHistoryRefresh((current) => current + 1);
-							setDialog(null);
-							toast("History cleared.");
-						} catch (error) {
-							setDialogError(error.message);
-						} finally {
-							setBusy(false);
-						}
-					}}
-					title="Clear history"
-				/>
-			);
-		}
-		return null;
-	})();
+	const dialogActions = {
+		async deleteCollection(collection) {
+			setBusy(true);
+			try {
+				await collectionApi.remove(collection._id, collection.revision);
+				setCollections((current) => current.filter((item) => item._id !== collection._id));
+				setDialog(null);
+				toast("Collection deleted.");
+			} catch (error) {
+				setDialogError(error.message);
+			} finally {
+				setBusy(false);
+			}
+		},
+		async duplicateCollection(collection, name) {
+			setBusy(true);
+			try {
+				await collectionApi.duplicate(collection._id, collection.revision, name);
+				const summaries = await collectionApi.list();
+				const aggregates = await Promise.all(summaries.map((summary) => collectionApi.get(summary._id)));
+				setCollections(aggregates);
+				setDialog(null);
+				toast("Collection duplicated.");
+			} catch (error) {
+				setDialogError(error.message);
+			} finally {
+				setBusy(false);
+			}
+		},
+		async createCollection({ name, description }) {
+			setBusy(true);
+			try {
+				const created = await collectionApi.create({ name, description });
+				const aggregate = await collectionApi.get(created._id);
+				setCollections((current) => [...current, aggregate]);
+				savePreferences({ collectionOrder: [...state.collectionOrder, aggregate._id] });
+				setDialog(null);
+				toast("Collection created.");
+			} catch (error) {
+				setDialogError(error.message);
+			} finally {
+				setBusy(false);
+			}
+		},
+		renameCollection(collection, name) {
+			return runAggregateEdit(collection, (current) => ({ ...current, name })).then((ok) => {
+				if (ok) toast("Collection renamed.");
+			});
+		},
+		createFolder(collection, name) {
+			return runAggregateEdit(collection, (current) => addFolder(current, name).aggregate).then((ok) => {
+				if (ok) toast("Folder created.");
+			});
+		},
+		renameFolder(collection, folder, name) {
+			return runAggregateEdit(collection, (current) => renameFolder(current, folder.id, name));
+		},
+		saveAsCopy(tabId) {
+			openDialog({ kind: "save-request", tabId });
+		},
+		discardTab(tabId) {
+			dispatch({ type: "draft/close", tabId });
+			setDialog(null);
+		},
+		async clearHistory() {
+			setBusy(true);
+			try {
+				await historyApi.clear();
+				setHistoryRefresh((current) => current + 1);
+				setDialog(null);
+				toast("History cleared.");
+			} catch (error) {
+				setDialogError(error.message);
+			} finally {
+				setBusy(false);
+			}
+		},
+		reloadCollection,
+		saveAsNewRequest,
+	};
+
+	const dialogNode = (
+		<WorkspaceDialogs
+			actions={dialogActions}
+			activeTab={activeTab}
+			busy={busy}
+			collections={collections}
+			dialog={dialog}
+			dialogError={dialogError}
+			onClose={() => setDialog(null)}
+		/>
+	);
 
 	return (
 		<div className="app-shell">
@@ -1016,14 +840,15 @@ export default function App() {
 								historyApi
 									.get(executionId)
 									.then((record) => {
-										if (!record.request?.schemaVersion) {
+										const request = materializeReplayRequest(record);
+										if (!request) {
 											toast(
 												"This history entry was recorded before replayable request snapshots and cannot be saved.",
 												"error",
 											);
 											return;
 										}
-										openDialog({ kind: "save-request", tabId: null, request: structuredClone(record.request) });
+										openDialog({ kind: "save-request", tabId: null, request });
 									})
 									.catch((error) => toast(error.message, "error"))
 							}
