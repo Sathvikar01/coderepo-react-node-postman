@@ -1,0 +1,9 @@
+.prettierrc export-ignore
+.prettierignore export-ignore
+.editorconfig export-ignore
+.gitattributes export-ignore
+AGENTS.md export-ignore
+ASTRA_ARCHITECTURE.md export-ignore
+GUIDELINES.md export-ignore
+skills/ export-ignore
+*.sh text eol=lf

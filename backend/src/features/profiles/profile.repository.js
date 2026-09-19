@@ -1,0 +1,18 @@
+import { Profile } from "./profile.model.js";
+import { ProfilePreference } from "./preference.model.js";
+
+export const profileRepository = {
+    list: () => Profile.find({}).sort({ sortOrder: 1, name: 1 }).lean(),
+    findById: (id) => Profile.findById(id).lean(),
+    create: (input) => Profile.create(input),
+    insertMany: (items) => Profile.insertMany(items),
+    deleteAll: () => Profile.deleteMany({}),
+};
+
+export const preferenceRepository = {
+    findByProfile: (ownerProfileId) => ProfilePreference.findOne({ ownerProfileId }).lean(),
+    upsert: (ownerProfileId, update) => ProfilePreference.updateOne({ ownerProfileId }, { $set: update }, { runValidators: true, upsert: true }),
+    create: (input) => ProfilePreference.create(input),
+    insertMany: (items) => ProfilePreference.insertMany(items),
+    deleteAll: () => ProfilePreference.deleteMany({}),
+};

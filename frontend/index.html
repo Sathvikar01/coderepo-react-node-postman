@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <script>
+            document.documentElement.dataset.theme = localStorage.getItem("request-desk-theme") === "light" ? "light" : "dark";
+        </script>
+        <meta charset="UTF-8" />
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="theme-color" content="#131314" media="(prefers-color-scheme: dark)" />
+        <meta name="theme-color" content="#f8fafd" media="(prefers-color-scheme: light)" />
+        <title>Request Desk</title>
+        <style>
+            html, body, #root { width: 100%; min-width: 320px; min-height: 100%; margin: 0; }
+            body { background: #131314; }
+            html[data-theme="light"] body { background: #f8fafd; }
+            .initial-boot { display: grid; position: fixed; inset: 0; place-content: center; gap: 20px; background: #131314; color: #e3e3e3; font-family: Roboto, Arial, sans-serif; }
+            html[data-theme="light"] .initial-boot { background: #f8fafd; color: #3c4043; }
+            .initial-boot-brand { display: flex; align-items: center; gap: 12px; font-size: 22px; letter-spacing: 0.2px; }
+            .initial-boot-mark { display: grid; width: 40px; height: 40px; place-items: center; border-radius: 10px; background: #1a73e8; color: #fff; font-weight: 500; }
+        </style>
+    </head>
+    <body>
+        <div id="root">
+            <main class="initial-boot" role="status" aria-label="Opening Request Desk">
+                <div class="initial-boot-brand"><span class="initial-boot-mark">RD</span><strong>Request Desk</strong></div>
+            </main>
+        </div>
+        <script type="module" src="/src/main.jsx"></script>
+    </body>
+</html>

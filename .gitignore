@@ -1,0 +1,16 @@
+node_modules/
+.bun-tmp/
+package-lock.json
+.mongodb/
+dist/
+build/
+.env
+.env.local
+*.log
+.DS_Store
+
+CLAUDE.md
+.claude/
+
+# Local AI transcript export (kept out of git and GitHub by request; copied into the submission archive only)
+transcripts/
