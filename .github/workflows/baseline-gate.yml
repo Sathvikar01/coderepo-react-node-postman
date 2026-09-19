@@ -1,0 +1,54 @@
+name: Baseline Gate
+
+on:
+  push:
+    branches:
+      - main
+      - "chatgpt/**"
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install
+        run: bun install --frozen-lockfile
+      - name: Test
+        run: bun test
+      - name: Backend syntax
+        run: find backend/src -name '*.js' -print0 | xargs -0 -n1 node --check
+      - name: Frontend build
+        run: cd frontend && bun run build
+      - name: Seed
+        run: bash setup.sh --seed
+      - name: Runtime smoke
+        shell: bash
+        run: |
+          bun start > /tmp/tracer.log 2>&1 &
+          APP_PID=$!
+          trap 'kill $APP_PID || true; cat /tmp/tracer.log' EXIT
+          for i in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:8000/api/v1/health >/tmp/health.json &&                curl --fail --silent http://127.0.0.1:3000 >/dev/null; then
+              cat /tmp/health.json
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/tracer.log
+          exit 1
