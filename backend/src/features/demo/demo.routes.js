@@ -1,9 +1,19 @@
 import { Router } from "express";
 import {
+	authExample,
+	compressedExample,
 	createOrder,
 	datasetTokens,
 	deleteOrder,
 	echo,
+	exampleDelay,
+	exampleEcho,
+	exampleEmpty,
+	exampleHtml,
+	exampleInvalidJson,
+	exampleStatus,
+	exampleText,
+	exampleXml,
 	formatSamples,
 	getOrder,
 	gzip,
@@ -15,6 +25,16 @@ import {
 
 export const demoRouter = Router();
 demoRouter.get("/v1/tokens", datasetTokens);
+demoRouter.get("/v1/auth/:kind", authExample);
+demoRouter.all("/v1/examples/echo", exampleEcho);
+demoRouter.get("/v1/examples/status/:code", exampleStatus);
+demoRouter.get("/v1/examples/delay/:ms", exampleDelay);
+demoRouter.get("/v1/examples/text", exampleText);
+demoRouter.get("/v1/examples/html", exampleHtml);
+demoRouter.get("/v1/examples/xml", exampleXml);
+demoRouter.get("/v1/examples/invalid-json", exampleInvalidJson);
+demoRouter.get("/v1/examples/empty", exampleEmpty);
+demoRouter.get("/v1/examples/compressed/:kind", compressedExample);
 demoRouter.get("/v1/echo", echo);
 demoRouter.get("/v1/status/:code", statusCode);
 demoRouter.get("/v1/slow", slow);
