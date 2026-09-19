@@ -148,7 +148,7 @@ export function compileRequest({ request, collection, environment, authOverride,
 	const pairs = mergeQuery(url, rows, missing, trace);
 	const headerRows = forRow(request.headers ?? []);
 	const body = buildBody(request.body, map, missing, trace);
-	const { auth, source } = { ...effectiveAuth(request, collection), ...(authOverride ? { auth: authOverride, source: "override" } : {}) };
+	const { auth, source } = authOverride ? { auth: authOverride, source: "override" } : effectiveAuth(request, collection);
 	const resolvedAuth = auth ?? { mode: "none" };
 	const headers = [];
 	const headerNames = new Set();
