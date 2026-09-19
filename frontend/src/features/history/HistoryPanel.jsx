@@ -17,26 +17,34 @@ const OUTCOME_STYLE = {
 export function HistoryPanel({ onDelete, onOpen, onResend, onSaveAs, onClear, refreshToken }) {
     const [items, setItems] = useState([]);
     const [cursor, setCursor] = useState(null);
-    const [hasMore, setHasMore] = useState(false);
     const [query, setQuery] = useState("");
     const [method, setMethod] = useState("");
     const [outcome, setOutcome] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const searchTimer = useRef(null);
+    const requestId = useRef(0);
+    const mounted = useRef(true);
+
+    useEffect(() => {
+        mounted.current = true;
+        return () => { mounted.current = false; };
+    }, []);
 
     const load = async ({ append = false, nextCursor = null } = {}) => {
+        const id = ++requestId.current;
         setLoading(true);
         setError("");
         try {
             const page = await historyApi.list({ cursor: nextCursor, limit: 25, method: method || undefined, outcome: outcome || undefined, q: query || undefined });
+            if (id !== requestId.current || !mounted.current) return;
             setItems((current) => (append ? [...current, ...page.items] : page.items));
             setCursor(page.nextCursor);
-            setHasMore(Boolean(page.nextCursor));
         } catch (caught) {
+            if (id !== requestId.current || !mounted.current) return;
             setError(caught.message);
         } finally {
-            setLoading(false);
+            if (id === requestId.current && mounted.current) setLoading(false);
         }
     };
 
@@ -95,7 +103,7 @@ export function HistoryPanel({ onDelete, onOpen, onResend, onSaveAs, onClear, re
                         </div>
                     ))}
                 </div>
-                {hasMore && (
+                {cursor && (
                     <button className="text-button" disabled={loading} type="button" onClick={() => load({ append: true, nextCursor: cursor })}>
                         {loading ? "Loading…" : "Load more"}
                     </button>

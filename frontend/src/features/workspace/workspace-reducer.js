@@ -42,6 +42,7 @@ export function createDraftTab({ collectionId = null, collectionName = null, col
         draftVersion: 1,
         executionId: null,
         status: "idle",
+        result: null,
         error: null,
         startedAt: null,
     };
@@ -90,8 +91,10 @@ export function workspaceReducer(state, action) {
         case "draft/result":
             return updateTab(state, action.tabId, (tab) => {
                 if (action.executionId && tab.executionId && action.executionId !== tab.executionId) return tab;
-                return { ...tab, status: action.result.outcome === "cancelled" ? "cancelled" : "settled", error: action.result.error ?? null };
+                return { ...tab, status: action.result.outcome === "cancelled" ? "cancelled" : "settled", result: action.result, error: action.result.error ?? null };
             });
+        case "draft/clear-result":
+            return updateTab(state, action.tabId, (tab) => ({ ...tab, result: null }));
         case "environment/select":
             return { ...state, activeEnvironmentId: action.environmentId };
         case "preferences/set":

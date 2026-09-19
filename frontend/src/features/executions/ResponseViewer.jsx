@@ -199,7 +199,7 @@ export function ResponseViewer({ onCopyUrl, result }) {
                         <button aria-controls="response-panel-details" aria-selected={tab === "details"} className="editor-tab" id="response-tab-details" role="tab" tabIndex={tab === "details" ? 0 : -1} type="button" onClick={() => setTab("details")}>Details</button>
                     </div>
                     <div aria-labelledby={`response-tab-${tab}`} className="response-panel" id={`response-panel-${tab}`} role="tabpanel">
-                        {tab === "body" && <BodyPanel response={response} />}
+                        {tab === "body" && <BodyPanel key={result.executionId ?? "live"} response={response} />}
                         {tab === "headers" && <HeadersPanel headers={response.headers} />}
                         {tab === "details" && <DetailsPanel result={result} />}
                     </div>

@@ -8,6 +8,7 @@ export function Modal({ children, className = "", label = "Tracer dialog", label
     }, [onClose]);
     useEffect(() => {
         const dialog = reference.current;
+        const opener = document.activeElement;
         if (!dialog.open) dialog.showModal();
         window.requestAnimationFrame(() => dialog.querySelector("[autofocus], [data-autofocus]")?.focus());
         const cancel = (event) => {
@@ -15,7 +16,10 @@ export function Modal({ children, className = "", label = "Tracer dialog", label
             closeReference.current();
         };
         dialog.addEventListener("cancel", cancel);
-        return () => dialog.removeEventListener("cancel", cancel);
+        return () => {
+            dialog.removeEventListener("cancel", cancel);
+            if (opener instanceof HTMLElement && document.contains(opener)) opener.focus();
+        };
     }, []);
     return (
         <dialog

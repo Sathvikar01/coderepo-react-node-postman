@@ -200,6 +200,22 @@ export default function App() {
         }
     };
 
+    const resetWorkspaceState = useCallback(() => {
+        dispatch({ type: "session/clear" });
+        setProfile(null);
+        setCollections([]);
+        setEnvironments([]);
+        setLiveResult(null);
+        setAuthOverrides({});
+        setExecutionPolicy(null);
+        setDialog(null);
+        setDialogError("");
+        setSidebarOpen(false);
+        setHistoryRefresh(0);
+        Object.values(reconcileTimers.current).forEach((timer) => clearTimeout(timer));
+        reconcileTimers.current = {};
+    }, []);
+
     const signOut = async () => {
         try {
             await authApi.logout();
@@ -207,12 +223,9 @@ export default function App() {
             // The stateless token is discarded locally regardless of the response.
         }
         clearSession();
-        dispatch({ type: "session/clear" });
+        resetWorkspaceState();
         setAccount(null);
-        setProfile(null);
         setProfiles(null);
-        setCollections([]);
-        setEnvironments([]);
     };
 
     const switchProfile = async () => {
@@ -224,10 +237,7 @@ export default function App() {
             return;
         }
         clearSession();
-        dispatch({ type: "session/clear" });
-        setProfile(null);
-        setCollections([]);
-        setEnvironments([]);
+        resetWorkspaceState();
     };
 
     const savePreferences = async (patch) => {
@@ -260,12 +270,23 @@ export default function App() {
         dispatch({ type: "draft/update", tabId: activeTab.id, patch });
     };
 
+    const openDialog = useCallback((next) => {
+        setDialogError("");
+        setDialog(next);
+    }, []);
+
     const closeTab = (tabId) => {
         const tab = state.tabs.find((item) => item.id === tabId);
         if (tab?.dirty) {
-            setDialog({ kind: "close-tab", tabId, title: "Discard unsaved changes?", message: `${tab.name} has unsaved changes. Closing this tab discards them.` });
+            openDialog({ kind: "close-tab", tabId, title: "Discard unsaved changes?", message: `${tab.name} has unsaved changes. Closing this tab discards them.` });
             return;
         }
+        setAuthOverrides((current) => {
+            if (!(tabId in current)) return current;
+            const next = { ...current };
+            delete next[tabId];
+            return next;
+        });
         dispatch({ type: "draft/close", tabId });
     };
 
@@ -275,6 +296,12 @@ export default function App() {
         if (!activeTab || activeTab.status === "running") return;
         const executionId = crypto.randomUUID();
         dispatch({ type: "draft/dispatched", tabId: activeTab.id, executionId });
+        setAuthOverrides((current) => {
+            if (!(activeTab.id in current)) return current;
+            const next = { ...current };
+            delete next[activeTab.id];
+            return next;
+        });
         const input = {
             executionId,
             tabId: activeTab.id,
@@ -290,7 +317,6 @@ export default function App() {
         try {
             const result = await executionApi.send(input);
             dispatch({ type: "draft/result", tabId: activeTab.id, executionId, result });
-            setLiveResult(result);
             setHistoryRefresh((current) => current + 1);
             if (result.outcome === "validation_error") toast(result.error?.message ?? "The request could not be sent.", "error");
         } catch (error) {
@@ -301,23 +327,32 @@ export default function App() {
 
     const startReconciliation = (tabId, executionId) => {
         let attempts = 0;
+        const finish = () => {
+            delete reconcileTimers.current[executionId];
+        };
         const poll = async () => {
             attempts += 1;
             try {
                 const record = await executionApi.status(executionId);
                 if (record.status === "terminal") {
                     dispatch({ type: "draft/result", tabId, executionId, result: record });
-                    setLiveResult(record);
                     setHistoryRefresh((current) => current + 1);
+                    finish();
                     return;
                 }
             } catch (error) {
                 if (error.code === "EXECUTION_NOT_FOUND" && attempts > 4) {
                     dispatch({ type: "draft/status", tabId, status: "error", error: "The application connection dropped before this send was recorded. It is unknown whether the target was reached." });
+                    finish();
                     return;
                 }
             }
-            if (attempts < 10) reconcileTimers.current[executionId] = setTimeout(poll, Math.min(400 * attempts, 3000));
+            if (attempts < 10) {
+                reconcileTimers.current[executionId] = setTimeout(poll, Math.min(400 * attempts, 3000));
+                return;
+            }
+            dispatch({ type: "draft/status", tabId, status: "error", error: "This send is still unconfirmed. Check History for the recorded outcome, or send again with a new request." });
+            finish();
         };
         poll();
     };
@@ -331,7 +366,6 @@ export default function App() {
                 const result = await executionApi.cancel(activeTab.executionId);
                 if (result.status === "terminal") {
                     dispatch({ type: "draft/result", tabId: activeTab.id, executionId: activeTab.executionId, result });
-                    setLiveResult(result);
                     setHistoryRefresh((current) => current + 1);
                     return;
                 }
@@ -356,7 +390,6 @@ export default function App() {
             folders: aggregate.folders ?? [],
             requests: aggregate.requests ?? [],
         });
-        dispatch({ type: "collection/loaded", collection: updated });
         setCollections((current) => current.map((item) => (item._id === updated._id ? updated : item)));
         if (!keepDraft) setDialog(null);
         setDialogError("");
@@ -387,14 +420,12 @@ export default function App() {
     const saveDraft = async () => {
         if (!activeTab) return;
         if (!activeTab.collectionId) {
-            setDialogError("");
-            setDialog({ kind: "save-request", tabId: activeTab.id });
+            openDialog({ kind: "save-request", tabId: activeTab.id });
             return;
         }
         const collection = collections.find((item) => item._id === activeTab.collectionId);
         if (!collection) {
-            setDialogError("");
-            setDialog({ kind: "save-request", tabId: activeTab.id });
+            openDialog({ kind: "save-request", tabId: activeTab.id });
             return;
         }
         setBusy(true);
@@ -407,14 +438,13 @@ export default function App() {
                 folders: collection.folders ?? [],
                 requests: updateRequest(collection, activeTab.request).requests,
             });
-            dispatch({ type: "collection/loaded", collection: result });
             setCollections((current) => current.map((item) => (item._id === result._id ? result : item)));
             dispatch({ type: "draft/saved", tabId: activeTab.id, request: activeTab.request, collectionId: result._id, collectionName: result.name, collectionRevision: result.revision });
             toast("Request saved.");
         } catch (error) {
             if (error.code === "COLLECTION_REVISION_CONFLICT") {
                 setDialogError("");
-                setDialog({ kind: "conflict", tabId: activeTab.id, collectionId: collection._id });
+                openDialog({ kind: "conflict", tabId: activeTab.id, collectionId: collection._id });
                 return;
             }
             toast(error.message, "error");
@@ -448,7 +478,6 @@ export default function App() {
         if (aggregate && activeTab) {
             const fresh = aggregate.requests.find((item) => item.id === activeTab.request.id);
             if (fresh) {
-                dispatch({ type: "draft/update", tabId: activeTab.id, patch: {} });
                 dispatch({ type: "draft/saved", tabId: activeTab.id, request: fresh, collectionId: aggregate._id, collectionName: aggregate.name, collectionRevision: aggregate.revision });
             }
         }
@@ -473,7 +502,7 @@ export default function App() {
                 setSidebarOpen(false);
                 return;
             }
-            setLiveResult({
+            const inspected = {
                 executionId,
                 outcome: record.outcome,
                 response: record.response,
@@ -486,7 +515,9 @@ export default function App() {
                 warnings: record.warnings ?? [],
                 historyId: record.executionId,
                 fromHistory: true,
-            });
+            };
+            if (activeTab) dispatch({ type: "draft/result", tabId: activeTab.id, executionId, result: inspected });
+            else setLiveResult(inspected);
             setSidebarOpen(false);
         } catch (error) {
             toast(error.message, "error");
@@ -504,7 +535,8 @@ export default function App() {
             const effectiveAuth = record.snapshot?.effectiveAuth;
             if (request.auth?.mode === "inherit" && effectiveAuth && effectiveAuth.mode !== "inherit") request.auth = structuredClone(effectiveAuth);
             const result = await executionApi.send({ executionId: crypto.randomUUID(), tabId: "history", draftVersion: 1, request, context: { ...(state.activeEnvironmentId ? { environmentId: state.activeEnvironmentId, environmentRevision: activeEnvironmentRevision } : {}) } });
-            setLiveResult(result);
+            if (activeTab) dispatch({ type: "draft/result", tabId: activeTab.id, result });
+            else setLiveResult(result);
             setHistoryRefresh((current) => current + 1);
             toast(`Resent as a new execution (${OUTCOME_LABELS[result.outcome] ?? result.outcome}).`);
         } catch (error) {
@@ -523,25 +555,28 @@ export default function App() {
     };
 
     const clearHistory = async () => {
-        setDialog({ kind: "clear-history" });
+        openDialog({ kind: "clear-history" });
     };
+
+    const shortcutHandlers = useRef({ send: null, saveDraft: null, dialogOpen: false });
+    shortcutHandlers.current = { send, saveDraft, dialogOpen: Boolean(dialog) };
 
     useEffect(() => {
         const onKeyDown = (event) => {
             const meta = event.metaKey || event.ctrlKey;
-            if (!activeTab) return;
-            if (meta && event.key === "Enter") {
+            if (!meta || shortcutHandlers.current.dialogOpen) return;
+            if (event.key === "Enter") {
                 event.preventDefault();
-                send();
+                shortcutHandlers.current.send?.();
             }
-            if (meta && event.key.toLowerCase() === "s") {
+            if (event.key.toLowerCase() === "s") {
                 event.preventDefault();
-                saveDraft();
+                shortcutHandlers.current.saveDraft?.();
             }
         };
         window.addEventListener("keydown", onKeyDown);
         return () => window.removeEventListener("keydown", onKeyDown);
-    });
+    }, []);
 
     const activeCollectionAuth = activeCollection?.auth ?? null;
 
@@ -562,8 +597,7 @@ export default function App() {
                     confirmLabel="Delete collection"
                     message={`Delete "${dialog.collection.name}" and its ${dialog.collection.requests?.length ?? 0} saved request(s)? History entries are kept because they store their own snapshots.`}
                     onCancel={() => setDialog(null)}
-                    onConfirm={async () => {
-                        setBusy(true);
+                    onConfirm={async () => {                        setBusy(true);
                         try {
                             await collectionApi.remove(dialog.collection._id, dialog.collection.revision);
                             setCollections((current) => current.filter((item) => item._id !== dialog.collection._id));
@@ -587,7 +621,6 @@ export default function App() {
                     const summaries = await collectionApi.list();
                     const aggregates = await Promise.all(summaries.map((summary) => collectionApi.get(summary._id)));
                     setCollections(aggregates);
-                    aggregates.forEach((collection) => dispatch({ type: "collection/loaded", collection }));
                     setDialog(null);
                     toast("Collection duplicated.");
                 } catch (error) {
@@ -604,7 +637,6 @@ export default function App() {
                     const created = await collectionApi.create({ name, description });
                     const aggregate = await collectionApi.get(created._id);
                     setCollections((current) => [...current, aggregate]);
-                    dispatch({ type: "collection/loaded", collection: aggregate });
                     savePreferences({ collectionOrder: [...state.collectionOrder, aggregate._id] });
                     setDialog(null);
                     toast("Collection created.");
@@ -632,7 +664,7 @@ export default function App() {
                     confirmLabel="Save as a copy"
                     message="This collection changed since it was loaded. Reload the latest revision to continue editing, or save your draft as a new request."
                     onCancel={() => setDialog(null)}
-                    onConfirm={() => { setDialog({ kind: "save-request", tabId: dialog.tabId }); }}
+                    onConfirm={() => { openDialog({ kind: "save-request", tabId: dialog.tabId }); }}
                     title="Collection changed"
                     error={dialogError}
                     extraFooter={<button className="text-button" type="button" onClick={() => reloadCollection(collection._id)}>Reload</button>}
@@ -658,13 +690,13 @@ export default function App() {
                 theme={theme}
                 onEnvironmentChange={(environmentId) => { savePreferences({ activeEnvironmentId: environmentId || null }); if (environmentId) dispatch({ type: "environment/select", environmentId }); }}
                 onLogout={switchProfile}
-                onOpenEnvironments={() => setDialog({ kind: "environments" })}
+                onOpenEnvironments={() => openDialog({ kind: "environments" })}
                 onToggleSidebar={() => setSidebarOpen((current) => !current)}
                 onToggleTheme={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
             />
             <div className="app-body">
                 {sidebarOpen && <div aria-hidden="true" className="sidebar-scrim" onClick={() => setSidebarOpen(false)} />}
-                <aside aria-label="Workspace panel" className={`sidebar ${sidebarOpen ? "open" : ""}`} onKeyDown={(event) => { if (event.key === "Escape" && sidebarOpen) { setSidebarOpen(false); event.currentTarget.querySelector(".sidebar-tab")?.focus(); } }}>
+                <aside aria-label="Workspace panel" className={`sidebar ${sidebarOpen ? "open" : ""}`} onKeyDown={(event) => { if (event.key === "Escape" && sidebarOpen) setSidebarOpen(false); }}>
                     <div aria-label="Sidebar sections" className="sidebar-tabs" onKeyDown={sidebarTabs.onKeyDown} ref={sidebarTabs.listRef} role="tablist">
                         <button aria-selected={sidebarTab === "collections"} className="sidebar-tab" role="tab" tabIndex={sidebarTab === "collections" ? 0 : -1} type="button" onClick={() => setSidebarTab("collections")}>
                             <MaterialIcon size={18}>folder_open</MaterialIcon> Collections
@@ -680,19 +712,19 @@ export default function App() {
                             collections={collections}
                             collectionOrder={state.collectionOrder}
                             loading={loadingCollections}
-                            onDeleteCollection={(collection) => setDialog({ kind: "delete-collection", collection })}
+                            onDeleteCollection={(collection) => openDialog({ kind: "delete-collection", collection })}
                             onDeleteFolder={(collection, folder) => runAggregateEdit(collection, (item) => deleteFolder(item, folder.id))}
                             onDeleteRequest={(collection, requestId) => runAggregateEdit(collection, (item) => removeRequest(item, requestId))}
-                            onDuplicateCollection={(collection) => setDialog({ kind: "duplicate-collection", collection })}
+                            onDuplicateCollection={(collection) => openDialog({ kind: "duplicate-collection", collection })}
                             onDuplicateFolder={(collection, folder) => runAggregateEdit(collection, (item) => duplicateFolder(item, folder.id)).then((ok) => { if (ok) toast("Folder duplicated."); })}
                             onDuplicateRequest={(collection, requestId) => runAggregateEdit(collection, (item) => duplicateRequest(item, requestId)).then((ok) => { if (ok) toast("Request duplicated."); })}
                             onMoveRequest={(collection, requestId, delta) => runAggregateEdit(collection, (item) => moveRequest(item, requestId, delta))}
-                            onNewCollection={() => { setDialogError(""); setDialog({ kind: "new-collection" }); }}
-                            onNewFolder={(collection) => setDialog({ kind: "new-folder", collection })}
+                            onNewCollection={() => openDialog({ kind: "new-collection" })}
+                            onNewFolder={(collection) => openDialog({ kind: "new-folder", collection })}
                             onOpenCollection={openCollection}
                             onOpenRequest={openRequest}
-                            onRenameCollection={(collection) => setDialog({ kind: "rename-collection", collection })}
-                            onRenameFolder={(collection, folder) => setDialog({ kind: "rename-folder", collection, folder })}
+                            onRenameCollection={(collection) => openDialog({ kind: "rename-collection", collection })}
+                            onRenameFolder={(collection, folder) => openDialog({ kind: "rename-folder", collection, folder })}
                             onReorderCollection={(collectionId, delta) => {
                                 const order = [...state.collectionOrder];
                                 const index = order.indexOf(collectionId);
@@ -717,7 +749,7 @@ export default function App() {
                                             toast("This history entry was recorded before replayable request snapshots and cannot be saved.", "error");
                                             return;
                                         }
-                                        setDialog({ kind: "save-request", tabId: null, request: structuredClone(record.request) });
+                                        openDialog({ kind: "save-request", tabId: null, request: structuredClone(record.request) });
                                     })
                                     .catch((error) => toast(error.message, "error"))
                             }
@@ -728,11 +760,11 @@ export default function App() {
                     <div className="request-tabs">
                         <div aria-label="Open requests" className="request-tab-list" onKeyDown={tabs.onKeyDown} ref={tabs.listRef} role="tablist">
                             {state.tabs.map((tab) => (
-                                <div className={`request-tab ${tab.id === state.activeTabId ? "" : ""}`} key={tab.id} role="tab" aria-selected={tab.id === state.activeTabId} tabIndex={tab.id === state.activeTabId ? 0 : -1} onClick={() => dispatch({ type: "draft/focus", tabId: tab.id })} onKeyDown={(event) => { if (event.key === "Enter") dispatch({ type: "draft/focus", tabId: tab.id }); }}>
+                                <div aria-selected={tab.id === state.activeTabId} className={`request-tab ${tab.id === state.activeTabId ? "" : ""}`} key={tab.id} role="tab" tabIndex={tab.id === state.activeTabId ? 0 : -1} onClick={() => dispatch({ type: "draft/focus", tabId: tab.id })} onKeyDown={(event) => { if (event.key === "Enter") dispatch({ type: "draft/focus", tabId: tab.id }); }}>
                                     <span className={`method-tag ${tab.request.method.toLowerCase()}`}>{tab.request.method}</span>
                                     <span>{tab.name}</span>
                                     {tab.dirty && <span aria-label="Unsaved changes" className="dirty-dot" />}
-                                    <button aria-label={`Close ${tab.name}`} className="request-tab-close" type="button" onClick={(event) => { event.stopPropagation(); closeTab(tab.id); }}>
+                                    <button aria-label={`Close ${tab.name}`} className="request-tab-close" tabIndex={-1} type="button" onClick={(event) => { event.stopPropagation(); closeTab(tab.id); }}>
                                         <MaterialIcon size={14}>close</MaterialIcon>
                                     </button>
                                 </div>
@@ -777,7 +809,7 @@ export default function App() {
                                 title="Drag to resize. Arrow keys adjust; Enter resets."
                             />
                             <div className="request-pane-bottom">
-                                {liveResult ? <ResponseViewer result={liveResult} onCopyUrl={async (headers) => { const location = headers.find((header) => header.name.toLowerCase() === "location")?.value; if (location) { await navigator.clipboard?.writeText(location); toast("Resolved URL copied."); } }} /> : (
+                                {activeTab.result ? <ResponseViewer result={activeTab.result} onCopyUrl={async (headers) => { const location = headers.find((header) => header.name.toLowerCase() === "location")?.value; if (location) { await navigator.clipboard?.writeText(location); toast("Resolved URL copied."); } }} /> : (
                                     <section aria-label="Response" className="response-area">
                                         <div className="response-placeholder">
                                             <MaterialIcon size={30}>send</MaterialIcon>

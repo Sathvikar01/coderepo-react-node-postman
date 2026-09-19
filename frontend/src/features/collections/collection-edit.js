@@ -74,10 +74,3 @@ export function duplicateFolder(aggregate, folderId) {
     };
 }
 
-export function requestChangedSince(base, canonical) {
-    if (!base) return canonical;
-    const match = canonical.requests.find((item) => item.id === base.id);
-    if (!match) return { missing: true };
-    if (JSON.stringify(match) !== JSON.stringify(base)) return { changed: true };
-    return null;
-}

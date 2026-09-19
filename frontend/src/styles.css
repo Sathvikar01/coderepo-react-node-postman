@@ -209,7 +209,7 @@ code, pre, .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", M
 .request-pane { display: flex; flex: 1; min-height: 0; flex-direction: column; background: var(--surface); }
 .request-pane-top { display: flex; min-height: 0; flex-direction: column; overflow: auto; }
 .request-pane-bottom { display: flex; flex: 1; min-height: 0; flex-direction: column; }
-.pane-splitter { display: flex; height: 7px; flex: none; align-items: center; justify-content: center; border-top: 1px solid var(--divider); border-bottom: 1px solid var(--divider); background: var(--surface-muted); cursor: row-resize; }
+.pane-splitter { display: flex; height: 7px; flex: none; align-items: center; justify-content: center; border-top: 1px solid var(--divider); border-bottom: 1px solid var(--divider); background: var(--surface-muted); cursor: row-resize; touch-action: none; }
 .pane-splitter::before { width: 46px; height: 3px; border-radius: 3px; background: var(--border-strong); content: ""; }
 .pane-splitter:hover::before, .pane-splitter:focus-visible::before { background: var(--brand); }
 .pane-splitter:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }

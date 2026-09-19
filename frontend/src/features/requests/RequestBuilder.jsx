@@ -21,7 +21,7 @@ const AUTH_MODES = [
 
 const countEnabled = (rows = []) => rows.filter((row) => row.enabled && row.key.trim()).length;
 
-function AuthEditor({ auth, authOverride, collectionAuth, onChange, onOverrideChange }) {
+function AuthEditor({ auth, authOverride, collectionAuth, onOverrideChange }) {
     const mode = authOverride ? authOverride.mode : auth?.mode ?? "inherit";
     const effective = authOverride ?? auth ?? { mode: "none" };
     const setMode = (nextMode) => {
@@ -152,7 +152,7 @@ export function RequestBuilder({ authOverride, collectionAuth, draftVersion, env
                 </button>
             </div>
             <div className="url-bar">
-                <SelectMenu ariaLabel="HTTP method" className="method-select" options={METHODS.map((method) => ({ value: method, label: method }))} value={request.method} onChange={(method) => onChange({ method, ...(disabledBody ? {} : {}) })} />
+                <SelectMenu ariaLabel="HTTP method" className="method-select" options={METHODS.map((method) => ({ value: method, label: method }))} value={request.method} onChange={(method) => onChange({ method })} />
                 <input
                     aria-label="Request URL"
                     className="url-input"
@@ -189,7 +189,7 @@ export function RequestBuilder({ authOverride, collectionAuth, draftVersion, env
                 {section === "params" && <KeyValueEditor label="Query parameters" rows={request.query} onChange={(query) => onChange({ query })} />}
                 {section === "headers" && <KeyValueEditor label="Headers" rows={request.headers} onChange={(headers) => onChange({ headers })} />}
                 {section === "body" && <BodyEditor body={disabledBody ? { mode: "none" } : request.body} onChange={(body) => onChange({ body })} />}
-                {section === "auth" && <AuthEditor auth={request.auth} authOverride={authOverride} collectionAuth={collectionAuth} onChange={() => {}} onOverrideChange={onOverrideChange} />}
+                {section === "auth" && <AuthEditor auth={request.auth} authOverride={authOverride} collectionAuth={collectionAuth} onOverrideChange={onOverrideChange} />}
                 {section === "settings" && (
                     <div className="settings-grid">
                         <div className="field-row">
