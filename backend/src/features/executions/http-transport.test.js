@@ -110,6 +110,70 @@ describe("http transport", () => {
 		expect(result.encoded.toString()).toBe("hello world");
 	});
 
+
+	test("accepts a valid close-delimited response body", async () => {
+		const result = await withServer(
+			(socket) => {
+				socket.once("data", () => respond(socket, "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nhello"));
+			},
+			(target) =>
+				performRequest({
+					target,
+					method: "GET",
+					headers: [],
+					body: null,
+					timeoutMs: 5000,
+					signal: new AbortController().signal,
+					limits,
+				}),
+		);
+		expect(result.ok).toBe(true);
+		expect(result.encoded.toString()).toBe("hello");
+	});
+
+	test("rejects malformed chunk delimiters and oversized chunk metadata", async () => {
+		const malformed = await withServer(
+			(socket) => {
+				socket.once("data", () =>
+					respond(socket, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhelloXX0\r\n\r\n"),
+				);
+			},
+			(target) =>
+				performRequest({
+					target,
+					method: "GET",
+					headers: [],
+					body: null,
+					timeoutMs: 5000,
+					signal: new AbortController().signal,
+					limits,
+				}),
+		);
+		expect(malformed.ok).toBe(false);
+		expect(malformed.error.kind).toBe("decode_error");
+
+		const oversized = await withServer(
+			(socket) => {
+				socket.once("data", () => {
+					socket.write("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n");
+					socket.write("a".repeat(9000));
+				});
+			},
+			(target) =>
+				performRequest({
+					target,
+					method: "GET",
+					headers: [],
+					body: null,
+					timeoutMs: 1000,
+					signal: new AbortController().signal,
+					limits,
+				}),
+		);
+		expect(oversized.ok).toBe(false);
+		expect(oversized.error.kind).toBe("decode_error");
+	});
+
 	test("skips informational responses before the final one", async () => {
 		const result = await withServer(
 			(socket) => {
