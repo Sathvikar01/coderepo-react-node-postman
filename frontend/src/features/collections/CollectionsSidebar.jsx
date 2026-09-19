@@ -56,6 +56,7 @@ export function CollectionsSidebar({
 	onDeleteRequest,
 	onDuplicateCollection,
 	onDuplicateFolder,
+	onEditCollection,
 	onDuplicateRequest,
 	onMoveFolder,
 	onMoveRequest,
@@ -149,6 +150,7 @@ export function CollectionsSidebar({
 												},
 												{ separator: true },
 												{ icon: "add", label: "New folder", onSelect: () => onNewFolder(collection) },
+												{ icon: "tune", label: "Edit defaults", onSelect: () => onEditCollection(collection) },
 												{ icon: "edit", label: "Rename", onSelect: () => onRenameCollection(collection) },
 												{
 													icon: "content_copy",
