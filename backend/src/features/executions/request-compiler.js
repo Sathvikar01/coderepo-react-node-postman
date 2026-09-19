@@ -71,15 +71,11 @@ function addHeader(headers, seen, name, value, { generated = false } = {}) {
 function mergeQuery(url, rows, missing, trace) {
 	const pairs = [];
 	url.searchParams.forEach((value, key) => pairs.push([key, value]));
-	const conflicts = new Set(pairs.map(([key]) => key.toLowerCase()));
 	for (const row of rows) {
 		if (!row.enabled) continue;
-		const name = interpolate(row.key, row._map, "query.key", trace, missing);
+		const name = String(row.key ?? "");
 		const value = interpolate(row.value, row._map, "query.value", trace, missing);
 		if (!name.trim()) continue;
-		if (conflicts.has(name.toLowerCase()))
-			throw new AppError(400, "QUERY_CONFLICT", `The query key "${name}" is defined more than once.`);
-		conflicts.add(name.toLowerCase());
 		pairs.push([name, value]);
 	}
 	return pairs;
@@ -104,7 +100,7 @@ function buildBody(body, map, missing, trace) {
 	const search = new URLSearchParams();
 	for (const row of body.rows) {
 		if (!row.enabled) continue;
-		const name = interpolate(row.key, map, "body.rows.key", trace, missing);
+		const name = String(row.key ?? "");
 		const value = interpolate(row.value, map, "body.rows.value", trace, missing);
 		if (!name.trim()) continue;
 		search.append(name, value);
@@ -158,7 +154,7 @@ export function compileRequest({ request, collection, environment, authOverride,
 	const headerNames = new Set();
 	for (const row of headerRows) {
 		if (!row.enabled) continue;
-		const name = interpolate(row.key, map, "headers.key", trace, missing).trim();
+		const name = String(row.key ?? "").trim();
 		const value = interpolate(row.value, map, "headers.value", trace, missing);
 		addHeader(headers, headerNames, name, value);
 	}
