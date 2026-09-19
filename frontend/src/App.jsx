@@ -1011,11 +1011,19 @@ export default function App() {
 								{activeTab.result ? (
 									<ResponseViewer
 										result={activeTab.result}
-										onCopyUrl={async (headers) => {
-											const location = headers.find((header) => header.name.toLowerCase() === "location")?.value;
-											if (location) {
-												await navigator.clipboard?.writeText(location);
+										onCopyUrl={async (response) => {
+											const location = response.headers.find((header) => header.name.toLowerCase() === "location")?.value;
+											if (!location) return;
+											try {
+												const resolved = new URL(location, response.executedUrl);
+												if (!["http:", "https:"].includes(resolved.protocol)) {
+													toast("This redirect is not an HTTP(S) URL.", "warning");
+													return;
+												}
+												await navigator.clipboard?.writeText(resolved.toString());
 												toast("Resolved URL copied.");
+											} catch {
+												toast("This redirect URL is invalid.", "warning");
 											}
 										}}
 									/>
