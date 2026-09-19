@@ -363,7 +363,7 @@ export function createExecutionService({ registry = operationRegistry, transport
 		send,
 		async status(profileId, executionId) {
 			registry.rateLimit(profileId, "status");
-			if (registry.isActive(executionId)) return { executionId, status: "running", effectCertainty: "may_have_reached_target" };
+			if (registry.isActive(profileId, executionId)) return { executionId, status: "running", effectCertainty: "may_have_reached_target" };
 			let record = await historyService.get(profileId, executionId);
 			if (record?.status === "running") {
 				await historyService.reconcileStale();
@@ -374,8 +374,8 @@ export function createExecutionService({ registry = operationRegistry, transport
 			return { ...terminalResult(record), status: "terminal" };
 		},
 		async cancel(profileId, executionId) {
-			if (registry.isActive(executionId)) {
-				registry.requestCancel(executionId);
+			if (registry.isActive(profileId, executionId)) {
+				registry.requestCancel(profileId, executionId);
 				return { executionId, status: "cancelling" };
 			}
 			const record = await historyService.get(profileId, executionId);
