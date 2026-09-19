@@ -240,7 +240,6 @@ export function createExecutionService({ registry = operationRegistry, transport
 		};
 
 		const semanticFailure = async (code, message, details) => {
-			registry.release(executionId);
 			const persistence = await persist({
 				outcome: "validation_error",
 				effectCertainty: "not_dispatched",
@@ -249,6 +248,7 @@ export function createExecutionService({ registry = operationRegistry, transport
 				compileTrace: [],
 				warnings: [],
 			});
+			registry.release(executionId);
 			if (persistence.record) return { ...terminalResult(persistence.record), tabId, draftVersion };
 			return {
 				executionId,
@@ -348,12 +348,15 @@ export function createExecutionService({ registry = operationRegistry, transport
 				});
 				response = buildResponseResult({ transport: result, capture, redaction: compiled.redaction, executedUrl, timeoutMs });
 			} catch (error) {
-				outcome = "decode_error";
-				errorPayload = { code: "DECODE_ERROR", message: error.message, details: null };
+				outcome = OUTCOME_BY_KIND[error?.kind] ?? "decode_error";
+				errorPayload = {
+					code: error?.kind ? error.kind.toUpperCase() : "DECODE_ERROR",
+					message: error.message,
+					details: error.details ?? null,
+				};
 			}
 		}
 
-		registry.release(executionId);
 		const finishedAt = new Date();
 		const warnings = [...(compiled.warnings ?? []), ...(response?.warnings ?? [])];
 		const persistence = await persist({
@@ -369,6 +372,7 @@ export function createExecutionService({ registry = operationRegistry, transport
 			compileTrace: compiled.trace,
 			warnings,
 		});
+		registry.release(executionId);
 		if (persistence.record) return { ...terminalResult(persistence.record), tabId, draftVersion };
 		return {
 			executionId,
