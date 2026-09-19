@@ -21,30 +21,52 @@ const AUTH_MODES = [
 
 const countEnabled = (rows = []) => rows.filter((row) => row.enabled && row.key.trim()).length;
 
-function AuthEditor({ auth, authOverride, collectionAuth, onOverrideChange }) {
-	const mode = authOverride ? authOverride.mode : (auth?.mode ?? "inherit");
-	const effective = authOverride ?? auth ?? { mode: "none" };
-	const setMode = (nextMode) => {
-		if (nextMode === "inherit") return onOverrideChange(null);
-		const base =
-			nextMode === "bearer"
-				? { mode: "bearer", tokenTemplate: "" }
-				: nextMode === "basic"
-					? { mode: "basic", usernameTemplate: "", passwordTemplate: "" }
-					: nextMode === "apiKey"
-						? { mode: "apiKey", key: "", valueTemplate: "", in: "header" }
+function AuthEditor({ auth, authOverride, collectionAuth, onAuthChange, onOverrideChange }) {
+	const [sendOnly, setSendOnly] = useState(Boolean(authOverride));
+	const saved = auth ?? { mode: "none" };
+	const effective = sendOnly ? (authOverride ?? { mode: "none" }) : saved;
+	const mode = effective.mode ?? "none";
+
+	const defaultAuth = (nextMode) =>
+		nextMode === "bearer"
+			? { mode: "bearer", tokenTemplate: "" }
+			: nextMode === "basic"
+				? { mode: "basic", usernameTemplate: "", passwordTemplate: "" }
+				: nextMode === "apiKey"
+					? { mode: "apiKey", key: "", valueTemplate: "", in: "header" }
+					: nextMode === "inherit"
+						? { mode: "inherit" }
 						: { mode: "none" };
-		return onOverrideChange(base);
-	};
-	const update = (patch) => onOverrideChange({ ...effective, ...patch });
-	const inheritSource = auth?.mode === "inherit" ? collectionAuth : null;
+
+	const commit = (next) => (sendOnly ? onOverrideChange(next) : onAuthChange(next));
+	const setMode = (nextMode) => commit(defaultAuth(nextMode));
+	const update = (patch) => commit({ ...effective, ...patch });
+	const inheritSource = saved.mode === "inherit" ? collectionAuth : null;
+
 	return (
 		<div className="settings-grid">
 			<div className="field-row">
 				<label htmlFor="auth-mode">Authentication</label>
 				<SelectMenu ariaLabel="Authentication mode" options={AUTH_MODES} value={mode} onChange={setMode} />
 			</div>
-			{mode === "inherit" && (
+			<div>
+				<button
+					className="text-button"
+					type="button"
+					onClick={() => {
+						if (sendOnly) {
+							setSendOnly(false);
+							onOverrideChange(null);
+						} else {
+							setSendOnly(true);
+							onOverrideChange({ mode: "none" });
+						}
+					}}
+				>
+					{sendOnly ? "Edit saved authentication" : "Use a send-only override"}
+				</button>
+			</div>
+			{!sendOnly && mode === "inherit" && (
 				<p className="field-hint">
 					{inheritSource
 						? `Inherited from the collection: ${inheritSource.mode === "none" ? "no authentication" : inheritSource.mode}.`
@@ -54,34 +76,18 @@ function AuthEditor({ auth, authOverride, collectionAuth, onOverrideChange }) {
 			{mode === "bearer" && (
 				<div className="field-row">
 					<label htmlFor="auth-token">Token</label>
-					<input
-						id="auth-token"
-						placeholder="{{orders_token}}"
-						type="text"
-						value={effective.tokenTemplate ?? ""}
-						onChange={(event) => update({ tokenTemplate: event.target.value })}
-					/>
+					<input id="auth-token" placeholder="{{orders_token}}" type="text" value={effective.tokenTemplate ?? ""} onChange={(event) => update({ tokenTemplate: event.target.value })} />
 				</div>
 			)}
 			{mode === "basic" && (
 				<>
 					<div className="field-row">
 						<label htmlFor="auth-username">Username</label>
-						<input
-							id="auth-username"
-							type="text"
-							value={effective.usernameTemplate ?? ""}
-							onChange={(event) => update({ usernameTemplate: event.target.value })}
-						/>
+						<input id="auth-username" type="text" value={effective.usernameTemplate ?? ""} onChange={(event) => update({ usernameTemplate: event.target.value })} />
 					</div>
 					<div className="field-row">
 						<label htmlFor="auth-password">Password</label>
-						<input
-							id="auth-password"
-							type="text"
-							value={effective.passwordTemplate ?? ""}
-							onChange={(event) => update({ passwordTemplate: event.target.value })}
-						/>
+						<input id="auth-password" type="text" value={effective.passwordTemplate ?? ""} onChange={(event) => update({ passwordTemplate: event.target.value })} />
 					</div>
 				</>
 			)}
@@ -89,37 +95,23 @@ function AuthEditor({ auth, authOverride, collectionAuth, onOverrideChange }) {
 				<>
 					<div className="field-row">
 						<label htmlFor="auth-key">Key name</label>
-						<input
-							id="auth-key"
-							type="text"
-							value={effective.key ?? ""}
-							onChange={(event) => update({ key: event.target.value })}
-						/>
+						<input id="auth-key" type="text" value={effective.key ?? ""} onChange={(event) => update({ key: event.target.value })} />
 					</div>
 					<div className="field-row">
 						<label htmlFor="auth-value">Value</label>
-						<input
-							id="auth-value"
-							type="text"
-							value={effective.valueTemplate ?? ""}
-							onChange={(event) => update({ valueTemplate: event.target.value })}
-						/>
+						<input id="auth-value" type="text" value={effective.valueTemplate ?? ""} onChange={(event) => update({ valueTemplate: event.target.value })} />
 					</div>
 					<div className="field-row">
 						<label htmlFor="auth-in">Add to</label>
-						<SelectMenu
-							ariaLabel="Where to add the API key"
-							options={[
-								{ value: "header", label: "Header" },
-								{ value: "query", label: "Query" },
-							]}
-							value={effective.in ?? "header"}
-							onChange={(value) => update({ in: value })}
-						/>
+						<SelectMenu ariaLabel="Where to add the API key" options={[{ value: "header", label: "Header" }, { value: "query", label: "Query" }]} value={effective.in ?? "header"} onChange={(value) => update({ in: value })} />
 					</div>
 				</>
 			)}
-			{authOverride && <p className="field-hint">This override applies to the next send only and is not saved with the request.</p>}
+			<p className="field-hint">
+				{sendOnly
+					? "This override applies to the next send only and is never saved."
+					: "Saved credential fields must use variable references such as {{orders_token}}."}
+			</p>
 		</div>
 	);
 }
@@ -290,6 +282,7 @@ export function RequestBuilder({
 						auth={request.auth}
 						authOverride={authOverride}
 						collectionAuth={collectionAuth}
+						onAuthChange={(auth) => onChange({ auth })}
 						onOverrideChange={onOverrideChange}
 					/>
 				)}
