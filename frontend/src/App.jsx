@@ -22,6 +22,8 @@ import { applyTheme, readTheme } from "./shared/utils/theme.js";
 import { createDraftTab, createInitialState, findOpenTab, MAX_TABS, workspaceReducer } from "./features/workspace/workspace-reducer.js";
 import { WorkspaceHeader } from "./features/workspace/WorkspaceHeader.jsx";
 import { TracerSymbol } from "./shared/components/TracerBrand.jsx";
+import { useRovingTabs } from "./shared/hooks/useRovingTabs.js";
+import { useSplitPane } from "./shared/hooks/useSplitPane.js";
 
 function BootScreen() {
     return (
@@ -54,6 +56,9 @@ export default function App() {
     const [liveResult, setLiveResult] = useState(null);
     const [authOverrides, setAuthOverrides] = useState({});
     const [executionPolicy, setExecutionPolicy] = useState(null);
+    const tabs = useRovingTabs();
+    const splitContainer = useRef(null);
+    const split = useSplitPane(splitContainer);
     const reconcileTimers = useRef({});
     const toastTimers = useRef(new Set());
     const maxTabs = executionPolicy?.maxOpenTabs ?? MAX_TABS;
@@ -720,9 +725,9 @@ export default function App() {
                 </aside>
                 <main className="workspace">
                     <div className="request-tabs">
-                        <div aria-label="Open requests" className="request-tab-list" role="tablist">
+                        <div aria-label="Open requests" className="request-tab-list" onKeyDown={tabs.onKeyDown} ref={tabs.listRef} role="tablist">
                             {state.tabs.map((tab) => (
-                                <div className={`request-tab ${tab.id === state.activeTabId ? "" : ""}`} key={tab.id} role="tab" aria-selected={tab.id === state.activeTabId} tabIndex={0} onClick={() => dispatch({ type: "draft/focus", tabId: tab.id })} onKeyDown={(event) => { if (event.key === "Enter") dispatch({ type: "draft/focus", tabId: tab.id }); }}>
+                                <div className={`request-tab ${tab.id === state.activeTabId ? "" : ""}`} key={tab.id} role="tab" aria-selected={tab.id === state.activeTabId} tabIndex={tab.id === state.activeTabId ? 0 : -1} onClick={() => dispatch({ type: "draft/focus", tabId: tab.id })} onKeyDown={(event) => { if (event.key === "Enter") dispatch({ type: "draft/focus", tabId: tab.id }); }}>
                                     <span className={`method-tag ${tab.request.method.toLowerCase()}`}>{tab.request.method}</span>
                                     <span>{tab.name}</span>
                                     {tab.dirty && <span aria-label="Unsaved changes" className="dirty-dot" />}
@@ -737,36 +742,50 @@ export default function App() {
                         </button>
                     </div>
                     {activeTab ? (
-                        <div className="request-pane">
-                            <RequestBuilder
-                                authOverride={authOverrides[activeTab.id] ?? null}
-                                collectionAuth={activeCollectionAuth}
-                                draftVersion={activeTab.draftVersion}
-                                environments={environments}
-                                executionPolicy={executionPolicy}
-                                hasCollection={Boolean(activeTab.collectionId)}
-                                request={activeTab.request}
-                                running={activeTab.status === "running"}
-                                savedName={activeTab.collectionName}
-                                onCancel={() => { openDraftTab(createDraftTab()); }}
-                                onChange={updateDraft}
-                                onOverrideChange={(override) => setAuthOverrides((current) => ({ ...current, [activeTab.id]: override }))}
-                                onSave={saveDraft}
-                                onSend={activeTab.status === "running" ? cancel : send}
+                        <div className="request-pane" ref={splitContainer}>
+                            <div className="request-pane-top" style={{ flexBasis: `${split.ratio * 100}%` }}>
+                                <RequestBuilder
+                                    authOverride={authOverrides[activeTab.id] ?? null}
+                                    collectionAuth={activeCollectionAuth}
+                                    draftVersion={activeTab.draftVersion}
+                                    environments={environments}
+                                    executionPolicy={executionPolicy}
+                                    hasCollection={Boolean(activeTab.collectionId)}
+                                    request={activeTab.request}
+                                    running={activeTab.status === "running"}
+                                    savedName={activeTab.collectionName}
+                                    onCancel={() => { openDraftTab(createDraftTab()); }}
+                                    onChange={updateDraft}
+                                    onOverrideChange={(override) => setAuthOverrides((current) => ({ ...current, [activeTab.id]: override }))}
+                                    onSave={saveDraft}
+                                    onSend={activeTab.status === "running" ? cancel : send}
+                                />
+                                {activeTab.status === "reconciling" && (
+                                    <div className="status-banner warning"><span className="spinner" />Checking whether this send was recorded before the connection dropped…</div>
+                                )}
+                                {activeTab.dirty && <div className="status-banner"><MaterialIcon size={16}>edit</MaterialIcon>Unsaved changes. Ctrl/Cmd+S saves into the collection.</div>}
+                            </div>
+                            <div
+                                aria-label="Resize request and response panes"
+                                aria-orientation="horizontal"
+                                className="pane-splitter"
+                                onKeyDown={split.onKeyDown}
+                                onPointerDown={split.onPointerDown}
+                                role="separator"
+                                tabIndex={0}
+                                title="Drag to resize. Arrow keys adjust; Enter resets."
                             />
-                            {activeTab.status === "reconciling" && (
-                                <div className="status-banner warning"><span className="spinner" />Checking whether this send was recorded before the connection dropped…</div>
-                            )}
-                            {activeTab.dirty && <div className="status-banner"><MaterialIcon size={16}>edit</MaterialIcon>Unsaved changes. Ctrl/Cmd+S saves into the collection.</div>}
-                            {liveResult ? <ResponseViewer result={liveResult} onCopyUrl={async (headers) => { const location = headers.find((header) => header.name.toLowerCase() === "location")?.value; if (location) { await navigator.clipboard?.writeText(location); toast("Resolved URL copied."); } }} /> : (
-                                <section aria-label="Response" className="response-area">
-                                    <div className="response-placeholder">
-                                        <MaterialIcon size={30}>send</MaterialIcon>
-                                        <span>Send a request to inspect its status, timing, headers, and body.</span>
-                                        <span className="field-hint">Ctrl/Cmd+Enter sends without saving. Every send is recorded in History with a redacted snapshot.</span>
-                                    </div>
-                                </section>
-                            )}
+                            <div className="request-pane-bottom">
+                                {liveResult ? <ResponseViewer result={liveResult} onCopyUrl={async (headers) => { const location = headers.find((header) => header.name.toLowerCase() === "location")?.value; if (location) { await navigator.clipboard?.writeText(location); toast("Resolved URL copied."); } }} /> : (
+                                    <section aria-label="Response" className="response-area">
+                                        <div className="response-placeholder">
+                                            <MaterialIcon size={30}>send</MaterialIcon>
+                                            <span>Send a request to inspect its status, timing, headers, and body.</span>
+                                            <span className="field-hint">Ctrl/Cmd+Enter sends without saving. Every send is recorded in History with a redacted snapshot.</span>
+                                        </div>
+                                    </section>
+                                )}
+                            </div>
                         </div>
                     ) : (
                         <section className="workspace-empty">
@@ -792,7 +811,10 @@ export default function App() {
             )}
             <div aria-live="polite" className="toast-region">
                 {toasts.map((item) => (
-                    <div className={`toast ${item.tone}`} key={item.id}>{item.text ?? item.message}</div>
+                    <div className={`toast ${item.tone}`} key={item.id}>
+                        <MaterialIcon size={16}>{item.tone === "error" ? "error" : item.tone === "warning" ? "warning" : item.tone === "success" ? "check" : "info"}</MaterialIcon>
+                        <span>{item.message}</span>
+                    </div>
                 ))}
             </div>
         </div>

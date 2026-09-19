@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { MaterialIcon } from "../../shared/components/MaterialIcon.jsx";
 import { SelectMenu } from "../../shared/components/SelectMenu.jsx";
+import { useRovingTabs } from "../../shared/hooks/useRovingTabs.js";
 import { KeyValueEditor } from "./KeyValueEditor.jsx";
 
 const METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
@@ -123,6 +124,7 @@ function BodyEditor({ body, onChange }) {
 
 export function RequestBuilder({ authOverride, collectionAuth, draftVersion, environments, executionPolicy, hasCollection, onCancel, onChange, onOverrideChange, onSave, onSend, request, running, savedName }) {
     const [section, setSection] = useState("params");
+    const tabs = useRovingTabs();
     const disabledBody = ["GET", "HEAD"].includes(request.method);
     const timeoutBounds = { min: executionPolicy?.minTimeoutMs ?? 100, max: executionPolicy?.maxTimeoutMs ?? 30000 };
     const sections = [
@@ -165,13 +167,16 @@ export function RequestBuilder({ authOverride, collectionAuth, draftVersion, env
                     {running ? "Cancel" : "Send"}
                 </button>
             </div>
-            <div className="request-editor-tabs" role="tablist" aria-label="Request sections">
+            <div className="request-editor-tabs" role="tablist" aria-label="Request sections" ref={tabs.listRef} onKeyDown={tabs.onKeyDown}>
                 {sections.map((item) => (
                     <button
+                        aria-controls={`request-editor-${item.id}`}
                         aria-selected={section === item.id}
                         className="editor-tab"
+                        id={`request-editor-tab-${item.id}`}
                         key={item.id}
                         role="tab"
+                        tabIndex={section === item.id ? 0 : -1}
                         type="button"
                         onClick={() => setSection(item.id)}
                     >
@@ -180,7 +185,7 @@ export function RequestBuilder({ authOverride, collectionAuth, draftVersion, env
                     </button>
                 ))}
             </div>
-            <div className="request-editor-body" role="tabpanel" aria-label={`${section} editor`}>
+            <div aria-labelledby={`request-editor-tab-${section}`} className="request-editor-body" id={`request-editor-${section}`} role="tabpanel">
                 {section === "params" && <KeyValueEditor label="Query parameters" rows={request.query} onChange={(query) => onChange({ query })} />}
                 {section === "headers" && <KeyValueEditor label="Headers" rows={request.headers} onChange={(headers) => onChange({ headers })} />}
                 {section === "body" && <BodyEditor body={disabledBody ? { mode: "none" } : request.body} onChange={(body) => onChange({ body })} />}

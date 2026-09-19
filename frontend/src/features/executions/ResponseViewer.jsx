@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { MaterialIcon } from "../../shared/components/MaterialIcon.jsx";
+import { useRovingTabs } from "../../shared/hooks/useRovingTabs.js";
 import { formatBytes, formatDuration, OUTCOME_LABELS, statusClass } from "../../shared/utils/format.js";
 import { JsonTree } from "./JsonTree.jsx";
 import { RawView } from "./RawView.jsx";
@@ -152,6 +153,7 @@ function DetailsPanel({ result }) {
 
 export function ResponseViewer({ onCopyUrl, result }) {
     const [tab, setTab] = useState("body");
+    const tabs = useRovingTabs();
     if (!result) return null;
     const response = result.response;
     const status = response?.status ?? null;
@@ -191,12 +193,12 @@ export function ResponseViewer({ onCopyUrl, result }) {
                 </div>
             ) : (
                 <>
-                    <div className="response-tabs" role="tablist" aria-label="Response sections">
-                        <button aria-selected={tab === "body"} className="editor-tab" role="tab" type="button" onClick={() => setTab("body")}>Body</button>
-                        <button aria-selected={tab === "headers"} className="editor-tab" role="tab" type="button" onClick={() => setTab("headers")}>Headers<span className="badge">{response.headers.length}</span></button>
-                        <button aria-selected={tab === "details"} className="editor-tab" role="tab" type="button" onClick={() => setTab("details")}>Details</button>
+                    <div className="response-tabs" role="tablist" aria-label="Response sections" ref={tabs.listRef} onKeyDown={tabs.onKeyDown}>
+                        <button aria-controls="response-panel-body" aria-selected={tab === "body"} className="editor-tab" id="response-tab-body" role="tab" tabIndex={tab === "body" ? 0 : -1} type="button" onClick={() => setTab("body")}>Body</button>
+                        <button aria-controls="response-panel-headers" aria-selected={tab === "headers"} className="editor-tab" id="response-tab-headers" role="tab" tabIndex={tab === "headers" ? 0 : -1} type="button" onClick={() => setTab("headers")}>Headers<span className="badge">{response.headers.length}</span></button>
+                        <button aria-controls="response-panel-details" aria-selected={tab === "details"} className="editor-tab" id="response-tab-details" role="tab" tabIndex={tab === "details" ? 0 : -1} type="button" onClick={() => setTab("details")}>Details</button>
                     </div>
-                    <div className="response-panel" role="tabpanel" aria-label={`${tab} panel`}>
+                    <div aria-labelledby={`response-tab-${tab}`} className="response-panel" id={`response-panel-${tab}`} role="tabpanel">
                         {tab === "body" && <BodyPanel response={response} />}
                         {tab === "headers" && <HeadersPanel headers={response.headers} />}
                         {tab === "details" && <DetailsPanel result={result} />}
