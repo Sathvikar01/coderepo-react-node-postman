@@ -269,7 +269,7 @@ export function createExecutionService({ registry = operationRegistry, transport
 
 		const secretValues = [];
 		const secrets = new Map();
-		for (const variable of environment.environment?.variables ?? []) {
+		for (const variable of resolved.collection?.variables ?? []) {
 			if (variable.enabled !== false && variable.kind === "secretRef" && variable.alias) {
 				const secret = environmentService.resolveSecretAlias(profileId, variable.alias);
 				if (secret) {
@@ -278,7 +278,7 @@ export function createExecutionService({ registry = operationRegistry, transport
 				}
 			}
 		}
-		for (const variable of resolved.collection?.variables ?? []) {
+		for (const variable of environment.environment?.variables ?? []) {
 			if (variable.enabled !== false && variable.kind === "secretRef" && variable.alias) {
 				const secret = environmentService.resolveSecretAlias(profileId, variable.alias);
 				if (secret) {
