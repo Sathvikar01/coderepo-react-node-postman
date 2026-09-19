@@ -126,6 +126,20 @@ export function WorkspaceDialogs({ actions, collections, dialog, dialogError, bu
 		);
 	}
 
+
+	if (dialog.kind === "delete-folder") {
+		return (
+			<ConfirmationDialog
+				busy={busy}
+				confirmLabel="Delete folder"
+				message={dialog.message}
+				onCancel={onClose}
+				onConfirm={() => actions.deleteFolder(dialog.collection, dialog.folder.id)}
+				title="Delete folder"
+			/>
+		);
+	}
+
 	if (dialog.kind === "close-tab") {
 		return (
 			<ConfirmationDialog
