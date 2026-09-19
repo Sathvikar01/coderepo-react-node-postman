@@ -57,6 +57,23 @@ describe("target policy", () => {
 		await expect(privateResolverPolicy.validate("http://localhost.evil.example/")).rejects.toMatchObject({ code: "TARGET_BLOCKED" });
 		await expect(privateResolverPolicy.validate("https://wildcard.example.com/")).rejects.toMatchObject({ code: "TARGET_BLOCKED" });
 	});
+
+	test("rejects unsafe authored spelling even after compiler normalization", async () => {
+		await expect(
+			policy.validate("http://127.0.0.1:8000/demo/v1/local/orders", {
+				allowLocalDemo: true,
+				authoredUrl: "http://2130706433:8000/demo/v1/local/orders",
+			}),
+		).rejects.toMatchObject({ code: "URL_AMBIGUOUS_HOST" });
+
+		await expect(
+			policy.validate("http://127.0.0.1:8000/demo/v1/local/orders", {
+				allowLocalDemo: true,
+				authoredUrl: "http://127.0.0.1:8000/demo/v1/local/../orders",
+			}),
+		).rejects.toMatchObject({ code: "TARGET_BLOCKED" });
+	});
+
 	test("allows only the canonical demo target on loopback", async () => {
 		const target = await policy.validate("http://127.0.0.1:8000/demo/v1/local/orders", { allowLocalDemo: true });
 		expect(target).toMatchObject({ local: true, port: 8000, originalHostname: "127.0.0.1" });
