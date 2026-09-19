@@ -126,6 +126,13 @@ function AuthEditor({ auth, authOverride, collectionAuth, onOverrideChange }) {
 
 function BodyEditor({ body, onChange }) {
 	const update = (patch) => onChange({ ...body, ...patch });
+	const changeMode = (mode) => {
+		if (mode === "none") return onChange({ mode: "none" });
+		if (mode === "json") return onChange({ mode: "json", text: body.mode === "json" ? (body.text ?? "") : "{\n  \n}" });
+		if (mode === "text")
+			return onChange({ mode: "text", text: body.mode === "text" ? (body.text ?? "") : "", contentType: "text/plain" });
+		return onChange({ mode: "urlencoded", rows: body.mode === "urlencoded" ? (body.rows ?? []) : [] });
+	};
 	return (
 		<div className="raw-editor">
 			<div className="field-row">
@@ -134,7 +141,7 @@ function BodyEditor({ body, onChange }) {
 					ariaLabel="Body type"
 					options={BODY_MODES}
 					value={body.mode}
-					onChange={(mode) => update({ mode, ...(mode === "json" && !body.text ? { text: "{\n  \n}" } : {}) })}
+					onChange={changeMode}
 				/>
 			</div>
 			{body.mode === "none" && (
@@ -224,7 +231,12 @@ export function RequestBuilder({
 					className="method-select"
 					options={METHODS.map((method) => ({ value: method, label: method }))}
 					value={request.method}
-					onChange={(method) => onChange({ method })}
+					onChange={(method) =>
+					onChange({
+						method,
+						...(["GET", "HEAD"].includes(method) && request.body.mode !== "none" ? { body: { mode: "none" } } : {}),
+					})
+				}
 				/>
 				<input
 					aria-label="Request URL"
