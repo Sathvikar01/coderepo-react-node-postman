@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { compileRequest } from "./request-compiler.js";
+import { compileRequest, redactUrl } from "./request-compiler.js";
 
 const baseRequest = (overrides = {}) => ({
 	schemaVersion: 1,
@@ -216,6 +216,69 @@ describe("request compiler", () => {
 				environment: null,
 			}),
 		).toThrow(expect.objectContaining({ code: "HEADER_LIMIT" }));
+	});
+
+
+	test("rejects generated auth/header injection and conflicts", () => {
+		expect(() =>
+			compileRequest({
+				request: baseRequest({
+					urlTemplate: "http://example.com/orders",
+					headers: [{ id: "h1", key: "Authorization", value: "manual", enabled: true }],
+					auth: { mode: "bearer", tokenTemplate: "generated" },
+				}),
+				collection: null,
+				environment: null,
+			}),
+		).toThrow(expect.objectContaining({ code: "AUTH_CONFLICT" }));
+
+		expect(() =>
+			compileRequest({
+				request: baseRequest({
+					urlTemplate: "http://example.com/orders",
+					auth: { mode: "bearer", tokenTemplate: "safe\r\nInjected: true" },
+				}),
+				collection: null,
+				environment: null,
+			}),
+		).toThrow(expect.objectContaining({ code: "HEADER_INVALID" }));
+
+		expect(() =>
+			compileRequest({
+				request: baseRequest({
+					method: "POST",
+					urlTemplate: "http://example.com/orders",
+					body: { mode: "text", text: "hello", contentType: "text/plain\r\nX-Evil: yes" },
+					auth: { mode: "none" },
+				}),
+				collection: null,
+				environment: null,
+			}),
+		).toThrow(expect.objectContaining({ code: "HEADER_INVALID" }));
+
+		expect(() =>
+			compileRequest({
+				request: baseRequest({
+					urlTemplate: "http://example.com/orders",
+					auth: { mode: "apiKey", key: "Host", valueTemplate: "evil.test", in: "header" },
+				}),
+				collection: null,
+				environment: null,
+			}),
+		).toThrow(expect.objectContaining({ code: "HEADER_RESERVED" }));
+	});
+
+	test("preserves the authored URL for policy and redacts known secrets from URLs", () => {
+		const compiled = compileRequest({
+			request: baseRequest({
+				urlTemplate: "http://2130706433:8000/demo/v1/local/orders?token={{token}}",
+				auth: { mode: "none" },
+			}),
+			collection: null,
+			environment: { name: "Local", variables: [{ id: "s", key: "token", kind: "plain", value: "abc123", enabled: true }] },
+		});
+		expect(compiled.authoredUrl).toBe("http://2130706433:8000/demo/v1/local/orders?token=abc123");
+		expect(redactUrl(compiled.url, { queryKeys: [], values: ["abc123"] })).not.toContain("abc123");
 	});
 
 	test("inherit without a collection is rejected", () => {
