@@ -79,17 +79,22 @@ export function workspaceReducer(state, action) {
 				draftVersion: tab.draftVersion + 1,
 			}));
 		case "draft/saved":
-			return updateTab(state, action.tabId, (tab) => ({
-				...tab,
-				name: action.request.name,
-				request: structuredClone(action.request),
-				baseRequest: structuredClone(action.request),
-				collectionId: action.collectionId,
-				collectionName: action.collectionName,
-				collectionRevision: action.collectionRevision,
-				replayHistoryId: null,
-				dirty: false,
-			}));
+			return updateTab(state, action.tabId, (tab) => {
+				const savedRequest = structuredClone(action.request);
+				const editedSinceSave =
+					action.savedDraftVersion !== undefined && tab.draftVersion !== action.savedDraftVersion;
+				return {
+					...tab,
+					name: editedSinceSave ? tab.request.name : savedRequest.name,
+					request: editedSinceSave ? tab.request : savedRequest,
+					baseRequest: savedRequest,
+					collectionId: action.collectionId,
+					collectionName: action.collectionName,
+					collectionRevision: action.collectionRevision,
+					replayHistoryId: null,
+					dirty: editedSinceSave,
+				};
+			});
 		case "draft/replay":
 			return updateTab(state, action.tabId, (tab) => ({ ...tab, replayHistoryId: action.replayHistoryId }));
 		case "draft/status":
