@@ -21,7 +21,7 @@ export function errorHandler(error, request, response, next) {
 		}
 		return response.status(error.statusCode).json({ error: { code: error.code, message: error.message, details: error.details } });
 	}
-	if (error?.code === "LIMIT_FILE_SIZE") {
+	if (error?.code === "LIMIT_FILE_SIZE" || error?.type === "entity.too.large") {
 		return response.status(413).json({ error: { code: "PAYLOAD_TOO_LARGE", message: "The request body exceeded the allowed size." } });
 	}
 	if (error?.type === "entity.parse.failed") {
