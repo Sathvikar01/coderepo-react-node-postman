@@ -26,7 +26,7 @@ export async function listHistory(request, response, next) {
 export async function getHistoryEntry(request, response, next) {
 	try {
 		const record = await historyService.get(request.profileId, request.params.executionId);
-		if (!record || record.expired) {
+		if (!record || record.expired || record.visible === false) {
 			throw new AppError(404, "HISTORY_NOT_FOUND", "The requested history entry does not exist.");
 		}
 		response.json({ data: record });
