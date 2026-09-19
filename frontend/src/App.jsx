@@ -157,6 +157,7 @@ export default function App() {
 			const aggregates = await Promise.all(summaries.map((summary) => collectionApi.get(summary._id)));
 			setCollections(aggregates);
 			setEnvironments(environmentSummaries);
+			if (preferences.preferences?.theme) setTheme(preferences.preferences.theme);
 			dispatch({ type: "preferences/set", preferences: preferences.preferences });
 			setExecutionPolicy(preferences.executionPolicy ?? null);
 		} catch (error) {
@@ -767,7 +768,13 @@ export default function App() {
 				onLogout={switchProfile}
 				onOpenEnvironments={() => openDialog({ kind: "environments" })}
 				onToggleSidebar={() => setSidebarOpen((current) => !current)}
-				onToggleTheme={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
+				onToggleTheme={() =>
+					setTheme((current) => {
+						const next = current === "dark" ? "light" : "dark";
+						savePreferences({ theme: next });
+						return next;
+					})
+				}
 			/>
 			<div className="app-body">
 				{sidebarOpen && <div aria-hidden="true" className="sidebar-scrim" onClick={() => setSidebarOpen(false)} />}
