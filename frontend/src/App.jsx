@@ -9,7 +9,9 @@ import {
 	deleteFolder,
 	duplicateFolder,
 	duplicateRequest,
+	moveFolder,
 	moveRequest,
+	moveRequestToFolder,
 	removeRequest,
 	renameFolder,
 	updateRequest,
@@ -737,6 +739,13 @@ export default function App() {
 				setBusy(false);
 			}
 		},
+		async deleteFolder(collection, folderId) {
+			const ok = await runAggregateEdit(collection, (item) => deleteFolder(item, folderId));
+			if (ok) {
+				setDialog(null);
+				toast("Folder deleted.");
+			}
+		},
 		reloadCollection,
 		saveAsNewRequest,
 	};
@@ -821,7 +830,14 @@ export default function App() {
 							collectionOrder={state.collectionOrder}
 							loading={loadingCollections}
 							onDeleteCollection={(collection) => openDialog({ kind: "delete-collection", collection })}
-							onDeleteFolder={(collection, folder) => runAggregateEdit(collection, (item) => deleteFolder(item, folder.id))}
+							onDeleteFolder={(collection, folder) =>
+								openDialog({
+									kind: "delete-folder",
+									collection,
+									folder,
+									message: `Delete "${folder.name}"? Requests inside it will move to the collection root.`,
+								})
+							}
 							onDeleteRequest={(collection, requestId) =>
 								runAggregateEdit(collection, (item) => removeRequest(item, requestId))
 							}
@@ -836,8 +852,14 @@ export default function App() {
 									if (ok) toast("Request duplicated.");
 								})
 							}
+							onMoveFolder={(collection, folderId, delta) =>
+								runAggregateEdit(collection, (item) => moveFolder(item, folderId, delta))
+							}
 							onMoveRequest={(collection, requestId, delta) =>
 								runAggregateEdit(collection, (item) => moveRequest(item, requestId, delta))
+							}
+							onMoveRequestToFolder={(collection, requestId, folderId) =>
+								runAggregateEdit(collection, (item) => moveRequestToFolder(item, requestId, folderId))
 							}
 							onNewCollection={() => openDialog({ kind: "new-collection" })}
 							onNewFolder={(collection) => openDialog({ kind: "new-folder", collection })}
