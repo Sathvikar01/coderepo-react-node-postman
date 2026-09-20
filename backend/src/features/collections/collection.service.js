@@ -26,6 +26,19 @@ async function ensureUniqueName(name, ownerProfileId, excludedId) {
 	if (conflict) throw new AppError(409, "COLLECTION_NAME_CONFLICT", "A collection with this name already exists in this profile.");
 }
 
+function nameConflict() {
+	return new AppError(409, "COLLECTION_NAME_CONFLICT", "A collection with this name already exists in this profile.");
+}
+
+async function withNameConflictBoundary(operation) {
+	try {
+		return await operation();
+	} catch (error) {
+		if (error?.code === 11000) throw nameConflict();
+		throw error;
+	}
+}
+
 export const collectionService = {
 	list: (ownerProfileId) => collectionRepository.list(ownerProfileId),
 	async get(id, ownerProfileId) {
@@ -46,7 +59,9 @@ export const collectionService = {
 		await ensureUniqueName(input.name, ownerProfileId, null);
 		const aggregate = { description: "", variables: [], auth: { mode: "none" }, folders: [], requests: [], ...input };
 		ensureAggregateSize(aggregate);
-		return collectionRepository.create({ ...aggregate, nameKey: nameKey(aggregate.name), ownerProfileId, revision: 1 });
+		return withNameConflictBoundary(() =>
+			collectionRepository.create({ ...aggregate, nameKey: nameKey(aggregate.name), ownerProfileId, revision: 1 }),
+		);
 	},
 	async replace(id, ownerProfileId, expectedRevision, input) {
 		assertId(id);
@@ -54,10 +69,12 @@ export const collectionService = {
 		if (!current) throw new AppError(404, "COLLECTION_NOT_FOUND", "The requested collection does not exist.");
 		await ensureUniqueName(input.name, ownerProfileId, id);
 		ensureAggregateSize(input);
-		const updated = await collectionRepository.replaceWithRevision(id, ownerProfileId, expectedRevision, {
-			...input,
-			nameKey: nameKey(input.name),
-		});
+		const updated = await withNameConflictBoundary(() =>
+			collectionRepository.replaceWithRevision(id, ownerProfileId, expectedRevision, {
+				...input,
+				nameKey: nameKey(input.name),
+			}),
+		);
 		if (!updated)
 			throw new AppError(
 				409,
@@ -98,7 +115,9 @@ export const collectionService = {
 			})),
 		};
 		ensureAggregateSize(aggregate);
-		return collectionRepository.create({ ...aggregate, nameKey: nameKey(name), ownerProfileId, revision: 1 });
+		return withNameConflictBoundary(() =>
+			collectionRepository.create({ ...aggregate, nameKey: nameKey(name), ownerProfileId, revision: 1 }),
+		);
 	},
 	async remove(id, ownerProfileId, expectedRevision) {
 		assertId(id);

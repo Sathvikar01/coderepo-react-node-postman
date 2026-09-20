@@ -21,6 +21,11 @@ export function errorHandler(error, request, response, next) {
 		}
 		return response.status(error.statusCode).json({ error: { code: error.code, message: error.message, details: error.details } });
 	}
+	if (error?.code === 11000) {
+		return response
+			.status(409)
+			.json({ error: { code: "DUPLICATE_KEY", message: "A record with these unique values already exists." } });
+	}
 	if (error?.code === "LIMIT_FILE_SIZE" || error?.type === "entity.too.large") {
 		return response.status(413).json({ error: { code: "PAYLOAD_TOO_LARGE", message: "The request body exceeded the allowed size." } });
 	}

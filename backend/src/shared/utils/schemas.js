@@ -44,8 +44,11 @@ export const variableSchema = z
 	.superRefine((variable, context) => {
 		if (variable.kind === "plain" && variable.value === undefined)
 			context.addIssue({ code: "custom", path: ["value"], message: "Plain variables require a value." });
-		if (variable.kind === "secretRef" && !variable.alias)
-			context.addIssue({ code: "custom", path: ["alias"], message: "Secret references require an alias." });
+		if (variable.kind === "secretRef") {
+			if (!variable.alias) context.addIssue({ code: "custom", path: ["alias"], message: "Secret references require an alias." });
+			if (variable.value !== undefined)
+				context.addIssue({ code: "custom", path: ["value"], message: "Secret references store an alias and never a value." });
+		}
 	});
 
 export const variablesSchema = z

@@ -34,7 +34,9 @@ export const historyRepository = {
 				},
 			];
 		}
-		const query = { ...filter, ...(cursor ? cursorPredicate(cursor) : {}) };
+		const query = cursor
+			? { ...filter, $and: [...(filter.$and ?? []), cursorPredicate(cursor)] }
+			: filter;
 		const find = ExecutionHistory.find(query)
 			.sort({ startedAt: -1, _id: -1 })
 			.limit(limit + 1)
