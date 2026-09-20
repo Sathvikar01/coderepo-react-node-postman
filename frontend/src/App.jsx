@@ -691,6 +691,7 @@ export default function App() {
 				response: record.response,
 				error: record.error,
 				effectCertainty: record.effectCertainty,
+				executedUrl: record.snapshot?.executedUrl ?? record.executedUrl ?? null,
 				persistence: record.persistence,
 				startedAt: record.startedAt,
 				finishedAt: record.finishedAt,

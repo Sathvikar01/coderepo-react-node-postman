@@ -72,6 +72,8 @@ function DetailsPanel({ result }) {
 	const response = result.response;
 	const trace = result.compileTrace ?? [];
 	const undecoded = response?.body?.omittedReason === "unsupported_encoding";
+	const dispatched = result.effectCertainty === "may_have_reached_target";
+	const executedUrl = response?.executedUrl ?? result.executedUrl ?? null;
 	return (
 		<div className="details-grid">
 			<section className="details-card">
@@ -105,9 +107,9 @@ function DetailsPanel({ result }) {
 				<h3>Resolution</h3>
 				<dl>
 					<dt>Executed URL</dt>
-					<dd>{response?.executedUrl ?? "not dispatched"}</dd>
+					<dd>{dispatched ? (executedUrl ?? "dispatched") : "not dispatched"}</dd>
 					<dt>Effect certainty</dt>
-					<dd>{result.effectCertainty === "may_have_reached_target" ? "may have reached the target" : "not dispatched"}</dd>
+					<dd>{dispatched ? "may have reached the target" : "not dispatched"}</dd>
 					<dt>Persistence</dt>
 					<dd>
 						{result.persistence?.state ?? "saved"}
