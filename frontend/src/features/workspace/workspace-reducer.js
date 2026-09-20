@@ -86,7 +86,9 @@ export function workspaceReducer(state, action) {
 				return {
 					...tab,
 					name: editedSinceSave ? tab.request.name : savedRequest.name,
-					request: editedSinceSave ? tab.request : savedRequest,
+					request: editedSinceSave
+						? { ...tab.request, id: savedRequest.id, folderId: savedRequest.folderId }
+						: savedRequest,
 					baseRequest: savedRequest,
 					collectionId: action.collectionId,
 					collectionName: action.collectionName,
@@ -121,12 +123,24 @@ export function workspaceReducer(state, action) {
 				};
 			});
 		case "draft/inspect":
-			return updateTab(state, action.tabId, (tab) => ({
-				...tab,
-				status: "settled",
-				result: action.result,
-				error: action.result.error ?? null,
-			}));
+			return updateTab(state, action.tabId, (tab) => {
+				const active = tab.status === "running" || tab.status === "reconciling";
+				return {
+					...tab,
+					status: active ? tab.status : "settled",
+					result: action.result,
+					error: active ? tab.error : (action.result.error ?? null),
+				};
+			});
+		case "collection/reconciled":
+			return {
+				...state,
+				tabs: state.tabs.map((tab) =>
+					tab.collectionId === action.collectionId
+						? { ...tab, collectionName: action.name, collectionRevision: action.revision }
+						: tab,
+				),
+			};
 		case "environment/select":
 			return { ...state, activeEnvironmentId: action.environmentId };
 		case "preferences/set":

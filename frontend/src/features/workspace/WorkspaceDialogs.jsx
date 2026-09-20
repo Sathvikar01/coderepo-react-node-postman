@@ -130,7 +130,7 @@ export function WorkspaceDialogs({ actions, collections, dialog, dialogError, bu
 				title="Collection changed"
 				error={dialogError}
 				extraFooter={
-					<button className="text-button" type="button" onClick={() => actions.reloadCollection(collection._id)}>
+					<button className="text-button" type="button" onClick={() => actions.reloadCollection(collection._id, dialog.tabId)}>
 						Reload
 					</button>
 				}
@@ -161,6 +161,19 @@ export function WorkspaceDialogs({ actions, collections, dialog, dialogError, bu
 				onCancel={onClose}
 				onConfirm={() => actions.discardTab(dialog.tabId)}
 				title={dialog.title}
+			/>
+		);
+	}
+
+	if (dialog.kind === "switch-profile") {
+		return (
+			<ConfirmationDialog
+				busy={false}
+				confirmLabel="Switch profile"
+				message="Switching profiles closes every open request tab and cancels active sends. Unsaved changes are discarded."
+				onCancel={onClose}
+				onConfirm={() => actions.confirmProfileSwitch()}
+				title="Switch profile"
 			/>
 		);
 	}
