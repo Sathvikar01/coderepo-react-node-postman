@@ -18,6 +18,11 @@ export function useExecutionReconciliation({ dispatch, onTerminal, onStatus }) {
 		}
 	}, []);
 
+	const clearAllTimers = useCallback(() => {
+		timers.current.forEach((timer) => clearTimeout(timer));
+		timers.current.clear();
+	}, []);
+
 	useEffect(
 		() => () => {
 			timers.current.forEach((timer) => clearTimeout(timer));
@@ -100,5 +105,5 @@ export function useExecutionReconciliation({ dispatch, onTerminal, onStatus }) {
 		[dispatch, onStatus, onTerminal],
 	);
 
-	return { reconcile, cancel, clearTimer };
+	return { reconcile, cancel, clearTimer, clearAllTimers };
 }

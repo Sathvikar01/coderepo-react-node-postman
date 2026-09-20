@@ -9,6 +9,7 @@ import {
 	deleteFolder,
 	duplicateFolder,
 	duplicateRequest,
+	hasRequest,
 	moveFolder,
 	moveRequest,
 	moveRequestToFolder,
@@ -41,6 +42,7 @@ import { OUTCOME_LABELS } from "./shared/utils/format.js";
 import { applyTheme, readTheme } from "./shared/utils/theme.js";
 import { createDraftTab, createInitialState, findOpenTab, MAX_TABS, workspaceReducer } from "./features/workspace/workspace-reducer.js";
 import { useExecutionReconciliation } from "./features/workspace/useExecutionReconciliation.js";
+import { isExecutionActive, tabKeyIntent, workspaceHasUnsettledWork } from "./features/workspace/workspace-workflow.js";
 import { WorkspaceDialogs } from "./features/workspace/WorkspaceDialogs.jsx";
 import { WorkspaceHeader } from "./features/workspace/WorkspaceHeader.jsx";
 import { TracerSymbol } from "./shared/components/TracerBrand.jsx";
@@ -82,7 +84,6 @@ export default function App() {
 	const [dialogError, setDialogError] = useState("");
 	const [toasts, setToasts] = useState([]);
 	const [historyRefresh, setHistoryRefresh] = useState(0);
-	const [liveResult, setLiveResult] = useState(null);
 	const [authOverrides, setAuthOverrides] = useState({});
 	const [executionPolicy, setExecutionPolicy] = useState(null);
 	const tabs = useRovingTabs();
@@ -90,6 +91,7 @@ export default function App() {
 	const splitContainer = useRef(null);
 	const split = useSplitPane(splitContainer);
 	const toastTimers = useRef(new Set());
+	const focusTabAfterClose = useRef(false);
 	const maxTabs = executionPolicy?.maxOpenTabs ?? MAX_TABS;
 
 	const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId) ?? null;
@@ -250,7 +252,6 @@ export default function App() {
 		setProfile(null);
 		setCollections([]);
 		setEnvironments([]);
-		setLiveResult(null);
 		setAuthOverrides({});
 		setExecutionPolicy(null);
 		setDialog(null);
@@ -265,10 +266,17 @@ export default function App() {
 		} catch {
 			// The stateless token is discarded locally regardless of the response.
 		}
+		releaseAllExecutions();
 		clearSession();
 		resetWorkspaceState();
 		setAccount(null);
 		setProfiles(null);
+	};
+
+	const performProfileSwitch = () => {
+		releaseAllExecutions();
+		clearProfileSession();
+		resetWorkspaceState();
 	};
 
 	const switchProfile = async () => {
@@ -279,8 +287,11 @@ export default function App() {
 			toast(error.message, "error");
 			return;
 		}
-		clearProfileSession();
-		resetWorkspaceState();
+		if (workspaceHasUnsettledWork(state.tabs)) {
+			openDialog({ kind: "switch-profile" });
+			return;
+		}
+		performProfileSwitch();
 	};
 
 	const savePreferences = async (patch) => {
@@ -297,6 +308,7 @@ export default function App() {
 			try {
 				const aggregate = await collectionApi.get(summary._id);
 				setCollections((current) => current.map((item) => (item._id === aggregate._id ? aggregate : item)));
+				dispatch({ type: "collection/reconciled", collectionId: aggregate._id, name: aggregate.name, revision: aggregate.revision });
 				return aggregate;
 			} catch (error) {
 				toast(error.message, "error");
@@ -330,7 +342,10 @@ export default function App() {
 
 	const closeTab = (tabId) => {
 		const tab = state.tabs.find((item) => item.id === tabId);
-		if (tab?.dirty) {
+		if (!tab) return;
+		const focusWasInTabList = Boolean(tabs.listRef.current?.contains(document.activeElement));
+		if (tab.dirty) {
+			focusTabAfterClose.current = focusWasInTabList;
 			openDialog({
 				kind: "close-tab",
 				tabId,
@@ -339,12 +354,9 @@ export default function App() {
 			});
 			return;
 		}
-		setAuthOverrides((current) => {
-			if (!(tabId in current)) return current;
-			const next = { ...current };
-			delete next[tabId];
-			return next;
-		});
+		focusTabAfterClose.current = focusWasInTabList;
+		releaseTabExecution(tab);
+		forgetTabOverride(tabId);
 		dispatch({ type: "draft/close", tabId });
 	};
 
@@ -352,7 +364,12 @@ export default function App() {
 		? environments.find((environment) => environment._id === state.activeEnvironmentId)?.revision
 		: undefined;
 
-	const { reconcile: startReconciliation, cancel: cancelExecution } = useExecutionReconciliation({
+	const {
+		reconcile: startReconciliation,
+		cancel: cancelExecution,
+		clearTimer: clearExecutionTimer,
+		clearAllTimers: clearExecutionTimers,
+	} = useExecutionReconciliation({
 		dispatch,
 		onTerminal: useCallback(() => setHistoryRefresh((current) => current + 1), []),
 		onStatus: useCallback(
@@ -361,16 +378,91 @@ export default function App() {
 		),
 	});
 
+	const forgetTabOverride = useCallback((tabId) => {
+		setAuthOverrides((current) => {
+			if (!(tabId in current)) return current;
+			const next = { ...current };
+			delete next[tabId];
+			return next;
+		});
+	}, []);
+
+	// A closed tab must not leave an execution polling or a backend send running.
+	const releaseTabExecution = useCallback(
+		(tab) => {
+			if (!tab) return;
+			if (tab.executionId) clearExecutionTimer(tab.executionId);
+			if (isExecutionActive(tab)) executionApi.cancel(tab.executionId).catch(() => {});
+		},
+		[clearExecutionTimer],
+	);
+
+	const releaseAllExecutions = useCallback(() => {
+		state.tabs.forEach((tab) => {
+			if (isExecutionActive(tab)) executionApi.cancel(tab.executionId).catch(() => {});
+		});
+		clearExecutionTimers();
+	}, [clearExecutionTimers, state.tabs]);
+
+	// Signing out, switching profiles, or expiring a session abandons every in-flight
+	// reconciliation poll; the timers must not survive into the next profile.
+	useEffect(() => {
+		if (!profile) clearExecutionTimers();
+	}, [profile, clearExecutionTimers]);
+
+	// Restore keyboard focus to the selected tab after a keyboard close.
+	useEffect(() => {
+		if (!focusTabAfterClose.current) return;
+		focusTabAfterClose.current = false;
+		tabs.listRef.current?.querySelector('[role="tab"][aria-selected="true"]')?.focus();
+	}, [state.tabs]);
+
+	useEffect(() => {
+		const warnAboutDrafts = (event) => {
+			if (!state.tabs.some((tab) => tab.dirty)) return;
+			event.preventDefault();
+			event.returnValue = "";
+		};
+		window.addEventListener("beforeunload", warnAboutDrafts);
+		return () => window.removeEventListener("beforeunload", warnAboutDrafts);
+	}, [state.tabs]);
+
+	const copyResolvedUrl = async (response) => {
+		const location = response.headers.find((header) => header.name.toLowerCase() === "location")?.value;
+		if (!location) return;
+		try {
+			const resolved = new URL(location, response.executedUrl);
+			if (!["http:", "https:"].includes(resolved.protocol)) {
+				toast("This redirect is not an HTTP(S) URL.", "warning");
+				return;
+			}
+			await navigator.clipboard?.writeText(resolved.toString());
+			toast("Resolved URL copied.");
+		} catch {
+			toast("This redirect URL is invalid.", "warning");
+		}
+	};
+
+	const responsePanel = (result) =>
+		result ? (
+			<ResponseViewer onCopyUrl={copyResolvedUrl} result={result} />
+		) : (
+			<section aria-label="Response" className="response-area">
+				<div className="response-placeholder">
+					<MaterialIcon size={30}>send</MaterialIcon>
+					<span>Send a request to inspect its status, timing, headers, and body.</span>
+					<span className="field-hint">
+						Ctrl/Cmd+Enter sends without saving. Every send is recorded in History with a redacted snapshot.
+					</span>
+				</div>
+			</section>
+		);
+
 	const send = async () => {
 		if (!activeTab || ["running", "reconciling"].includes(activeTab.status)) return;
 		const executionId = crypto.randomUUID();
 		dispatch({ type: "draft/dispatched", tabId: activeTab.id, executionId });
-		setAuthOverrides((current) => {
-			if (!(activeTab.id in current)) return current;
-			const next = { ...current };
-			delete next[activeTab.id];
-			return next;
-		});
+		forgetTabOverride(activeTab.id);
 		const input = {
 			executionId,
 			tabId: activeTab.id,
@@ -428,6 +520,7 @@ export default function App() {
 			requests: aggregate.requests ?? [],
 		});
 		setCollections((current) => current.map((item) => (item._id === updated._id ? updated : item)));
+		dispatch({ type: "collection/reconciled", collectionId: updated._id, name: updated.name, revision: updated.revision });
 		if (!keepDraft) setDialog(null);
 		setDialogError("");
 		if (successMessage) toast(successMessage);
@@ -456,18 +549,23 @@ export default function App() {
 
 	const saveDraft = async () => {
 		if (!activeTab) return;
+		const saveTabId = activeTab.id;
+		const saveDraftVersion = activeTab.draftVersion;
+		const saveRequest = structuredClone(activeTab.request);
 		if (!activeTab.collectionId) {
-			openDialog({ kind: "save-request", tabId: activeTab.id });
+			openDialog({ kind: "save-request", tabId: saveTabId, request: saveRequest });
 			return;
 		}
 		const collection = collections.find((item) => item._id === activeTab.collectionId);
 		if (!collection) {
-			openDialog({ kind: "save-request", tabId: activeTab.id });
+			openDialog({ kind: "save-request", tabId: saveTabId, request: saveRequest });
 			return;
 		}
-		const saveTabId = activeTab.id;
-		const saveDraftVersion = activeTab.draftVersion;
-		const saveRequest = structuredClone(activeTab.request);
+		if (!hasRequest(collection, saveRequest.id)) {
+			toast("This request no longer exists in the collection. Save it as a copy to keep your draft.", "warning");
+			openDialog({ kind: "save-request", tabId: saveTabId, request: saveRequest });
+			return;
+		}
 		setBusy(true);
 		try {
 			const result = await collectionApi.update(collection._id, collection.revision, {
@@ -479,6 +577,7 @@ export default function App() {
 				requests: updateRequest(collection, saveRequest).requests,
 			});
 			setCollections((current) => current.map((item) => (item._id === result._id ? result : item)));
+			dispatch({ type: "collection/reconciled", collectionId: result._id, name: result.name, revision: result.revision });
 			dispatch({
 				type: "draft/saved",
 				tabId: saveTabId,
@@ -504,6 +603,7 @@ export default function App() {
 	const saveAsNewRequest = async ({ collectionId, folderId, name }, draftRequest = activeTab?.request, tabId = activeTab?.id ?? null) => {
 		const collection = collections.find((item) => item._id === collectionId);
 		if (!collection || !draftRequest) return;
+		const savedDraftVersion = tabId ? state.tabs.find((tab) => tab.id === tabId)?.draftVersion : undefined;
 		setBusy(true);
 		try {
 			const next = addRequest({ ...collection, requests: collection.requests }, { ...draftRequest, name }, folderId).aggregate;
@@ -513,6 +613,7 @@ export default function App() {
 					type: "draft/saved",
 					tabId,
 					request: { ...draftRequest, name, id: next.requests[next.requests.length - 1].id, folderId },
+					savedDraftVersion,
 					collectionId: updated._id,
 					collectionName: updated.name,
 					collectionRevision: updated.revision,
@@ -526,24 +627,44 @@ export default function App() {
 		}
 	};
 
-	const reloadCollection = async (collectionId) => {
+	const reloadCollection = async (collectionId, tabId) => {
 		const summary = collections.find((item) => item._id === collectionId);
 		if (!summary) return;
 		const aggregate = await openCollection(summary);
-		if (aggregate && activeTab) {
-			const fresh = aggregate.requests.find((item) => item.id === activeTab.request.id);
-			if (fresh) {
-				dispatch({
-					type: "draft/saved",
-					tabId: activeTab.id,
-					request: fresh,
-					collectionId: aggregate._id,
-					collectionName: aggregate.name,
-					collectionRevision: aggregate.revision,
-				});
-			}
-		}
 		setDialog(null);
+		if (!aggregate) return;
+		const tab = state.tabs.find((item) => item.id === tabId);
+		if (!tab) return;
+		const fresh = aggregate.requests.find((item) => item.id === tab.request.id);
+		if (!fresh) {
+			toast("This request no longer exists in the collection. Your draft was kept; save it as a copy to keep it.", "warning");
+			return;
+		}
+		dispatch({
+			type: "draft/saved",
+			tabId: tab.id,
+			request: fresh,
+			savedDraftVersion: tab.draftVersion,
+			collectionId: aggregate._id,
+			collectionName: aggregate.name,
+			collectionRevision: aggregate.revision,
+		});
+	};
+
+	// History results belong in a request tab: reuse the active tab, or open the
+	// recorded request in a new one when the workspace is empty.
+	const showInWorkspace = (result, request) => {
+		if (activeTab) {
+			dispatch({ type: "draft/inspect", tabId: activeTab.id, result });
+			return;
+		}
+		if (!request) {
+			toast("This history entry was recorded before replayable request snapshots and cannot be shown.", "error");
+			return;
+		}
+		const tab = createDraftTab({ request });
+		if (!openDraftTab(tab)) return;
+		dispatch({ type: "draft/inspect", tabId: tab.id, result });
 	};
 
 	const openHistoryEntry = async (executionId, { reopen = false } = {}) => {
@@ -576,8 +697,7 @@ export default function App() {
 				historyId: record.executionId,
 				fromHistory: true,
 			};
-			if (activeTab) dispatch({ type: "draft/inspect", tabId: activeTab.id, result: inspected });
-			else setLiveResult(inspected);
+			showInWorkspace(inspected, materializeReplayRequest(record));
 			setSidebarOpen(false);
 		} catch (error) {
 			toast(error.message, "error");
@@ -602,8 +722,7 @@ export default function App() {
 					environmentRevision: activeEnvironmentRevision,
 				}),
 			});
-			if (activeTab) dispatch({ type: "draft/inspect", tabId: activeTab.id, result });
-			else setLiveResult(result);
+			showInWorkspace(result, request);
 			setHistoryRefresh((current) => current + 1);
 			toast(`Resent as a new execution (${OUTCOME_LABELS[result.outcome] ?? result.outcome}).`);
 		} catch (error) {
@@ -731,11 +850,18 @@ export default function App() {
 			return runAggregateEdit(collection, (current) => renameFolder(current, folder.id, name));
 		},
 		saveAsCopy(tabId) {
-			openDialog({ kind: "save-request", tabId });
+			const tab = state.tabs.find((item) => item.id === tabId) ?? null;
+			openDialog({ kind: "save-request", tabId, request: tab ? structuredClone(tab.request) : null });
 		},
 		discardTab(tabId) {
+			releaseTabExecution(state.tabs.find((item) => item.id === tabId) ?? null);
+			forgetTabOverride(tabId);
 			dispatch({ type: "draft/close", tabId });
 			setDialog(null);
+		},
+		confirmProfileSwitch() {
+			setDialog(null);
+			performProfileSwitch();
 		},
 		async clearHistory() {
 			setBusy(true);
@@ -932,7 +1058,15 @@ export default function App() {
 									tabIndex={tab.id === state.activeTabId ? 0 : -1}
 									onClick={() => dispatch({ type: "draft/focus", tabId: tab.id })}
 									onKeyDown={(event) => {
-										if (event.key === "Enter") dispatch({ type: "draft/focus", tabId: tab.id });
+										if (event.key === "Enter") {
+											event.preventDefault();
+											dispatch({ type: "draft/focus", tabId: tab.id });
+											return;
+										}
+										if (tabKeyIntent(event.key) === "close") {
+											event.preventDefault();
+											closeTab(tab.id);
+										}
 									}}
 								>
 									<span className={`method-tag ${tab.request.method.toLowerCase()}`}>{tab.request.method}</span>
@@ -973,7 +1107,7 @@ export default function App() {
 									executionPolicy={executionPolicy}
 									hasCollection={Boolean(activeTab.collectionId)}
 									request={activeTab.request}
-									running={activeTab.status === "running"}
+									running={["running", "reconciling"].includes(activeTab.status)}
 									savedName={activeTab.collectionName}
 									onCancel={() => {
 										openDraftTab(createDraftTab());
@@ -983,7 +1117,7 @@ export default function App() {
 										setAuthOverrides((current) => ({ ...current, [activeTab.id]: override }))
 									}
 									onSave={saveDraft}
-									onSend={activeTab.status === "running" ? cancel : send}
+									onSend={["running", "reconciling"].includes(activeTab.status) ? cancel : send}
 								/>
 								{activeTab.status === "reconciling" && (
 									<div className="status-banner warning" role="status">
@@ -1007,39 +1141,7 @@ export default function App() {
 								tabIndex={0}
 								title="Drag to resize. Arrow keys adjust; Enter resets."
 							/>
-							<div className="request-pane-bottom">
-								{activeTab.result ? (
-									<ResponseViewer
-										result={activeTab.result}
-										onCopyUrl={async (response) => {
-											const location = response.headers.find((header) => header.name.toLowerCase() === "location")?.value;
-											if (!location) return;
-											try {
-												const resolved = new URL(location, response.executedUrl);
-												if (!["http:", "https:"].includes(resolved.protocol)) {
-													toast("This redirect is not an HTTP(S) URL.", "warning");
-													return;
-												}
-												await navigator.clipboard?.writeText(resolved.toString());
-												toast("Resolved URL copied.");
-											} catch {
-												toast("This redirect URL is invalid.", "warning");
-											}
-										}}
-									/>
-								) : (
-									<section aria-label="Response" className="response-area">
-										<div className="response-placeholder">
-											<MaterialIcon size={30}>send</MaterialIcon>
-											<span>Send a request to inspect its status, timing, headers, and body.</span>
-											<span className="field-hint">
-												Ctrl/Cmd+Enter sends without saving. Every send is recorded in History with a redacted
-												snapshot.
-											</span>
-										</div>
-									</section>
-								)}
-							</div>
+							<div className="request-pane-bottom">{responsePanel(activeTab.result)}</div>
 						</div>
 					) : (
 						<section className="workspace-empty">

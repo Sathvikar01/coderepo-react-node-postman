@@ -12,6 +12,10 @@ export function addRequest(aggregate, request, folderId = null, position = "end"
 	return { aggregate: next, request: entry };
 }
 
+export function hasRequest(aggregate, requestId) {
+	return Boolean(aggregate?.requests?.some((item) => item.id === requestId));
+}
+
 export function updateRequest(aggregate, request) {
 	return { ...aggregate, requests: aggregate.requests.map((item) => (item.id === request.id ? structuredClone(request) : item)) };
 }
