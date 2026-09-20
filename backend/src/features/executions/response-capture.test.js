@@ -137,3 +137,81 @@ describe("response decoding matrix", () => {
 		).rejects.toMatchObject({ kind: "timeout" });
 	});
 });
+
+describe("response body classification", () => {
+	const limits = { decodedBytes: 1024 * 1024 };
+
+	test("HEAD, 204, and 304 always produce an empty UTF-8 body", async () => {
+		const cases = [
+			{ method: "HEAD", status: 200, headers: [{ name: "Content-Type", value: "application/json" }] },
+			{ method: "GET", status: 204, headers: [] },
+			{ method: "GET", status: 304, headers: [{ name: "Content-Type", value: "text/plain" }] },
+		];
+		for (const { method, status, headers } of cases) {
+			const result = await captureBody({ encoded: Buffer.alloc(0), headers, limits, method, status });
+			expect(result.body.encoding).toBe("utf8");
+			expect(result.body.value).toBe("");
+			expect(result.body.truncated).toBe(false);
+			expect(result.decodedBodyBytes).toBe(0);
+			expect(result.capturedBodyBytes).toBe(0);
+			expect(result.warnings).toEqual([]);
+		}
+	});
+
+	test("invalid UTF-8 with a textual media type is labeled and never rendered as text", async () => {
+		const encoded = Buffer.from([0xff, 0xfe, 0x00]);
+		const result = await captureBody({
+			encoded,
+			headers: [{ name: "Content-Type", value: "text/plain; charset=utf-8" }],
+			limits,
+			method: "GET",
+			status: 200,
+		});
+		expect(result.body.encoding).toBe("base64");
+		expect(result.body.omittedReason).toBe("invalid_utf8");
+		expect(result.body.value).toBe(encoded.toString("base64"));
+		expect(result.warnings).toContainEqual(expect.objectContaining({ code: "INVALID_UTF8" }));
+	});
+
+	test("valid UTF-8 multibyte text survives identity capture byte-for-byte", async () => {
+		const text = "héllo — 日本語 🚀";
+		const result = await captureBody({
+			encoded: Buffer.from(text, "utf8"),
+			headers: [{ name: "Content-Type", value: "text/plain; charset=utf-8" }],
+			limits,
+			method: "GET",
+			status: 200,
+		});
+		expect(result.body.encoding).toBe("utf8");
+		expect(result.body.value).toBe(text);
+		expect(result.decodedBodyBytes).toBe(Buffer.byteLength(text, "utf8"));
+	});
+
+	test("compressed multibyte text decodes exactly", async () => {
+		const text = "héllo — 日本語 🚀".repeat(20);
+		const result = await captureBody({
+			encoded: zlib.gzipSync(Buffer.from(text, "utf8")),
+			headers: [
+				{ name: "Content-Encoding", value: "gzip" },
+				{ name: "Content-Type", value: "text/plain; charset=utf-8" },
+			],
+			limits,
+			method: "GET",
+			status: 200,
+		});
+		expect(result.body.value).toBe(text);
+		expect(result.warnings).toEqual([]);
+	});
+
+	test("binary media types with valid UTF-8 bytes stay readable text", async () => {
+		const result = await captureBody({
+			encoded: Buffer.from("plain text"),
+			headers: [{ name: "Content-Type", value: "application/octet-stream" }],
+			limits,
+			method: "GET",
+			status: 200,
+		});
+		expect(result.body.encoding).toBe("utf8");
+		expect(result.body.value).toBe("plain text");
+	});
+});
