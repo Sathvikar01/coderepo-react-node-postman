@@ -2444,6 +2444,49 @@ dialog::backdrop {
 	color: var(--ink-strong);
 	font-size: 13px;
 	font-weight: 600;
+}
+/* Examples and mocks */
+.sidebar-label-actions {
+	display: flex;
+	gap: 4px;
+}
+.example-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.example-row {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 10px;
+	border: 1px solid var(--divider);
+	border-radius: 10px;
+	background: var(--surface);
+}
+.example-row-main {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+.example-row-path {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--ink-strong);
+	font-size: 13px;
+}
+.example-row-meta {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+.example-row-meta .field-hint {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -2470,4 +2513,82 @@ dialog::backdrop {
 	color: var(--ink);
 	font-size: 11px;
 	line-height: 18px;
+}
+.example-row-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+}
+.sidebar-hint {
+	padding: 0 2px;
+}
+.example-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 12px 0;
+}
+.example-actions .field-hint {
+	flex: 1 1 220px;
+}
+.mock-banner {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 10px 12px 0;
+}
+.mock-banner span {
+	flex: 1;
+}
+.example-summary {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 18px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	color: var(--muted);
+	font-size: 13px;
+}
+.example-summary strong {
+	color: var(--ink-strong);
+}
+.example-selection {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	margin: 0;
+	padding: 10px;
+	border: 1px solid var(--divider);
+	border-radius: 10px;
+}
+.example-selection legend {
+	padding: 0 6px;
+	color: var(--muted);
+	font-size: 12px;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+.example-selection .kv-check span {
+	color: var(--ink-strong);
+	font-size: 13px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.example-body-input {
+	width: 100%;
+	min-height: 96px;
+	padding: 10px;
+	border: 1px solid var(--divider);
+	border-radius: 10px;
+	background: var(--field);
+	color: var(--ink-strong);
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: 12px;
+	resize: vertical;
+}
+.text-button.danger {
+	color: var(--danger, #d64545);
 }
