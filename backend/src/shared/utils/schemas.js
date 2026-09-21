@@ -3,7 +3,7 @@ import { LIMITS, utf8Bytes } from "./limits.js";
 
 export const METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
 export const AUTH_MODES = ["inherit", "none", "bearer", "basic", "apiKey"];
-const CREDENTIAL_REFERENCE = /\{\{\s*[A-Za-z_][A-Za-z0-9_]*\s*\}\}/;
+export const CREDENTIAL_REFERENCE = /\{\{\s*[A-Za-z_][A-Za-z0-9_]*\s*\}\}/;
 
 const idSchema = z.uuid("Provide a valid identifier.");
 export const rowSchema = z
