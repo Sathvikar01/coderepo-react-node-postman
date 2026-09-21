@@ -17,6 +17,7 @@ import {
 	renameFolder,
 	updateRequest,
 } from "./features/collections/collection-edit.js";
+import { DocsView } from "./features/docs/DocsView.jsx";
 import { EnvironmentsDrawer } from "./features/environments/EnvironmentsDrawer.jsx";
 import { environmentApi } from "./features/environments/environment.api.js";
 import { executionApi } from "./features/executions/execution.api.js";
@@ -85,6 +86,7 @@ export default function App() {
 	const [sidebarTab, setSidebarTab] = useState("collections");
 	const [sidebarOpen, setSidebarOpen] = useState(false);
 	const [dialog, setDialog] = useState(null);
+	const [docsCollectionId, setDocsCollectionId] = useState(null);
 	const [busy, setBusy] = useState(false);
 	const [dialogError, setDialogError] = useState("");
 	const [toasts, setToasts] = useState([]);
@@ -936,6 +938,8 @@ export default function App() {
 		saveAsNewRequest,
 	};
 
+	const docsCollection = docsCollectionId ? collections.find((item) => item._id === docsCollectionId) ?? null : null;
+
 	const dialogNode = (
 		<WorkspaceDialogs
 			actions={dialogActions}
@@ -1055,6 +1059,7 @@ export default function App() {
 							onNewCollection={() => openDialog({ kind: "new-collection" })}
 							onNewFolder={(collection) => openDialog({ kind: "new-folder", collection })}
 							onOpenCollection={openCollection}
+							onOpenDocs={(collection) => setDocsCollectionId(collection._id)}
 							onOpenRequest={openRequest}
 							onRenameCollection={(collection) => openDialog({ kind: "rename-collection", collection })}
 							onRenameFolder={(collection, folder) => openDialog({ kind: "rename-folder", collection, folder })}
@@ -1225,6 +1230,7 @@ export default function App() {
 				</main>
 			</div>
 			{dialogNode}
+			{docsCollection && <DocsView collection={docsCollection} onClose={() => setDocsCollectionId(null)} />}
 			{dialog?.kind === "environments" && (
 				<EnvironmentsDrawer
 					activeEnvironmentId={state.activeEnvironmentId}
