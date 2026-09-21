@@ -2,55 +2,27 @@ import { useMemo, useState } from "react";
 import { MaterialIcon } from "../../shared/components/MaterialIcon.jsx";
 import { useRovingTabs } from "../../shared/hooks/useRovingTabs.js";
 import { formatBytes, formatDuration, OUTCOME_LABELS, statusClass } from "../../shared/utils/format.js";
+import { bodyNotice, describeBody } from "./body-view.js";
 import { JsonTree } from "./JsonTree.jsx";
 import { RawView } from "./RawView.jsx";
-import { formatHtml, formatXml } from "./markup-format.js";
-
-const JSON_LIMIT = 256 * 1024;
 
 function BodyPanel({ response }) {
 	const [view, setView] = useState("pretty");
 	const [search, setSearch] = useState("");
-	const body = response?.body;
-	const text = body?.encoding === "utf8" ? body.value : "";
-	const media = (body?.mediaType || "").toLowerCase();
-	const canPretty = body?.encoding === "utf8" && !body.truncated && text.length <= JSON_LIMIT;
-	const pretty = useMemo(() => {
-		if (!canPretty) return null;
-		if (media.includes("json") || /^\s*[[{]/.test(text)) {
-			try {
-				const parsed = JSON.parse(text);
-				return { kind: "json", value: JSON.stringify(parsed, null, 2) };
-			} catch {
-				return null;
-			}
-		}
-		if (media.includes("xml") && !media.includes("html")) {
-			const result = formatXml(text);
-			return result.ok ? { kind: "text", value: result.text } : { kind: "reason", reason: result.reason };
-		}
-		if (media.includes("html")) {
-			const result = formatHtml(text);
-			return result.ok ? { kind: "text", value: result.text } : { kind: "reason", reason: result.reason };
-		}
-		return null;
-	}, [canPretty, media, text]);
-	if (!response) return null;
-	if (body?.encoding === "base64") {
+	const described = describeBody(response?.body);
+	const notice = bodyNotice(response?.body, response?.size);
+	if (described.presentation === "binary") {
 		return (
 			<div className="raw-view">
-				<div className="notice info">
-					This response is binary or not valid UTF-8 ({body.mediaType || "unknown media type"}). It is shown as Base64 and never
-					rendered as live content.
-				</div>
-				<RawView search={search} text={body.value} />
+				{notice && <div className={`notice ${notice.tone}`}>{notice.message}</div>}
+				<RawView search={search} text={described.text} />
 			</div>
 		);
 	}
-	if (!text) return <p className="field-hint">This response has an empty body.</p>;
+	if (described.presentation === "empty") return <p className="field-hint">This response has an empty body.</p>;
 	return (
 		<div className="raw-view">
-			{body.truncated && <div className="notice warning">The captured body was truncated. Only the first part is displayed.</div>}
+			{notice && <div className={`notice ${notice.tone}`}>{notice.message}</div>}
 			<div className="field-row">
 				<div className="view-switch" role="group" aria-label="Body view">
 					<button aria-pressed={view === "pretty"} type="button" onClick={() => setView("pretty")}>
@@ -71,17 +43,13 @@ function BodyPanel({ response }) {
 				/>
 			</div>
 			{view === "raw" ? (
-				<RawView search={search} text={text} />
-			) : pretty?.kind === "json" ? (
-				search.trim() ? <RawView search={search} text={pretty.value} /> : <JsonTree text={text} />
-			) : pretty?.kind === "text" ? (
-				<RawView search={search} text={pretty.value} />
+				<RawView search={search} text={described.text} />
+			) : described.presentation === "json" && !search.trim() ? (
+				<JsonTree text={response.body.value} />
 			) : (
-				<RawView search={search} text={text} />
+				<RawView search={search} text={described.text} />
 			)}
-			{view === "pretty" && pretty?.kind === "reason" && (
-				<div className="notice info">{pretty.reason} Raw source is shown instead.</div>
-			)}
+			{view === "pretty" && described.reason && <div className="notice info">{described.reason} Raw source is shown instead.</div>}
 		</div>
 	);
 }
@@ -103,6 +71,9 @@ function HeadersPanel({ headers = [] }) {
 function DetailsPanel({ result }) {
 	const response = result.response;
 	const trace = result.compileTrace ?? [];
+	const undecoded = response?.body?.omittedReason === "unsupported_encoding";
+	const dispatched = result.effectCertainty === "may_have_reached_target";
+	const executedUrl = response?.executedUrl ?? result.executedUrl ?? null;
 	return (
 		<div className="details-grid">
 			<section className="details-card">
@@ -121,7 +92,13 @@ function DetailsPanel({ result }) {
 					<dt>Received body</dt>
 					<dd>{formatBytes(response?.size?.receivedBodyBytes)}</dd>
 					<dt>Decoded body</dt>
-					<dd>{formatBytes(response?.size?.decodedBodyBytes)}</dd>
+					<dd>{undecoded ? "not decoded (encoding unsupported)" : formatBytes(response?.size?.decodedBodyBytes)}</dd>
+					{response?.body?.historyBodyTruncated && (
+						<>
+							<dt>History body</dt>
+							<dd>{formatBytes(response.size.persistedBodyBytes)} kept</dd>
+						</>
+					)}
 					<dt>Timeout</dt>
 					<dd>{formatDuration(response?.timeoutMs)}</dd>
 				</dl>
@@ -130,9 +107,9 @@ function DetailsPanel({ result }) {
 				<h3>Resolution</h3>
 				<dl>
 					<dt>Executed URL</dt>
-					<dd>{response?.executedUrl ?? "not dispatched"}</dd>
+					<dd>{dispatched ? (executedUrl ?? "dispatched") : "not dispatched"}</dd>
 					<dt>Effect certainty</dt>
-					<dd>{result.effectCertainty === "may_have_reached_target" ? "may have reached the target" : "not dispatched"}</dd>
+					<dd>{dispatched ? "may have reached the target" : "not dispatched"}</dd>
 					<dt>Persistence</dt>
 					<dd>
 						{result.persistence?.state ?? "saved"}
@@ -178,6 +155,7 @@ export function ResponseViewer({ onCopyUrl, result }) {
 	const response = result.response;
 	const status = response?.status ?? null;
 	const errorMessage = result.error?.message;
+	const hasLocation = response?.headers?.some((header) => header.name.toLowerCase() === "location");
 	return (
 		<section aria-label="Response" className="response-area">
 			<div className="response-toolbar">
@@ -209,7 +187,7 @@ export function ResponseViewer({ onCopyUrl, result }) {
 					)}
 					{errorMessage && <span className="field-hint">{errorMessage}</span>}
 				</div>
-				{status !== null && status >= 300 && status < 400 && (
+				{status !== null && status >= 300 && status < 400 && hasLocation && (
 					<button className="button" type="button" onClick={() => onCopyUrl(response)}>
 						<MaterialIcon size={18}>content_copy</MaterialIcon>
 						<span className="button-label">Copy resolved URL</span>
@@ -221,70 +199,69 @@ export function ResponseViewer({ onCopyUrl, result }) {
 					{warning.message}
 				</div>
 			))}
-			{!response ? (
-				<div className="response-placeholder">
-					<MaterialIcon size={28}>error_outline</MaterialIcon>
-					<span>{errorMessage ?? "No HTTP response was produced for this send."}</span>
-					{result.error?.code === "TARGET_BLOCKED" && (
-						<span className="field-hint">
-							Tracer blocks addresses that are not publicly routable. Only the seeded local demo target on 127.0.0.1:8000 is
-							exempt.
-						</span>
-					)}
-				</div>
-			) : (
-				<>
-					<div
-						className="response-tabs"
-						role="tablist"
-						aria-label="Response sections"
-						ref={tabs.listRef}
-						onKeyDown={tabs.onKeyDown}
-					>
-						<button
-							aria-controls="response-panel-body"
-							aria-selected={tab === "body"}
-							className="editor-tab"
-							id="response-tab-body"
-							role="tab"
-							tabIndex={tab === "body" ? 0 : -1}
-							type="button"
-							onClick={() => setTab("body")}
-						>
-							Body
-						</button>
-						<button
-							aria-controls="response-panel-headers"
-							aria-selected={tab === "headers"}
-							className="editor-tab"
-							id="response-tab-headers"
-							role="tab"
-							tabIndex={tab === "headers" ? 0 : -1}
-							type="button"
-							onClick={() => setTab("headers")}
-						>
-							Headers<span className="badge">{response.headers.length}</span>
-						</button>
-						<button
-							aria-controls="response-panel-details"
-							aria-selected={tab === "details"}
-							className="editor-tab"
-							id="response-tab-details"
-							role="tab"
-							tabIndex={tab === "details" ? 0 : -1}
-							type="button"
-							onClick={() => setTab("details")}
-						>
-							Details
-						</button>
-					</div>
-					<div aria-labelledby={`response-tab-${tab}`} className="response-panel" id={`response-panel-${tab}`} role="tabpanel">
-						{tab === "body" && <BodyPanel key={result.executionId ?? "live"} response={response} />}
-						{tab === "headers" && <HeadersPanel headers={response.headers} />}
-						{tab === "details" && <DetailsPanel result={result} />}
-					</div>
-				</>
-			)}
+			<div className="response-tabs" role="tablist" aria-label="Response sections" ref={tabs.listRef} onKeyDown={tabs.onKeyDown}>
+				<button
+					aria-controls="response-panel-body"
+					aria-selected={tab === "body"}
+					className="editor-tab"
+					id="response-tab-body"
+					role="tab"
+					tabIndex={tab === "body" ? 0 : -1}
+					type="button"
+					onClick={() => setTab("body")}
+				>
+					Body
+				</button>
+				<button
+					aria-controls="response-panel-headers"
+					aria-selected={tab === "headers"}
+					className="editor-tab"
+					id="response-tab-headers"
+					role="tab"
+					tabIndex={tab === "headers" ? 0 : -1}
+					type="button"
+					onClick={() => setTab("headers")}
+				>
+					Headers{response ? <span className="badge">{response.headers.length}</span> : null}
+				</button>
+				<button
+					aria-controls="response-panel-details"
+					aria-selected={tab === "details"}
+					className="editor-tab"
+					id="response-tab-details"
+					role="tab"
+					tabIndex={tab === "details" ? 0 : -1}
+					type="button"
+					onClick={() => setTab("details")}
+				>
+					Details
+				</button>
+			</div>
+			<div
+				aria-labelledby={`response-tab-${tab}`}
+				className={`response-panel${response ? "" : " is-empty"}`}
+				id={`response-panel-${tab}`}
+				role="tabpanel"
+			>
+				{tab === "body" &&
+					(response ? (
+						<BodyPanel key={result.executionId ?? "live"} response={response} />
+					) : (
+						<div className="response-placeholder">
+							<MaterialIcon size={28}>error_outline</MaterialIcon>
+							<span>{errorMessage ?? "No HTTP response was produced for this send."}</span>
+							{result.error?.code === "TARGET_BLOCKED" && (
+								<span className="field-hint">
+									Tracer blocks addresses that are not publicly routable. Only the seeded local demo target on
+									127.0.0.1:8000 is exempt.
+								</span>
+							)}
+							<span className="field-hint">Open the Details tab for effect certainty and persistence.</span>
+						</div>
+					))}
+				{tab === "headers" && <HeadersPanel headers={response?.headers} />}
+				{tab === "details" && <DetailsPanel result={result} />}
+			</div>
 		</section>
 	);
 }

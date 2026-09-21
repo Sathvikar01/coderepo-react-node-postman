@@ -1,22 +1,29 @@
 import { useMemo, useState } from "react";
+import { parseJsonDocument } from "./json-format.js";
 
 const NODE_BUDGET = 2000;
 
+function isNumberLiteral(value) {
+	return Boolean(value) && typeof value === "object" && typeof value.__number === "string";
+}
+
 function countNodes(value, budget = NODE_BUDGET) {
+	const stack = [value];
 	let count = 0;
-	const walk = (node) => {
-		if (count > budget) return;
+	while (stack.length > 0 && count <= budget) {
+		const node = stack.pop();
 		count += 1;
-		if (node && typeof node === "object") {
-			const entries = Array.isArray(node) ? node : Object.values(node);
-			for (const entry of entries) walk(entry);
+		if (Array.isArray(node)) {
+			for (const item of node) stack.push(item);
+		} else if (node && typeof node === "object" && !isNumberLiteral(node)) {
+			for (const item of Object.values(node)) stack.push(item);
 		}
-	};
-	walk(value);
+	}
 	return count;
 }
 
 function JsonValue({ value }) {
+	if (isNumberLiteral(value)) return <span className="json-number">{value.__number}</span>;
 	if (value === null) return <span className="json-null">null</span>;
 	if (typeof value === "string") return <span className="json-string">&quot;{value}&quot;</span>;
 	if (typeof value === "number") return <span className="json-number">{String(value)}</span>;
@@ -27,7 +34,7 @@ function JsonValue({ value }) {
 function JsonNode({ name, value, depth }) {
 	const [expanded, setExpanded] = useState(depth < 1);
 	const isArray = Array.isArray(value);
-	const isObject = value && typeof value === "object" && !isArray;
+	const isObject = Boolean(value) && typeof value === "object" && !isArray && !isNumberLiteral(value);
 	if (!isArray && !isObject) {
 		return (
 			<div className="json-row">
@@ -66,14 +73,11 @@ function JsonNode({ name, value, depth }) {
 
 export function JsonTree({ text }) {
 	const parsed = useMemo(() => {
-		try {
-			const value = JSON.parse(text);
-			const nodes = countNodes(value);
-			if (nodes > NODE_BUDGET) return { error: `This document has more than ${NODE_BUDGET} nodes; use Raw view to inspect it.` };
-			return { value };
-		} catch (error) {
-			return { error: `This response is not valid JSON (${error.message}). Use Raw view for the exact source.` };
-		}
+		const result = parseJsonDocument(text);
+		if (!result.ok) return { error: `${result.reason} Use Raw view for the exact source.` };
+		if (countNodes(result.value) > NODE_BUDGET)
+			return { error: `This document has more than ${NODE_BUDGET} nodes; use Raw view to inspect it.` };
+		return { value: result.value };
 	}, [text]);
 	if (parsed.error) return <p className="field-hint">{parsed.error}</p>;
 	return (

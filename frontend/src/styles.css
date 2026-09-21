@@ -1151,6 +1151,11 @@ pre,
 	overflow: auto;
 	padding: 14px 16px 24px;
 }
+.response-panel.is-empty {
+	display: flex;
+	flex-direction: column;
+	padding: 0;
+}
 .response-placeholder {
 	display: grid;
 	flex: 1;

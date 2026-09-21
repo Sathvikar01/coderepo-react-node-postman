@@ -4,7 +4,7 @@ import { AppError } from "../../shared/errors/app-error.js";
 import { initConfig } from "../../shared/config/index.js";
 import { fingerprintOf } from "../history/fingerprint.js";
 import { createOperationRegistry } from "./active-registry.js";
-import { createExecutionService } from "./execution.service.js";
+import { createExecutionService, terminalResult } from "./execution.service.js";
 import { TransportError } from "./http-transport.js";
 
 process.env.MONGODB_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/request_desk_phase2_test";
@@ -180,6 +180,46 @@ describe("execution pipeline order", () => {
 		expect(result.effectCertainty).toBe("not_dispatched");
 		expect(result.error.code).toBe("TARGET_BLOCKED");
 		expect(result.persistence).toEqual({ state: "saved" });
+	});
+
+	test("carries the executed URL when a dispatched send fails", async () => {
+		const history = fakeHistory();
+		history.finalize = async () => null;
+		const { service } = makeService({
+			history,
+			transport: async (input) => {
+				input.onDispatch?.();
+				return {
+					ok: false,
+					error: new TransportError("timeout", "This execution exceeded its time budget."),
+					state: { status: 0, statusText: "", httpVersion: "1.1", headers: [] },
+					encoded: Buffer.alloc(0),
+					encodedBytes: 0,
+					truncated: false,
+					omittedReason: null,
+					bytesSent: 64,
+					timing: { totalMs: 5000, firstByteMs: null },
+				};
+			},
+		});
+
+		const result = await service.send(nextProfile(), sendInput());
+
+		expect(result.outcome).toBe("timeout");
+		expect(result.effectCertainty).toBe("may_have_reached_target");
+		expect(result.executedUrl).toBe("https://example.test/probe");
+		expect(result.response).toBeNull();
+	});
+
+	test("terminal results expose the recorded executed URL", () => {
+		const result = terminalResult({
+			executionId: "exec-1",
+			outcome: "timeout",
+			effectCertainty: "may_have_reached_target",
+			snapshot: { executedUrl: "https://example.test/probe" },
+		});
+
+		expect(result.executedUrl).toBe("https://example.test/probe");
 	});
 
 	test("blocks a method that is not a supported HTTP token", async () => {

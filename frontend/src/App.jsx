@@ -20,6 +20,7 @@ import {
 import { EnvironmentsDrawer } from "./features/environments/EnvironmentsDrawer.jsx";
 import { environmentApi } from "./features/environments/environment.api.js";
 import { executionApi } from "./features/executions/execution.api.js";
+import { resolveRedirectUrl } from "./features/executions/redirect.js";
 import { ResponseViewer } from "./features/executions/ResponseViewer.jsx";
 import { HistoryPanel } from "./features/history/HistoryPanel.jsx";
 import { historyApi } from "./features/history/history.api.js";
@@ -430,16 +431,17 @@ export default function App() {
 	const copyResolvedUrl = async (response) => {
 		const location = response.headers.find((header) => header.name.toLowerCase() === "location")?.value;
 		if (!location) return;
+		const resolved = resolveRedirectUrl(location, response.executedUrl);
+		if (!resolved.ok) {
+			toast(resolved.reason === "scheme" ? "This redirect is not an HTTP(S) URL." : "This redirect URL is invalid.", "warning");
+			return;
+		}
 		try {
-			const resolved = new URL(location, response.executedUrl);
-			if (!["http:", "https:"].includes(resolved.protocol)) {
-				toast("This redirect is not an HTTP(S) URL.", "warning");
-				return;
-			}
-			await navigator.clipboard?.writeText(resolved.toString());
+			if (!navigator.clipboard) throw new Error("clipboard unavailable");
+			await navigator.clipboard.writeText(resolved.url);
 			toast("Resolved URL copied.");
 		} catch {
-			toast("This redirect URL is invalid.", "warning");
+			toast("The clipboard is not available in this browser.", "warning");
 		}
 	};
 
@@ -689,6 +691,7 @@ export default function App() {
 				response: record.response,
 				error: record.error,
 				effectCertainty: record.effectCertainty,
+				executedUrl: record.snapshot?.executedUrl ?? record.executedUrl ?? null,
 				persistence: record.persistence,
 				startedAt: record.startedAt,
 				finishedAt: record.finishedAt,
