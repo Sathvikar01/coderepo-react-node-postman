@@ -241,6 +241,7 @@ These rules record the user's assignment and attached architecture brief. Preser
 - Preserve `hackerrank.yml`'s install/run commands, ports 3000/8000, read-only paths, default-open files, environment setup, and reset-and-seed startup behavior. Install, build, and start must work from a clean checkout without manual repairs.
 - Use the reference design system and theme behavior to deliver a modern, polished, responsive, keyboard-accessible UI. Use local assets, clear American English, and the existing formatting configuration. Remove dead code and temporary debugging output.
 - Keep core demonstrations functional without external hosted services. For an HTTP client, provide real local HTTP endpoints and MongoDB-backed example data; do not replace execution with canned frontend responses.
+- **No external AI integration:** do not add or call AI SDKs, hosted model APIs, or equivalent third-party AI inference services anywhere in the product. This explicitly makes Phase 26 non-applicable unless the user later changes the constraint.
 - Keep application sign-in credentials separate from credentials attached to target requests. Never hardcode real secrets or commit local environment files. Treat the HTTP executor as a server-side request forgery boundary.
 - Make human judgment traceable: document scope decisions and tradeoffs, preserve actual user corrections, and distinguish recommendations from decisions the user has expressly endorsed. Do not fabricate approval, transcripts, runtime results, or production-readiness claims.
 
@@ -291,7 +292,7 @@ This section is the repo-level source of truth for phase numbers. Agents must no
 | 23 | Learning System | Tutorials/guided learning built on generated docs and real product workflows, not disconnected static content. |
 | 24 | Collaboration + Versioning | Multi-user/version workflows after portable/Git foundations converge. |
 | 25 | Ecosystem | Extensibility/integration surface around stable portable, runner, docs, and collaboration contracts. |
-| 26 | AI + Enterprise Layer | AI-assisted and enterprise controls added last, on top of deterministic existing authority. |
+| 26 | SKIPPED — AI + Enterprise Layer | **Intentionally not implemented.** External AI SDKs/model APIs are not permitted for this project, so the entire Phase 26 lane is out of scope unless the user explicitly reopens it later. |
 
 ### 10.2 Dependency graph
 
@@ -303,7 +304,7 @@ Mandatory chains:
 - `16 → 17`
 - `22 → 23`
 - Phase 20 should reuse runner/CLI semantics from 13–15 rather than invent a second execution model.
-- Phases 24–26 start only after the platform foundations they depend on have converged; 24, 25, and 26 may later run in parallel if ownership is non-overlapping.
+- Phases 24–25 start only after the platform foundations they depend on have converged. **Phase 26 is skipped by project constraint and must not be scheduled or implemented.**
 
 Current safe parallel expansion lanes after Phase 7:
 
@@ -576,13 +577,13 @@ When the user assigns a phase, the agent MUST execute the matching specification
 - **Do not:** allow arbitrary plugin code to bypass security boundaries or mutate core state outside declared APIs.
 - **Exit:** sample extension/integration proves capability isolation and backward-compatible contracts.
 
-#### Phase 26 — AI + Enterprise Layer
-- **Branch:** `phase26/ai-enterprise`.
-- **Dependency:** last phase after deterministic platform foundations stabilize.
-- **Goal:** add AI-assisted workflows and enterprise controls as optional layers.
-- **Do:** AI may draft/explain/generate but deterministic validators/execution remain authority; enterprise controls may include governance/audit/policy features explicitly selected by the user.
-- **Do not:** let AI auto-send dangerous requests, expose secrets, bypass policy/auth, or become the source of truth for execution/history.
-- **Exit:** AI suggestions are reviewable/reversible/evidence-linked; enterprise permission/audit/policy tests green.
+#### Phase 26 — SKIPPED / NOT APPLICABLE
+- **Status:** intentionally skipped by explicit user decision.
+- **Reason:** this project may not add or call external AI SDKs, hosted model APIs, or equivalent third-party AI inference integrations.
+- **Do not:** create `phase26/ai-enterprise`, add AI dependencies, wire model providers, or substitute another hosted AI service.
+- **Do not:** silently replace the skipped AI lane with an embedded/local model runtime; that would be a new architectural decision and requires explicit user approval.
+- **Enterprise note:** the combined Phase 26 lane is skipped as a whole. If non-AI enterprise controls are wanted later, define them as a separate future phase rather than reviving Phase 26 implicitly.
+- **Exit:** none; Phase 26 is complete by exclusion, not by implementation.
 
 ### 10.7 Common phase completion gate
 
@@ -607,6 +608,7 @@ As of the Phase 7 merge:
 - Phases **1–6: PROTECTED / FROZEN baseline**.
 - Phase **7: merged shared import foundation**.
 - Phases **8, 9, 11, 18, 19, 22: eligible parallel lanes** from the Phase 7 merged baseline.
-- All other phases remain blocked by their dependency chain or by explicit user assignment.
+- Phase **26: SKIPPED / NOT APPLICABLE** because external AI SDKs/model APIs are forbidden by project constraint.
+- All other non-skipped phases remain blocked by their dependency chain or by explicit user assignment.
 
 The user may advance this state over time. When a phase passes and merges, update only this subsection plus any dependency/ownership facts that actually changed; do not rewrite historical phase definitions.
