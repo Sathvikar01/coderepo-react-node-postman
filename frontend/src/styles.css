@@ -1940,6 +1940,73 @@ dialog::backdrop {
 	color: var(--danger);
 }
 
+/* Generated code dialog */
+.code-dialog-modal {
+	width: fit-content;
+	max-width: min(760px, 94vw);
+}
+.code-dialog {
+	width: min(760px, 94vw);
+}
+.code-formats {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 2px;
+	border-bottom: 1px solid var(--divider);
+}
+.code-format {
+	padding: 9px 12px;
+	border: 0;
+	border-bottom: 2px solid transparent;
+	background: transparent;
+	color: var(--muted);
+	font-size: 13px;
+	transition:
+		color 120ms ease-out,
+		border-color 120ms ease-out;
+}
+.code-format:hover {
+	color: var(--ink-strong);
+}
+.code-format[aria-selected="true"] {
+	border-bottom-color: var(--blue);
+	color: var(--blue);
+	font-weight: 500;
+}
+.code-preview {
+	max-height: min(52vh, 420px);
+	overflow: auto;
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	background: var(--field);
+}
+.code-preview pre {
+	margin: 0;
+	padding: 14px 16px;
+}
+.code-preview code {
+	color: var(--ink-strong);
+	font-family: "SFMono-Regular", Consolas, monospace;
+	font-size: 12.5px;
+	line-height: 1.55;
+	white-space: pre;
+}
+.code-empty {
+	margin: 0;
+	padding: 14px 16px;
+	color: var(--muted);
+	font-size: 12.5px;
+}
+.code-copy-status {
+	flex: 1;
+	margin: 0;
+	color: var(--muted);
+	font-size: 12px;
+}
+.code-button {
+	flex: none;
+}
+
 /* Environments drawer */
 .environment-row {
 	display: flex;
@@ -2175,6 +2242,12 @@ dialog::backdrop {
 	}
 	.send-button {
 		flex: 1;
+	}
+	.code-button {
+		padding: 0 12px;
+	}
+	.code-button .button-label {
+		display: none;
 	}
 	.request-editor-body {
 		max-height: none;

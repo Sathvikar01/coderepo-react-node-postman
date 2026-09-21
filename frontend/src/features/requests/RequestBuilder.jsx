@@ -182,6 +182,7 @@ export function RequestBuilder({
 	hasCollection,
 	onCancel,
 	onChange,
+	onExport,
 	onOverrideChange,
 	onSave,
 	onSend,
@@ -239,6 +240,10 @@ export function RequestBuilder({
 					value={request.urlTemplate}
 					onChange={(event) => onChange({ urlTemplate: event.target.value })}
 				/>
+				<button className="button code-button" title="Generate code for this request" type="button" onClick={onExport}>
+					<MaterialIcon size={18}>code</MaterialIcon>
+					<span className="button-label">Code</span>
+				</button>
 				<button className={`send-button ${running ? "cancel" : ""}`} type="button" onClick={onSend}>
 					<MaterialIcon size={18}>{running ? "stop" : "send"}</MaterialIcon>
 					{running ? "Cancel" : "Send"}

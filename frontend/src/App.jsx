@@ -941,6 +941,7 @@ export default function App() {
 			actions={dialogActions}
 			activeTab={activeTab}
 			busy={busy}
+			collectionAuth={activeCollectionAuth}
 			collections={collections}
 			dialog={dialog}
 			dialogError={dialogError}
@@ -1165,6 +1166,7 @@ export default function App() {
 										openDraftTab(createDraftTab());
 									}}
 									onChange={updateDraft}
+									onExport={() => openDialog({ kind: "code-snippet" })}
 									onOverrideChange={(override) =>
 										setAuthOverrides((current) => ({ ...current, [activeTab.id]: override }))
 									}
