@@ -39,6 +39,10 @@ export const LIMITS = {
 	scriptTests: 100,
 	scriptOutputBytes: 32 * 1024,
 	scriptResponseBodyBytes: 64 * 1024,
+	cookiesPerProfile: 200,
+	cookieBytes: 4096,
+	cookiePathBytes: 1024,
+	cookieHeaderBytes: 8 * 1024,
 };
 
 export const utf8Bytes = (value) => Buffer.byteLength(String(value ?? ""), "utf8");

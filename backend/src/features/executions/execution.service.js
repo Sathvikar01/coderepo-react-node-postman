@@ -3,6 +3,7 @@ import { AppError } from "../../shared/errors/app-error.js";
 import { getConfig } from "../../shared/config/index.js";
 import { LIMITS } from "../../shared/utils/limits.js";
 import { collectionRepository } from "../collections/collection.repository.js";
+import { cookieService } from "../cookies/cookie.service.js";
 import { environmentRepository } from "../environments/environment.repository.js";
 import { environmentService } from "../environments/environment.service.js";
 import { historyService } from "../history/history.service.js";
@@ -125,6 +126,7 @@ export function createExecutionService({
 	policy = null,
 	history = historyService,
 	localRuntime = localRuntimeService,
+	cookies = cookieService,
 } = {}) {
 	const targetPolicy = policy ?? createTargetPolicy();
 
@@ -399,6 +401,17 @@ export function createExecutionService({
 		if (remainingBeforeDispatch <= 0)
 			return preDispatchFailure("timeout", "TIMEOUT", "This execution exceeded its time budget before dispatch.", null, compiled);
 
+		// The profile jar is applied after compilation and target validation so a
+		// stored cookie can never change which target this execution reaches.
+		const cookieApplication = await cookies.applyToRequest({
+			profileId,
+			url: compiled.url,
+			headers: compiled.headers,
+		});
+		compiled.headers = cookieApplication.headers;
+		compiled.warnings.push(...cookieApplication.warnings);
+		compiled.redaction.values.push(...(cookieApplication.secretValues ?? []));
+
 		let dispatchStarted = false;
 		const result = await transport({
 			target,
@@ -419,6 +432,13 @@ export function createExecutionService({
 		});
 
 		const effectCertainty = dispatchStarted ? "may_have_reached_target" : "not_dispatched";
+		// Redirects are never followed automatically, so Set-Cookie on a 3xx response
+		// is stored exactly like any other response and only used by later sends.
+		const cookieCapture = await cookies.storeResponseCookies({
+			profileId,
+			url: compiled.url,
+			responseHeaders: result.state?.headers ?? [],
+		});
 		let outcome = "response";
 		let response = null;
 		let errorPayload = null;
@@ -472,8 +492,9 @@ export function createExecutionService({
 						},
 					]
 				: []),
-			...(response?.warnings ?? []),
+			...cookieCapture.warnings,
 			...scriptWarnings,
+			...(response?.warnings ?? []),
 		];
 		const persistence = await persist({
 			outcome,

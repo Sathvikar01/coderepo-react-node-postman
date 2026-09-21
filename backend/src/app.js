@@ -5,6 +5,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { authRouter } from "./features/auth/auth.routes.js";
 import { collectionRouter } from "./features/collections/collection.routes.js";
+import { cookieRouter } from "./features/cookies/cookie.routes.js";
 import { demoRouter } from "./features/demo/demo.routes.js";
 import { environmentRouter } from "./features/environments/environment.routes.js";
 import { executionRouter } from "./features/executions/execution.routes.js";
@@ -75,6 +76,13 @@ export function createApp() {
 		requireWorkspaceAuth,
 		resolveProfileContext,
 		environmentRouter,
+	);
+	app.use(
+		"/api/v1/cookies",
+		express.json({ limit: LIMITS.jsonBodyDefault }),
+		requireWorkspaceAuth,
+		resolveProfileContext,
+		cookieRouter,
 	);
 	app.use(
 		"/api/v1/executions",

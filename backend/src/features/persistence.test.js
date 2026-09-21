@@ -6,6 +6,8 @@ import { variablesSchema } from "../shared/utils/schemas.js";
 import { connectTestDatabase, disconnectTestDatabase } from "../shared/utils/test-db.js";
 import { Collection } from "./collections/collection.model.js";
 import { collectionService } from "./collections/collection.service.js";
+import { createCookieService } from "./cookies/cookie.service.js";
+import { ProfileCookie } from "./cookies/cookie.model.js";
 import { Environment } from "./environments/environment.model.js";
 import { environmentService } from "./environments/environment.service.js";
 import { ExecutionHistory } from "./history/history.model.js";
@@ -23,7 +25,7 @@ initConfig();
 
 const ready = await connectTestDatabase();
 if (ready) {
-	await Promise.all([Collection.init(), Environment.init(), ProfilePreference.init(), ExecutionHistory.init()]);
+	await Promise.all([Collection.init(), Environment.init(), ProfilePreference.init(), ExecutionHistory.init(), ProfileCookie.init()]);
 }
 
 const profileA = new mongoose.Types.ObjectId();
@@ -112,6 +114,7 @@ describe.skipIf(!ready)("persistence and state correctness", () => {
 			Environment.deleteMany({ ownerProfileId: { $in: [profileA, profileB] } }),
 			ProfilePreference.deleteMany({ ownerProfileId: { $in: [profileA, profileB] } }),
 			ExecutionHistory.deleteMany({ ownerProfileId: { $in: [profileA, profileB] } }),
+			ProfileCookie.deleteMany({ ownerProfileId: { $in: [profileA, profileB] } }),
 		]);
 	});
 	afterAll(disconnectTestDatabase);
@@ -578,6 +581,111 @@ describe.skipIf(!ready)("persistence and state correctness", () => {
 			const history = await historyRepository.findByExecutionId(profileA, executionId);
 			expect(history.status).toBe("terminal");
 			expect(history.outcome).toBe("response");
+		});
+	});
+
+	describe("cookie jar persistence", () => {
+		const setCookie = (value) => ({ name: "Set-Cookie", value });
+
+		mtest("persists, replaces, deletes, and clears cookies per profile", async () => {
+			const service = createCookieService({ sessionId: "persist-session", isStoreReady: () => true });
+			const stored = await service.storeResponseCookies({
+				profileId: profileA,
+				url: "http://api.demo.test/login",
+				responseHeaders: [setCookie("sid=one; Path=/"), setCookie("theme=light; Path=/app")],
+			});
+			expect(stored.stored).toBe(2);
+			expect(stored.warnings).toEqual([]);
+
+			await service.storeResponseCookies({
+				profileId: profileA,
+				url: "http://api.demo.test/login",
+				responseHeaders: [setCookie("sid=two; Path=/; Max-Age=3600")],
+			});
+			const listed = await service.list(profileA);
+			expect(listed.cookies.map((cookie) => [cookie.name, cookie.value, cookie.session]).sort()).toEqual([
+				["sid", "two", false],
+				["theme", "light", true],
+			]);
+
+			await service.storeResponseCookies({
+				profileId: profileB,
+				url: "http://api.demo.test/login",
+				responseHeaders: [setCookie("sid=other-profile; Path=/")],
+			});
+			expect((await service.list(profileB)).cookies.map((cookie) => cookie.value)).toEqual(["other-profile"]);
+
+			await service.remove(profileA, listed.cookies.find((cookie) => cookie.name === "theme").id);
+			expect((await service.list(profileA)).cookies.map((cookie) => cookie.name)).toEqual(["sid"]);
+			let crossProfileError = null;
+			try {
+				await service.remove(profileB, listed.cookies.find((cookie) => cookie.name === "theme").id);
+			} catch (error) {
+				crossProfileError = error;
+			}
+			expect(crossProfileError).toMatchObject({ code: "COOKIE_NOT_FOUND", statusCode: 404 });
+
+			await service.clear(profileA);
+			expect((await service.list(profileA)).cookies).toEqual([]);
+			expect((await service.list(profileB)).cookies).toHaveLength(1);
+		});
+
+		mtest("persistent cookies survive a restart while session cookies do not", async () => {
+			const first = createCookieService({ sessionId: "session-one", isStoreReady: () => true });
+			await first.storeResponseCookies({
+				profileId: profileA,
+				url: "https://api.demo.test/login",
+				responseHeaders: [setCookie("session=one; Path=/; Secure"), setCookie("persistent=two; Path=/; Secure; Max-Age=86400")],
+			});
+
+			const restarted = createCookieService({ sessionId: "session-two", isStoreReady: () => true });
+			const applied = await restarted.applyToRequest({ profileId: profileA, url: "https://api.demo.test/", headers: [] });
+			expect(applied.headers).toEqual([{ name: "Cookie", value: "persistent=two" }]);
+			expect((await restarted.list(profileA)).cookies.map((cookie) => [cookie.name, cookie.session])).toEqual([
+				["persistent", false],
+			]);
+		});
+
+		mtest("expired cookies are purged and never sent", async () => {
+			const service = createCookieService({ sessionId: "expiry-session", isStoreReady: () => true });
+			await service.storeResponseCookies({
+				profileId: profileA,
+				url: "http://api.demo.test/",
+				responseHeaders: [setCookie("ephemeral=1; Path=/; Max-Age=1")],
+			});
+			await ProfileCookie.updateOne(
+				{ ownerProfileId: profileA, name: "ephemeral" },
+				{ $set: { expiresAt: new Date(Date.now() - 1000) } },
+			);
+			const applied = await service.applyToRequest({ profileId: profileA, url: "http://api.demo.test/", headers: [] });
+			expect(applied.headers).toEqual([]);
+			expect((await service.list(profileA)).cookies).toEqual([]);
+		});
+
+		mtest("host-only and domain cookies keep their scope through Mongo", async () => {
+			const service = createCookieService({ sessionId: "scope-session", isStoreReady: () => true });
+			await service.storeResponseCookies({
+				profileId: profileA,
+				url: "http://api.demo.test/app/start",
+				responseHeaders: [setCookie("hostonly=1"), setCookie("shared=1; Domain=demo.test; Path=/app")],
+			});
+			const sibling = await service.applyToRequest({ profileId: profileA, url: "http://cdn.demo.test/app/page", headers: [] });
+			expect(sibling.headers).toEqual([{ name: "Cookie", value: "shared=1" }]);
+			const rootOnly = await service.applyToRequest({ profileId: profileA, url: "http://api.demo.test/other", headers: [] });
+			expect(rootOnly.headers).toEqual([]);
+			const scoped = await service.applyToRequest({ profileId: profileA, url: "http://api.demo.test/app/page", headers: [] });
+			expect(scoped.headers.at(-1).value).toBe("hostonly=1; shared=1");
+		});
+
+		mtest("a repeated name and path replaces instead of duplicating", async () => {
+			const service = createCookieService({ sessionId: "dup-session", isStoreReady: () => true });
+			await service.storeResponseCookies({
+				profileId: profileA,
+				url: "http://api.demo.test/",
+				responseHeaders: [setCookie("same=root; Path=/"), setCookie("same=deep; Path=/deep"), setCookie("same=deep2; Path=/deep")],
+			});
+			const applied = await service.applyToRequest({ profileId: profileA, url: "http://api.demo.test/deep/page", headers: [] });
+			expect(applied.headers.at(-1).value).toBe("same=deep2; same=root");
 		});
 	});
 

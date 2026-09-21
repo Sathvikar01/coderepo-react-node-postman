@@ -272,3 +272,38 @@ export function compressedExample(request, response, next) {
 		next(error);
 	}
 }
+
+const cookieSetSchema = z
+	.object({
+		name: z.string().regex(/^[A-Za-z0-9_.-]{1,64}$/).default("tracer_session"),
+		value: z.string().regex(/^[A-Za-z0-9_.-]{0,128}$/).default("demo-value"),
+		path: z.string().regex(/^\/[A-Za-z0-9_./-]{0,64}$/).default("/"),
+		maxAge: z.coerce.number().int().min(-1).max(86400).optional(),
+		secure: z.enum(["true", "false"]).optional(),
+	})
+	.strict();
+
+// Sets one cookie from query parameters plus a path-scoped marker cookie, so a
+// single send demonstrates multiple Set-Cookie headers, scope, and deletion
+// (maxAge=0). Values are echoed back as names only; the jar viewer shows values.
+export function setCookies(request, response, next) {
+	try {
+		const input = cookieSetSchema.parse(request.query);
+		const attributes = [`Path=${input.path}`];
+		if (input.maxAge !== undefined) attributes.push(`Max-Age=${input.maxAge}`);
+		if (input.secure === "true") attributes.push("Secure");
+		response.append("Set-Cookie", `${input.name}=${input.value}; ${attributes.join("; ")}`);
+		response.append("Set-Cookie", `tracer_last_set=${input.name}; Path=/demo`);
+		response.json({ data: { name: input.name, path: input.path, maxAge: input.maxAge ?? null, secure: input.secure === "true" } });
+	} catch (error) {
+		next(error);
+	}
+}
+
+export function cookieEcho(request, response) {
+	const names = String(request.headers.cookie ?? "")
+		.split(";")
+		.map((pair) => pair.trim().split("=")[0])
+		.filter(Boolean);
+	response.json({ data: { cookieNames: names, count: names.length, path: request.path, secure: Boolean(request.secure) } });
+}

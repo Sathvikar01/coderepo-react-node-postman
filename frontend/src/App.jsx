@@ -3,6 +3,7 @@ import { WorkspaceLogin } from "./features/auth/WorkspaceLogin.jsx";
 import { authApi } from "./features/auth/auth.api.js";
 import { CollectionsSidebar } from "./features/collections/CollectionsSidebar.jsx";
 import { collectionApi } from "./features/collections/collection.api.js";
+import { CookiePanel } from "./features/cookies/CookiePanel.jsx";
 import {
 	addFolder,
 	addRequest,
@@ -1015,6 +1016,16 @@ export default function App() {
 						>
 							<MaterialIcon size={18}>history</MaterialIcon> History
 						</button>
+						<button
+							aria-selected={sidebarTab === "cookies"}
+							className="sidebar-tab"
+							role="tab"
+							tabIndex={sidebarTab === "cookies" ? 0 : -1}
+							type="button"
+							onClick={() => setSidebarTab("cookies")}
+						>
+							<MaterialIcon size={18}>cookie</MaterialIcon> Cookies
+						</button>
 					</div>
 					{sidebarTab === "collections" ? (
 						<CollectionsSidebar
@@ -1072,7 +1083,7 @@ export default function App() {
 								savePreferences({ collectionOrder: order });
 							}}
 						/>
-					) : (
+					) : sidebarTab === "history" ? (
 						<HistoryPanel
 							refreshToken={historyRefresh}
 							onClear={clearHistory}
@@ -1096,6 +1107,8 @@ export default function App() {
 									.catch((error) => toast(error.message, "error"))
 							}
 						/>
+					) : (
+						<CookiePanel refreshToken={historyRefresh} />
 					)}
 				</aside>
 				<main className="workspace">
