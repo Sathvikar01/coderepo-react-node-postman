@@ -9,6 +9,7 @@ import { demoRouter } from "./features/demo/demo.routes.js";
 import { environmentRouter } from "./features/environments/environment.routes.js";
 import { executionRouter } from "./features/executions/execution.routes.js";
 import { historyRouter } from "./features/history/history.routes.js";
+import { localRuntimeRouter } from "./features/local-runtime/local-runtime.routes.js";
 import { preferenceRouter, profileRouter } from "./features/profiles/profile.routes.js";
 import { errorHandler, notFoundHandler } from "./shared/middleware/error-handler.js";
 import { requireWorkspaceAuth } from "./shared/middleware/auth.js";
@@ -83,6 +84,13 @@ export function createApp() {
 		executionRouter,
 	);
 	app.use("/api/v1/history", express.json({ limit: LIMITS.jsonBodyDefault }), requireWorkspaceAuth, resolveProfileContext, historyRouter);
+	app.use(
+		"/api/v1/local-runtime",
+		express.json({ limit: LIMITS.jsonBodyDefault }),
+		requireWorkspaceAuth,
+		resolveProfileContext,
+		localRuntimeRouter,
+	);
 
 	app.use(notFoundHandler);
 	app.use(errorHandler);

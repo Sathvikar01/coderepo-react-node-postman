@@ -1,4 +1,5 @@
 import { AppError } from "../../shared/errors/app-error.js";
+import { validateLocalTarget } from "../local-runtime/local-target-policy.js";
 import { classifyAddress } from "./address-policy.js";
 import { dnsResolver } from "./address-resolver.js";
 
@@ -47,7 +48,7 @@ function isRejectedHostname(hostname) {
 
 export function createTargetPolicy({ resolver = dnsResolver } = {}) {
 	return {
-		async validate(rawUrl, { allowLocalDemo = false, authoredUrl = null } = {}) {
+		async validate(rawUrl, { allowLocalDemo = false, authoredUrl = null, localRuntime = null } = {}) {
 			const raw = String(rawUrl ?? "").trim();
 			const authored = String(authoredUrl ?? raw).trim();
 			if (!raw || !authored) throw new AppError(400, "URL_INVALID", "Provide an absolute HTTP or HTTPS URL.");
@@ -100,6 +101,20 @@ export function createTargetPolicy({ resolver = dnsResolver } = {}) {
 					policyVersion: POLICY_VERSION,
 					local: true,
 				};
+			}
+
+			if (
+				localRuntime?.enabled === true &&
+				(localRuntime.hosts ?? []).includes(hostname.toLowerCase())
+			) {
+				return validateLocalTarget({
+					resolver,
+					hostname,
+					port,
+					url,
+					isIpLiteral,
+					policyVersion: POLICY_VERSION,
+				});
 			}
 
 			if (!isIpLiteral && isRejectedHostname(hostname)) throw new AppError(400, "TARGET_BLOCKED", "This hostname is not permitted.");

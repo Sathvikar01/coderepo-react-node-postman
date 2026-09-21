@@ -99,12 +99,15 @@ function okTransport(overrides = {}) {
 	};
 }
 
+const disabledLocalRuntime = { forExecution: async () => ({ enabled: false, hosts: [] }) };
+
 function makeService({ history = fakeHistory(), transport, policy } = {}) {
 	const registry = createOperationRegistry();
 	const calls = { transport: [], policy: [] };
 	const service = createExecutionService({
 		registry,
 		history,
+		localRuntime: disabledLocalRuntime,
 		transport: async (input) => {
 			calls.transport.push(input);
 			if (transport) return transport(input, service);
@@ -486,6 +489,7 @@ describe("execution deadline and cancellation coverage", () => {
 		const service = createExecutionService({
 			registry,
 			history,
+			localRuntime: disabledLocalRuntime,
 			transport: (transportInput) => {
 				transportInput.onDispatch();
 				registry.requestCancel(profileId, input.executionId);
