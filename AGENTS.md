@@ -368,6 +368,237 @@ Every agent/sub-agent must:
 9. Rebase/merge latest approved `main` only at a deliberate integration point; do not repeatedly pull unrelated active branches into each other.
 10. Before PR merge, run the phase gate plus the repository Baseline Gate. A phase is not complete merely because its local tests pass.
 
+
+### 10.6 Executable phase specifications
+
+When the user assigns a phase, the agent MUST execute the matching specification below directly. Do not ask the user for a separate phase prompt unless an essential ambiguity is genuinely missing. Each phase uses branch `phase<N>/<short-name>`, targets `main`, requires the repository Baseline Gate plus its phase-specific tests, and must finish with `PHASE <N> VERDICT: PASS` or `PHASE <N> VERDICT: BLOCKED`.
+
+#### Phase 1 — Repo + HackerRank Compliance Audit
+- **Branch:** audit/read-only against current baseline.
+- **Goal:** trace the six frozen capabilities end to end and compare actual code/runtime to Architecture B, GUIDELINES, hackerrank.yml, tests, seed, and packaging.
+- **Do:** verify request execution, collections, environments, auth, inspector, history, ownership, CAS, security, responsive/accessibility, clean commands.
+- **Do not:** implement product features.
+- **Exit:** concrete findings, severity/root cause/minimal fix/test, dependency-safe work split, exact acceptance blockers.
+
+#### Phase 2 — Execution Core Verification
+- **Branch:** `phase2/execution-core`.
+- **Goal:** harden `compile → policy → DNS → transport → capture → normalize → history`.
+- **Do:** adversarial SSRF/DNS, pinned destination, deadline/cancel/finalize races, framing, HEAD/204/304, gzip/deflate/br, size limits, redaction, receipt truth.
+- **Primary paths:** `backend/src/features/executions/**`.
+- **Do not:** add frontend/product features.
+- **Exit:** execution/security matrix green.
+
+#### Phase 3 — Persistence & State Correctness
+- **Branch:** `phase3/persistence-state`.
+- **Goal:** prove profile-scoped Mongo correctness for collections, environments, preferences, history, revisions/CAS, restart/reset.
+- **Do:** stale/concurrent writes, duplicate races, secretRef round-trip, cursor/expiry, restart persistence, deterministic reset.
+- **Primary paths:** backend persistence domains; minimal frontend reconciliation only if required.
+- **Do not:** alter execution semantics without proven persistence bug.
+- **Exit:** Mongo-backed race/ownership/restart tests green.
+
+#### Phase 4 — Frontend Workflow Correctness
+- **Branch:** `phase4/frontend-workflows`.
+- **Goal:** harden tabs, drafts, Send/Save separation, async result ownership, conflicts, close/switch/logout/profile isolation.
+- **Do:** edit-during-send/save, stale callbacks, reconciliation/cancel, Save As, dirty prompts, keyboard focus/close, history isolation.
+- **Primary paths:** `frontend/src/App.jsx`, `frontend/src/features/workspace/**`, history/request workflow helpers.
+- **Do not:** broad App.jsx refactor.
+- **Exit:** reducer/workflow tests + responsive browser flows green.
+
+#### Phase 5 — Response Inspector + Developer UX
+- **Branch:** `phase5/response-inspector`.
+- **Goal:** exact and safe response presentation.
+- **Do:** status/timing/size/outcome, duplicate headers, raw fidelity, token-preserving JSON, safe XML/HTML fallback, binary/empty/multibyte bodies, live-vs-history truncation, redirects, errors/cancel/blocked metadata.
+- **Primary paths:** `frontend/src/features/executions/**`; backend normalization only for proven contract bug.
+- **Do not:** change transport behavior gratuitously.
+- **Exit:** parser/view tests + browser inspector matrix green.
+
+#### Phase 6 — HackerRank Acceptance Freeze
+- **Branch:** `phase6/hackerrank-acceptance-freeze`.
+- **Goal:** produce the protected known-good HackerRank baseline.
+- **Do:** clean install, all tests, syntax/build, isolated seed/reset, runtime, ownership, seeded matrix, persistence, UI/responsive/accessibility, packaging/archive, GitHub Actions.
+- **Do not:** opportunistically improve product; fix only real acceptance failures.
+- **Exit:** `PHASE 6 VERDICT: PASS — HACKERRANK BASELINE FROZEN`; phases 1–6 become protected.
+
+#### Phase 7 — Import Foundation
+- **Branch:** `phase7/import-foundation`.
+- **Goal:** establish one normalized import adapter, starting with cURL only.
+- **Do:** safe cURL parsing, quoting/multiline, method/headers/body/auth, warnings, fail-closed file/shell/network flags, preview → dirty draft.
+- **Primary paths:** `frontend/src/features/import/**`.
+- **Do not:** auto-Send/Save; do not implement Postman/OpenAPI/Insomnia yet.
+- **Exit:** parser/adapter/browser tests green; later adapters MUST reuse this boundary.
+
+#### Phase 8 — Export + Code Snippets
+- **Branch:** `phase8/export-snippets`.
+- **Goal:** export normalized requests as cURL, JS fetch, Node, Python requests.
+- **Do:** preserve method/URL/ordered query/duplicate headers/body, safe escaping, variable placeholders, secret protection, preview/copy.
+- **Primary paths:** `frontend/src/features/export/**`.
+- **Do not:** expose resolved secrets or send-only overrides; no execution/persistence mutation.
+- **Exit:** round-trip/import-export and browser copy tests green.
+
+#### Phase 9 — Cookie / Session Jar
+- **Branch:** `phase9/cookie-session-jar`.
+- **Goal:** profile-scoped HTTP cookie storage and replay.
+- **Do:** Set-Cookie parsing, domain/path/host-only/Secure/expiry/Max-Age, replacement/deletion/order, explicit Cookie conflicts, persistence, inspect/delete/clear.
+- **Primary paths:** `backend/src/features/cookies/**`, `frontend/src/features/cookies/**`; narrow execution hook.
+- **Do not:** leak across profiles or bypass existing security/redaction.
+- **Exit:** matching/security/restart/browser tests green.
+
+#### Phase 10 — Advanced Auth
+- **Branch:** `phase10/advanced-auth`.
+- **Dependency:** Phase 9 merged.
+- **Goal:** extend target authentication beyond baseline modes using the existing secret-safe auth boundary.
+- **Do:** implement only explicitly selected advanced schemes that fit the product scope; model credentials as references/ephemeral inputs, deterministic header/query generation, collection inheritance, preview-safe metadata.
+- **Primary paths:** dedicated auth modules + narrow request/compiler UI integration.
+- **Do not:** hardcode/persist literals, weaken generated-header conflict checks, or build OAuth browser flows without an explicit supported contract.
+- **Exit:** every added scheme has end-to-end UI/save/send/security tests and no secret leakage.
+
+#### Phase 11 — Script Sandbox
+- **Branch:** `phase11/script-sandbox`.
+- **Goal:** bounded pre-request and post-response scripting.
+- **Do:** allow explicit variable/header mutations, response reads, tests/assertions, bounded console; enforce time/output/memory practical limits.
+- **Primary paths:** `backend/src/features/scripts/**`, `frontend/src/features/scripts/**`.
+- **Block:** filesystem, process/env, child processes, arbitrary network, imports/require, escaping timers, prototype/global pollution.
+- **Invariant:** mutated request still passes normal compiler/policy/transport; post-response script cannot rewrite HTTP truth.
+- **Exit:** forbidden-capability, timeout, isolation, SSRF-bypass and browser tests green.
+
+#### Phase 12 — Assertions / Testing
+- **Branch:** `phase12/assertions-testing`.
+- **Dependency:** Phase 11 merged.
+- **Goal:** make request assertions a first-class deterministic feature.
+- **Do:** status/header/body/JSON-path-like bounded assertions, named tests, pass/fail/error results, clear diagnostics, persisted definitions but immutable run results.
+- **Primary paths:** assertions/test-result feature modules reusing script result model.
+- **Do not:** invent a second scripting runtime.
+- **Exit:** assertion semantics, edge cases, history/result display and browser tests green.
+
+#### Phase 13 — Collection Runner
+- **Branch:** `phase13/collection-runner`.
+- **Dependency:** Phase 12 merged.
+- **Goal:** run ordered request sets with variables/assertions using existing execution authority.
+- **Do:** bounded iteration/order, stop/continue policy, per-request results, cancellation, variable scope, summary, rerun.
+- **Primary paths:** dedicated runner backend/frontend modules.
+- **Do not:** bypass per-request policy/auth/cookie/script/assertion rules or create an alternate transport.
+- **Exit:** deterministic run/cancel/failure/variable propagation tests + browser runner flow green.
+
+#### Phase 14 — CLI
+- **Branch:** `phase14/cli`.
+- **Dependency:** Phase 13 merged.
+- **Goal:** headless collection/project execution with semantics matching the app runner.
+- **Do:** parse explicit project/collection inputs, machine-readable output, exit codes, environment selection, secret injection through env/stdin-safe mechanisms.
+- **Primary paths:** dedicated CLI entrypoints reusing runner services.
+- **Do not:** duplicate runner logic or require GUI state.
+- **Exit:** parity fixtures prove CLI and UI runner produce equivalent deterministic outcomes.
+
+#### Phase 15 — CI/CD Parity
+- **Branch:** `phase15/cicd-parity`.
+- **Dependency:** Phase 14 merged.
+- **Goal:** make runner/CLI reliable in CI.
+- **Do:** stable exit codes, JSON/JUnit-like machine output if approved without dependency expansion, non-interactive secrets/env, artifact/report examples, CI documentation.
+- **Do not:** add hosted infrastructure.
+- **Exit:** representative CI job runs collections headlessly and fails/passes correctly.
+
+#### Phase 16 — Portable Project Model
+- **Branch:** `phase16/portable-project`.
+- **Goal:** define deterministic portable representation of requests, collections, variables, examples, auth references, scripts/tests metadata where applicable.
+- **Do:** versioned schema, canonical ordering/serialization, import/export validation, forward-compatible unknown-field policy, secret-safe representation.
+- **Primary paths:** dedicated portable/project-model modules.
+- **Do not:** make Mongo documents the interchange format or include secret values.
+- **Exit:** canonical round-trip/hash/diff-friendly fixtures green.
+
+#### Phase 17 — Git-Native Workflow
+- **Branch:** `phase17/git-native`.
+- **Dependency:** Phase 16 merged.
+- **Goal:** make portable projects pleasant to version/review in Git.
+- **Do:** deterministic file layout, meaningful diffs, conflict-safe IDs, validate/import changed project files, clear sync semantics.
+- **Do not:** shell out to arbitrary Git commands from untrusted project content or replace Mongo runtime persistence with Git.
+- **Exit:** edit/diff/merge/import round-trip scenarios green.
+
+#### Phase 18 — Local Execution Runtime / Agent
+- **Branch:** `phase18/local-runtime`.
+- **Goal:** explicit opt-in access to approved localhost/private dev targets without weakening normal SSRF policy.
+- **Do:** profile-scoped enablement, explicit host/IP allowlist, DNS-rebinding defense, pinned address, metadata block, IPv4/IPv6, timeout/cancel/redaction.
+- **Primary paths:** `backend/src/features/local-runtime/**`, frontend local-runtime controls, narrow target-policy hook.
+- **Do not:** wildcard private network by default; no installer/daemon unless separately authorized.
+- **Exit:** normal mode remains blocked; approved local mode passes adversarial tests.
+
+#### Phase 19 — Examples + Mock Servers
+- **Branch:** `phase19/examples-mocks`.
+- **Goal:** saved response examples and deterministic mocks.
+- **Do:** save/manual examples, ordered headers/body/status/content type, explicit method/path/query/header match rules, deterministic priority, mock miss, edit/delete.
+- **Primary paths:** `backend/frontend src/features/{examples,mocks}/**`.
+- **Invariant:** mock execution makes zero real transport calls and is clearly marked.
+- **Exit:** persistence/profile isolation/matching/zero-network/browser tests green.
+
+#### Phase 20 — Monitoring / Private Runners
+- **Branch:** `phase20/monitoring-runners`.
+- **Dependency:** reuse Phase 13–15 runner/CLI semantics; Phase 18 may be required for private targets.
+- **Goal:** scheduled/remote runs with deterministic runner outcomes.
+- **Do:** schedules/configuration, bounded run history, status summaries, private-runner registration boundary if selected, secret-safe configuration.
+- **Do not:** invent a second execution engine or claim production scheduler guarantees not implemented.
+- **Exit:** scheduled/manual trigger parity, cancellation, result retention, isolation and failure-reporting tests green.
+
+#### Phase 21 — Protocol Expansion
+- **Branch:** `phase21/protocol-expansion`.
+- **Dependency:** Phase 10 merged; also require relevant runtime/security foundations.
+- **Goal:** add carefully selected non-baseline protocol support.
+- **Do:** choose protocol(s) explicitly; define separate deterministic compiler/transport/result contract while sharing auth/variables/security where valid.
+- **Do not:** force non-HTTP semantics through HTTP code or weaken SSRF/local-runtime boundaries.
+- **Exit:** protocol-specific end-to-end tests + UI inspection + isolation from HTTP regressions.
+
+#### Phase 22 — Generated API Documentation
+- **Branch:** `phase22/generated-docs`.
+- **Goal:** generate useful docs from canonical request/project data.
+- **Do:** collection/request navigation, method/path/auth/variables/body examples, response examples where available, stable anchors, copyable snippets by consuming Phase 8 output if merged.
+- **Primary paths:** dedicated docs-generation/view modules.
+- **Do not:** mutate requests/execution or create a competing schema.
+- **Exit:** deterministic generation, stale/missing-data behavior, responsive docs UI tests green.
+
+#### Phase 23 — Learning System
+- **Branch:** `phase23/learning-system`.
+- **Dependency:** Phase 22 merged.
+- **Goal:** contextual tutorials/guided learning tied to real product workflows/docs.
+- **Do:** progressive lessons, runnable examples, completion state, links into actual requests/collections, beginner-to-advanced paths.
+- **Do not:** ship disconnected static blog filler or fake execution results.
+- **Exit:** learning flows launch real product actions and remain accessible/responsive.
+
+#### Phase 24 — Collaboration + Versioning
+- **Branch:** `phase24/collaboration-versioning`.
+- **Dependency:** platform foundations converged; Phase 16–17 strongly preferred.
+- **Goal:** explicit collaborative ownership/version workflows.
+- **Do:** roles/permissions, change/version metadata, conflict/review behavior, auditability, profile/account isolation.
+- **Do not:** silently introduce real-time distributed complexity; start with smallest coherent collaboration model.
+- **Exit:** permission matrix, concurrent edit/version conflict, audit/history and browser flows green.
+
+#### Phase 25 — Ecosystem
+- **Branch:** `phase25/ecosystem`.
+- **Dependency:** stable portable/runner/docs/collaboration contracts.
+- **Goal:** extensibility/integration surface without destabilizing core.
+- **Do:** define narrow extension/import/export/integration contracts, permission/capability boundaries, versioning, failure isolation.
+- **Do not:** allow arbitrary plugin code to bypass security boundaries or mutate core state outside declared APIs.
+- **Exit:** sample extension/integration proves capability isolation and backward-compatible contracts.
+
+#### Phase 26 — AI + Enterprise Layer
+- **Branch:** `phase26/ai-enterprise`.
+- **Dependency:** last phase after deterministic platform foundations stabilize.
+- **Goal:** add AI-assisted workflows and enterprise controls as optional layers.
+- **Do:** AI may draft/explain/generate but deterministic validators/execution remain authority; enterprise controls may include governance/audit/policy features explicitly selected by the user.
+- **Do not:** let AI auto-send dangerous requests, expose secrets, bypass policy/auth, or become the source of truth for execution/history.
+- **Exit:** AI suggestions are reviewable/reversible/evidence-linked; enterprise permission/audit/policy tests green.
+
+### 10.7 Common phase completion gate
+
+Unless a phase explicitly requires more, every implementation phase must:
+- start from the correct approved dependency commit;
+- keep its branch/worktree ownership isolated;
+- add regression tests for every real bug fixed;
+- run `bun test`;
+- run backend syntax checks when backend code changed;
+- run `cd frontend && bun run build` when frontend code changed;
+- run relevant browser smoke at 375 / 768 / 1024 / 1440 for UI changes;
+- pass existing GitHub Actions / Baseline Gate;
+- leave git clean except intentional ignored local artifacts;
+- open a PR to `main` and report commit, PR, tests, fixes, evidence, blockers;
+- never claim PASS if required evidence was not executed.
+
 ### 10.5 Current roadmap state
 
 As of the Phase 7 merge:
