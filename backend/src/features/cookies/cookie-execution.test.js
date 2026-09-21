@@ -167,6 +167,7 @@ function harness({ repository = fakeCookieRepository(), sessionId = "session-a",
 		registry: createOperationRegistry(),
 		history,
 		cookies,
+		localRuntime: { forExecution: async () => ({ enabled: false, hosts: [] }) },
 		transport: async (input) => {
 			calls.transport.push(input);
 			input.onDispatch?.();
@@ -358,6 +359,7 @@ describe("cookie jar through the execution pipeline", () => {
 		const broken = createExecutionService({
 			registry: createOperationRegistry(),
 			history: fakeHistory(),
+			localRuntime: { forExecution: async () => ({ enabled: false, hosts: [] }) },
 			cookies: {
 				applyToRequest: async ({ headers }) => ({ headers, warnings: [{ code: "COOKIE_JAR_UNAVAILABLE", message: "down" }] }),
 				storeResponseCookies: async () => ({ stored: 0, warnings: [{ code: "COOKIE_JAR_UNAVAILABLE", message: "down" }] }),
