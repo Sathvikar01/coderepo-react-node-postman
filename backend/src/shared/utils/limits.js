@@ -17,6 +17,7 @@ export const LIMITS = {
 	collectionJsonBytes: 2 * 1024 * 1024,
 	collectionsPerProfile: 50,
 	environmentsPerProfile: 20,
+	localRuntimeTargets: 20,
 	openTabs: 10,
 	jsonBodyCollection: 3 * 1024 * 1024,
 	jsonBodyExecution: 1 * 1024 * 1024,

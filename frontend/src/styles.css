@@ -42,6 +42,7 @@
 	--radius-md: 8px;
 	--radius-lg: 12px;
 	--font-sans: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+	--header-height: 64px;
 	color: var(--ink);
 	background: var(--surface);
 	font-family: var(--font-sans);
@@ -416,7 +417,7 @@ pre,
 }
 .app-header {
 	display: flex;
-	height: 64px;
+	height: var(--header-height);
 	flex: none;
 	align-items: center;
 	gap: 12px;
@@ -2052,12 +2053,64 @@ dialog::backdrop {
 	}
 }
 
+/* Local Runtime */
+.local-runtime-toggle {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	color: var(--ink-strong);
+	font-size: 13.5px;
+}
+.local-runtime-toggle input {
+	width: 18px;
+	height: 18px;
+	accent-color: var(--accent);
+}
+.local-runtime-add {
+	display: flex;
+	min-width: 0;
+	flex: 1;
+	gap: 8px;
+}
+.local-runtime-targets {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.local-runtime-targets li {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 8px 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: var(--surface-raised);
+}
+.local-runtime-targets li.kv-empty {
+	display: block;
+	padding: 0;
+	border: none;
+	background: none;
+}
+.local-runtime-targets code {
+	font-size: 12.5px;
+	color: var(--ink-strong);
+}
+.app-header-actions .button.local-runtime-on {
+	border-color: var(--warning);
+	color: var(--warning);
+}
+
 /* Responsive */
 @media (max-width: 840px) {
 	.sidebar {
 		position: fixed;
 		z-index: 120;
-		top: 64px;
+		top: var(--header-height);
 		bottom: 0;
 		left: 0;
 		width: 288px;
@@ -2071,7 +2124,7 @@ dialog::backdrop {
 	.sidebar-scrim {
 		position: fixed;
 		z-index: 110;
-		inset: 64px 0 0;
+		inset: var(--header-height) 0 0;
 		background: rgb(0 0 0 / 45%);
 	}
 	.app-header {
@@ -2154,6 +2207,22 @@ dialog::backdrop {
 	}
 }
 @media (max-width: 480px) {
+	:root {
+		--header-height: 104px;
+	}
+	.app-header {
+		height: var(--header-height);
+		flex-wrap: wrap;
+		align-content: center;
+		padding: 6px 10px;
+	}
+	.app-header-spacer {
+		display: none;
+	}
+	.app-header-actions {
+		width: 100%;
+		justify-content: flex-end;
+	}
 	.app-brand > div {
 		display: none;
 	}

@@ -26,6 +26,9 @@ import { HistoryPanel } from "./features/history/HistoryPanel.jsx";
 import { historyApi } from "./features/history/history.api.js";
 import { materializeReplayRequest, replayContext } from "./features/history/history-replay.js";
 import { buildImportedTab } from "./features/import/import-draft.js";
+import { LocalRuntimeDialog } from "./features/local-runtime/LocalRuntimeDialog.jsx";
+import { localRuntimeApi } from "./features/local-runtime/local-runtime.api.js";
+import { approvedHostForUrl, EMPTY_LOCAL_RUNTIME } from "./features/local-runtime/local-runtime.js";
 import { ProfilePicker } from "./features/profiles/ProfilePicker.jsx";
 import { profileApi } from "./features/profiles/profile.api.js";
 import { RequestBuilder } from "./features/requests/RequestBuilder.jsx";
@@ -88,6 +91,9 @@ export default function App() {
 	const [historyRefresh, setHistoryRefresh] = useState(0);
 	const [authOverrides, setAuthOverrides] = useState({});
 	const [executionPolicy, setExecutionPolicy] = useState(null);
+	const [localRuntime, setLocalRuntime] = useState(EMPTY_LOCAL_RUNTIME);
+	const [localRuntimeBusy, setLocalRuntimeBusy] = useState(false);
+	const [localRuntimeError, setLocalRuntimeError] = useState("");
 	const tabs = useRovingTabs();
 	const sidebarTabs = useRovingTabs();
 	const splitContainer = useRef(null);
@@ -99,6 +105,9 @@ export default function App() {
 	const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId) ?? null;
 	const activeCollection = activeTab?.collectionId
 		? (collections.find((collection) => collection._id === activeTab.collectionId) ?? null)
+		: null;
+	const activeLocalHost = activeTab
+		? approvedHostForUrl(activeTab.request?.urlTemplate, localRuntime.targets.map((target) => target.host))
 		: null;
 
 	const toast = useCallback((message, tone = "info") => {
@@ -155,14 +164,17 @@ export default function App() {
 	const loadWorkspace = useCallback(async () => {
 		setLoadingCollections(true);
 		try {
-			const [summaries, environmentSummaries, preferences] = await Promise.all([
+			const [summaries, environmentSummaries, preferences, localRuntimeSettings] = await Promise.all([
 				collectionApi.list(),
 				environmentApi.list(),
 				profileApi.preferences(),
+				localRuntimeApi.get(),
 			]);
 			const aggregates = await Promise.all(summaries.map((summary) => collectionApi.get(summary._id)));
 			setCollections(aggregates);
 			setEnvironments(environmentSummaries);
+			setLocalRuntime(localRuntimeSettings);
+			setLocalRuntimeError("");
 			if (preferences.preferences?.theme) setTheme(preferences.preferences.theme);
 			dispatch({ type: "preferences/set", preferences: preferences.preferences });
 			setExecutionPolicy(preferences.executionPolicy ?? null);
@@ -256,6 +268,9 @@ export default function App() {
 		setEnvironments([]);
 		setAuthOverrides({});
 		setExecutionPolicy(null);
+		setLocalRuntime(EMPTY_LOCAL_RUNTIME);
+		setLocalRuntimeBusy(false);
+		setLocalRuntimeError("");
 		setDialog(null);
 		setDialogError("");
 		setSidebarOpen(false);
@@ -302,6 +317,26 @@ export default function App() {
 			dispatch({ type: "preferences/set", preferences: result.preferences });
 		} catch (error) {
 			toast(error.message, "error");
+		}
+	};
+
+	const saveLocalRuntime = async ({ enabled, targets }) => {
+		setLocalRuntimeBusy(true);
+		setLocalRuntimeError("");
+		try {
+			const updated = await localRuntimeApi.update({ expectedRevision: localRuntime.revision, enabled, targets });
+			setLocalRuntime(updated);
+		} catch (error) {
+			setLocalRuntimeError(error.message);
+			if (error.status === 409) {
+				try {
+					setLocalRuntime(await localRuntimeApi.get());
+				} catch {
+					// Keep the current view; the error message already explains the conflict.
+				}
+			}
+		} finally {
+			setLocalRuntimeBusy(false);
 		}
 	};
 
@@ -919,6 +954,7 @@ export default function App() {
 				account={account}
 				activeEnvironmentId={state.activeEnvironmentId}
 				environments={environments}
+				localRuntime={localRuntime}
 				profile={profile}
 				theme={theme}
 				onEnvironmentChange={(environmentId) => {
@@ -928,6 +964,7 @@ export default function App() {
 				onLogout={switchProfile}
 				onOpenEnvironments={() => openDialog({ kind: "environments" })}
 				onOpenImport={() => openDialog({ kind: "import-curl" })}
+				onOpenLocalRuntime={() => openDialog({ kind: "local-runtime" })}
 				onToggleSidebar={() => setSidebarOpen((current) => !current)}
 				onToggleTheme={() =>
 					setTheme((current) => {
@@ -1134,6 +1171,14 @@ export default function App() {
 									onSave={saveDraft}
 									onSend={["running", "reconciling"].includes(activeTab.status) ? cancel : send}
 								/>
+								{localRuntime.enabled && (
+									<div className="status-banner warning" role="status">
+										<MaterialIcon size={16}>warning</MaterialIcon>
+										{activeLocalHost
+											? `This request targets ${activeLocalHost}, an approved Local Runtime host, and is sent from this server.`
+											: "Local Runtime is on. Only requests to approved local hosts use local access."}
+									</div>
+								)}
 								{activeTab.status === "reconciling" && (
 									<div className="status-banner warning" role="status">
 										<span className="spinner" />
@@ -1196,6 +1241,15 @@ export default function App() {
 						toast("Environment saved.");
 					}}
 					onSelect={(environmentId) => savePreferences({ activeEnvironmentId: environmentId })}
+				/>
+			)}
+			{dialog?.kind === "local-runtime" && (
+				<LocalRuntimeDialog
+					busy={localRuntimeBusy}
+					error={localRuntimeError}
+					localRuntime={localRuntime}
+					onClose={() => setDialog(null)}
+					onSave={saveLocalRuntime}
 				/>
 			)}
 			<div aria-live="polite" className="toast-region">

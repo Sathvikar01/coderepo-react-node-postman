@@ -7,9 +7,11 @@ export function WorkspaceHeader({
 	account,
 	environments,
 	activeEnvironmentId,
+	localRuntime,
 	onEnvironmentChange,
 	onOpenEnvironments,
 	onOpenImport,
+	onOpenLocalRuntime,
 	onLogout,
 	onToggleSidebar,
 	onToggleTheme,
@@ -55,6 +57,17 @@ export function WorkspaceHeader({
 				<button className="button" type="button" onClick={onOpenEnvironments}>
 					<MaterialIcon size={18}>edit</MaterialIcon>
 					<span className="button-label">Environments</span>
+				</button>
+				<button
+					aria-label={`Local Runtime is ${localRuntime?.enabled ? "on" : "off"}`}
+					aria-pressed={localRuntime?.enabled === true}
+					className={`button ${localRuntime?.enabled ? "local-runtime-on" : ""}`}
+					title="Local Runtime: send to approved local development hosts"
+					type="button"
+					onClick={onOpenLocalRuntime}
+				>
+					<MaterialIcon size={18}>{localRuntime?.enabled ? "warning" : "dns"}</MaterialIcon>
+					<span className="button-label">Local Runtime: {localRuntime?.enabled ? "On" : "Off"}</span>
 				</button>
 				<button
 					aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}

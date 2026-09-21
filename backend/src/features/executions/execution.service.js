@@ -7,6 +7,7 @@ import { environmentRepository } from "../environments/environment.repository.js
 import { environmentService } from "../environments/environment.service.js";
 import { historyService } from "../history/history.service.js";
 import { fingerprintKeyId, fingerprintOf } from "../history/fingerprint.js";
+import { localRuntimeService } from "../local-runtime/local-runtime.service.js";
 import { operationRegistry } from "./active-registry.js";
 import { performRequest } from "./http-transport.js";
 import { captureBody } from "./response-capture.js";
@@ -74,6 +75,7 @@ export function terminalResult(record) {
 		warnings: record.warnings ?? [],
 		historyId: record.executionId,
 		visible: record.visible !== false,
+		localAccess: record.snapshot?.localAccess === true,
 	};
 }
 
@@ -115,7 +117,13 @@ function raceBudget(promise, { deadlineAt, signal }) {
 	});
 }
 
-export function createExecutionService({ registry = operationRegistry, transport = performRequest, policy = null, history = historyService } = {}) {
+export function createExecutionService({
+	registry = operationRegistry,
+	transport = performRequest,
+	policy = null,
+	history = historyService,
+	localRuntime = localRuntimeService,
+} = {}) {
 	const targetPolicy = policy ?? createTargetPolicy();
 
 	async function resolveRequestContext(profileId, context, draftRequest) {
@@ -354,8 +362,14 @@ export function createExecutionService({ registry = operationRegistry, transport
 
 		const executedUrl = redactUrl(compiled.url, compiled.redaction);
 
+		const localSettings = await localRuntime.forExecution(profileId);
+
 		const validation = await raceBudget(
-			targetPolicy.validate(compiled.url, { allowLocalDemo: true, authoredUrl: compiled.authoredUrl }),
+			targetPolicy.validate(compiled.url, {
+				allowLocalDemo: true,
+				authoredUrl: compiled.authoredUrl,
+				localRuntime: localSettings,
+			}),
 			{ deadlineAt, signal: controller.signal },
 		);
 		if (validation.state === "timeout")
@@ -365,6 +379,7 @@ export function createExecutionService({ registry = operationRegistry, transport
 		if (validation.state === "error")
 			return semanticFailure(validation.error.code ?? "TARGET_INVALID", validation.error.message, validation.error.details);
 		const target = validation.value;
+		const localAccess = target.local === true;
 
 		const remainingBeforeDispatch = deadlineAt - Date.now();
 		if (remainingBeforeDispatch <= 0)
@@ -419,7 +434,18 @@ export function createExecutionService({ registry = operationRegistry, transport
 		}
 
 		const finishedAt = new Date();
-		const warnings = [...(compiled.warnings ?? []), ...(response?.warnings ?? [])];
+		const warnings = [
+			...(compiled.warnings ?? []),
+			...(localAccess
+				? [
+						{
+							code: "LOCAL_RUNTIME",
+							message: `This request used Local Runtime access to ${target.originalHostname}.`,
+						},
+					]
+				: []),
+			...(response?.warnings ?? []),
+		];
 		const persistence = await persist({
 			outcome,
 			effectCertainty,
@@ -428,6 +454,7 @@ export function createExecutionService({ registry = operationRegistry, transport
 			persistence: { state: "saved" },
 			"snapshot.bytesSent": result.bytesSent ?? 0,
 			"snapshot.executedUrl": executedUrl,
+			...(localAccess ? { "snapshot.localAccess": true } : {}),
 			"snapshot.effectiveAuth": compiled.authSource === "override" ? null : sanitizeAuthForHistory(compiled.authTemplate),
 			"snapshot.requestHeaders": compiled.headers.map((header) => header.name),
 			compileTrace: compiled.trace,
@@ -451,6 +478,7 @@ export function createExecutionService({ registry = operationRegistry, transport
 			finishedAt,
 			compileTrace: compiled.trace,
 			warnings,
+			localAccess,
 		};
 	}
 
