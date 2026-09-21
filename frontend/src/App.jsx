@@ -22,6 +22,13 @@ import { DocsView } from "./features/docs/DocsView.jsx";
 import { EnvironmentsDrawer } from "./features/environments/EnvironmentsDrawer.jsx";
 import { environmentApi } from "./features/environments/environment.api.js";
 import { executionApi } from "./features/executions/execution.api.js";
+import { exampleApi } from "./features/examples/example.api.js";
+import { ExampleActions } from "./features/examples/ExampleActions.jsx";
+import { ExampleDialog } from "./features/examples/ExampleDialog.jsx";
+import { ExamplesPanel } from "./features/examples/ExamplesPanel.jsx";
+import { mockApi } from "./features/mocks/mock.api.js";
+import { MockResultBanner } from "./features/mocks/MockResultBanner.jsx";
+import { runMockSend } from "./features/mocks/mock-run.js";
 import { resolveRedirectUrl } from "./features/executions/redirect.js";
 import { ResponseViewer } from "./features/executions/ResponseViewer.jsx";
 import { HistoryPanel } from "./features/history/HistoryPanel.jsx";
@@ -92,6 +99,10 @@ export default function App() {
 	const [dialogError, setDialogError] = useState("");
 	const [toasts, setToasts] = useState([]);
 	const [historyRefresh, setHistoryRefresh] = useState(0);
+	const [examplesVersion, setExamplesVersion] = useState(0);
+	const [exampleDialog, setExampleDialog] = useState(null);
+	const [mockMeta, setMockMeta] = useState(null);
+	const [mockBusy, setMockBusy] = useState(false);
 	const [authOverrides, setAuthOverrides] = useState({});
 	const [executionPolicy, setExecutionPolicy] = useState(null);
 	const [localRuntime, setLocalRuntime] = useState(EMPTY_LOCAL_RUNTIME);
@@ -189,6 +200,25 @@ export default function App() {
 	}, [toast]);
 
 	useEffect(() => {
+		if (!profile) {
+			setMockMeta(null);
+			return;
+		}
+		let active = true;
+		mockApi
+			.meta()
+			.then((meta) => {
+				if (active) setMockMeta(meta);
+			})
+			.catch(() => {
+				if (active) setMockMeta(null);
+			});
+		return () => {
+			active = false;
+		};
+	}, [profile, examplesVersion]);
+
+	useEffect(() => {
 		let active = true;
 		const restore = async () => {
 			if (!hasSessionToken()) {
@@ -278,6 +308,9 @@ export default function App() {
 		setDialogError("");
 		setSidebarOpen(false);
 		setHistoryRefresh(0);
+		setExamplesVersion(0);
+		setExampleDialog(null);
+		setMockMeta(null);
 	}, []);
 
 	const signOut = async () => {
@@ -543,6 +576,68 @@ export default function App() {
 				error: error.message,
 			});
 			startReconciliation(activeTab.id, executionId);
+		}
+	};
+
+	const copyMockUrl = async () => {
+		if (!mockMeta?.route) return;
+		const url = `${window.location.origin}${mockMeta.route}`;
+		try {
+			if (!navigator.clipboard) throw new Error("clipboard unavailable");
+			await navigator.clipboard.writeText(url);
+			toast("Mock URL copied. Requests to it match saved examples for this profile.");
+		} catch {
+			toast("The clipboard is not available in this browser.", "warning");
+		}
+	};
+
+	// Mock Send is a separate, explicit control. It resolves the current request against saved
+	// examples on the server and never calls the execution pipeline.
+	const mockSend = async () => {
+		if (!activeTab || ["running", "reconciling"].includes(activeTab.status) || mockBusy) return;
+		const executionId = crypto.randomUUID();
+		dispatch({ type: "draft/dispatched", tabId: activeTab.id, executionId });
+		setMockBusy(true);
+		try {
+			const data = await runMockSend({
+				api: mockApi,
+				request: activeTab.request,
+				environmentId: state.activeEnvironmentId,
+				executionId,
+			});
+			dispatch({ type: "draft/result", tabId: activeTab.id, executionId, result: data.result });
+			toast(data.matched ? `Mock response served from "${data.example.name}".` : "Mock miss: no saved example matched.", data.matched ? "info" : "warning");
+		} catch (error) {
+			dispatch({ type: "draft/status", tabId: activeTab.id, executionId, status: "error", error: error.message });
+			toast(error.message, "error");
+		} finally {
+			setMockBusy(false);
+		}
+	};
+
+	const submitExample = async (payload) => {
+		setBusy(true);
+		setDialogError("");
+		try {
+			if (exampleDialog?.example) await exampleApi.update(exampleDialog.example._id, payload);
+			else await exampleApi.create(payload);
+			setExampleDialog(null);
+			setExamplesVersion((current) => current + 1);
+			toast(exampleDialog?.example ? "Example updated." : "Example saved.");
+		} catch (error) {
+			setDialogError(error.message);
+		} finally {
+			setBusy(false);
+		}
+	};
+
+	const deleteExample = async (example) => {
+		try {
+			await exampleApi.remove(example._id);
+			setExamplesVersion((current) => current + 1);
+			toast("Example deleted.");
+		} catch (error) {
+			toast(error.message, "error");
 		}
 	};
 
@@ -954,8 +1049,27 @@ export default function App() {
 		/>
 	);
 
+	const exampleDialogNode = exampleDialog ? (
+		<ExampleDialog
+			busy={busy}
+			collectionId={activeTab?.collectionId ?? null}
+			environmentId={state.activeEnvironmentId}
+			error={dialogError}
+			example={exampleDialog.example}
+			mode={exampleDialog.mode}
+			request={activeTab?.request ?? null}
+			result={activeTab?.result ?? null}
+			onCancel={() => {
+				setExampleDialog(null);
+				setDialogError("");
+			}}
+			onSubmit={submitExample}
+		/>
+	) : null;
+
 	return (
 		<div className="app-shell">
+			{exampleDialogNode}
 			<WorkspaceHeader
 				account={account}
 				activeEnvironmentId={state.activeEnvironmentId}
@@ -1025,6 +1139,16 @@ export default function App() {
 							onClick={() => setSidebarTab("cookies")}
 						>
 							<MaterialIcon size={18}>cookie</MaterialIcon> Cookies
+						</button>
+						<button
+							aria-selected={sidebarTab === "examples"}
+							className="sidebar-tab"
+							role="tab"
+							tabIndex={sidebarTab === "examples" ? 0 : -1}
+							type="button"
+							onClick={() => setSidebarTab("examples")}
+						>
+							<MaterialIcon size={18}>bookmark</MaterialIcon> Examples
 						</button>
 					</div>
 					{sidebarTab === "collections" ? (
@@ -1107,8 +1231,17 @@ export default function App() {
 									.catch((error) => toast(error.message, "error"))
 							}
 						/>
-					) : (
+					) : sidebarTab === "cookies" ? (
 						<CookiePanel refreshToken={historyRefresh} />
+					) : (
+						<ExamplesPanel
+							refreshToken={examplesVersion}
+							onChanged={() => setExamplesVersion((current) => current + 1)}
+							onCopyMockUrl={copyMockUrl}
+							onCreate={() => setExampleDialog({ mode: "manual", example: null })}
+							onDelete={deleteExample}
+							onEdit={(example) => setExampleDialog({ mode: "edit", example })}
+						/>
 					)}
 				</aside>
 				<main className="workspace">
@@ -1221,7 +1354,21 @@ export default function App() {
 								tabIndex={0}
 								title="Drag to resize. Arrow keys adjust; Enter resets."
 							/>
-							<div className="request-pane-bottom">{responsePanel(activeTab.result)}</div>
+							<div className="request-pane-bottom">
+								<ExampleActions
+									busy={mockBusy}
+									canSave={Boolean(activeTab.result?.response)}
+									mockRoute={mockMeta?.route ?? ""}
+									onCopyMockUrl={copyMockUrl}
+									onMockSend={mockSend}
+									onSaveExample={() => {
+										setDialogError("");
+										setExampleDialog({ mode: "from-response", example: null });
+									}}
+								/>
+								<MockResultBanner mock={activeTab.result?.mock ?? null} onCopyMockUrl={copyMockUrl} />
+								{responsePanel(activeTab.result)}
+							</div>
 						</div>
 					) : (
 						<section className="workspace-empty">

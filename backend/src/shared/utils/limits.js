@@ -16,6 +16,7 @@ export const LIMITS = {
 	foldersPerCollection: 20,
 	collectionJsonBytes: 2 * 1024 * 1024,
 	collectionsPerProfile: 50,
+	examplesPerProfile: 50,
 	environmentsPerProfile: 20,
 	localRuntimeTargets: 20,
 	openTabs: 10,

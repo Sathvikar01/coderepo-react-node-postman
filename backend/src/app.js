@@ -8,9 +8,11 @@ import { collectionRouter } from "./features/collections/collection.routes.js";
 import { cookieRouter } from "./features/cookies/cookie.routes.js";
 import { demoRouter } from "./features/demo/demo.routes.js";
 import { environmentRouter } from "./features/environments/environment.routes.js";
+import { exampleRouter } from "./features/examples/example.routes.js";
 import { executionRouter } from "./features/executions/execution.routes.js";
 import { historyRouter } from "./features/history/history.routes.js";
 import { localRuntimeRouter } from "./features/local-runtime/local-runtime.routes.js";
+import { mockRouteRouter, mockRouter } from "./features/mocks/mock.routes.js";
 import { preferenceRouter, profileRouter } from "./features/profiles/profile.routes.js";
 import { errorHandler, notFoundHandler } from "./shared/middleware/error-handler.js";
 import { requireWorkspaceAuth } from "./shared/middleware/auth.js";
@@ -99,6 +101,16 @@ export function createApp() {
 		resolveProfileContext,
 		localRuntimeRouter,
 	);
+	app.use(
+		"/api/v1/examples",
+		express.json({ limit: LIMITS.jsonBodyCollection }),
+		requireWorkspaceAuth,
+		resolveProfileContext,
+		exampleRouter,
+	);
+	// Capability-token mock routes stay unauthenticated by design and never reach the execution pipeline.
+	app.use("/api/v1/mocks", express.json({ limit: LIMITS.jsonBodyDefault }), mockRouteRouter);
+	app.use("/api/v1/mocks", express.json({ limit: LIMITS.jsonBodyExecution }), requireWorkspaceAuth, resolveProfileContext, mockRouter);
 
 	app.use(notFoundHandler);
 	app.use(errorHandler);
