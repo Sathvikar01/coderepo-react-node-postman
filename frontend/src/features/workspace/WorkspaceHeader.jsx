@@ -9,6 +9,7 @@ export function WorkspaceHeader({
 	activeEnvironmentId,
 	onEnvironmentChange,
 	onOpenEnvironments,
+	onOpenImport,
 	onLogout,
 	onToggleSidebar,
 	onToggleTheme,
@@ -47,6 +48,10 @@ export function WorkspaceHeader({
 					value={activeEnvironmentId ?? ""}
 					onChange={onEnvironmentChange}
 				/>
+				<button aria-label="Import cURL" className="button" title="Import cURL" type="button" onClick={onOpenImport}>
+					<MaterialIcon size={18}>content_paste_go</MaterialIcon>
+					<span className="button-label">Import cURL</span>
+				</button>
 				<button className="button" type="button" onClick={onOpenEnvironments}>
 					<MaterialIcon size={18}>edit</MaterialIcon>
 					<span className="button-label">Environments</span>

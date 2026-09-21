@@ -25,6 +25,7 @@ import { ResponseViewer } from "./features/executions/ResponseViewer.jsx";
 import { HistoryPanel } from "./features/history/HistoryPanel.jsx";
 import { historyApi } from "./features/history/history.api.js";
 import { materializeReplayRequest, replayContext } from "./features/history/history-replay.js";
+import { buildImportedTab } from "./features/import/import-draft.js";
 import { ProfilePicker } from "./features/profiles/ProfilePicker.jsx";
 import { profileApi } from "./features/profiles/profile.api.js";
 import { RequestBuilder } from "./features/requests/RequestBuilder.jsx";
@@ -785,6 +786,16 @@ export default function App() {
 		);
 
 	const dialogActions = {
+		importCurl(parsed) {
+			const imported = buildImportedTab(parsed);
+			if (!imported) return;
+			if (!openDraftTab(imported.tab)) return;
+			if (imported.authOverride)
+				setAuthOverrides((current) => ({ ...current, [imported.tab.id]: imported.authOverride }));
+			setDialog(null);
+			toast(`Imported ${imported.tab.request.method} ${imported.tab.request.name} as an unsaved draft.`, "success");
+			setSidebarOpen(false);
+		},
 		async deleteCollection(collection) {
 			setBusy(true);
 			try {
@@ -916,6 +927,7 @@ export default function App() {
 				}}
 				onLogout={switchProfile}
 				onOpenEnvironments={() => openDialog({ kind: "environments" })}
+				onOpenImport={() => openDialog({ kind: "import-curl" })}
 				onToggleSidebar={() => setSidebarOpen((current) => !current)}
 				onToggleTheme={() =>
 					setTheme((current) => {
