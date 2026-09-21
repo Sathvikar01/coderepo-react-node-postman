@@ -3,7 +3,7 @@ import { LIMITS, utf8Bytes } from "../../shared/utils/limits.js";
 import { METHODS } from "../../shared/utils/schemas.js";
 
 const PLACEHOLDER = /\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/g;
-const MANAGED_TRANSPORT_HEADERS = new Set([
+export const MANAGED_TRANSPORT_HEADERS = new Set([
 	"host",
 	"content-length",
 	"connection",
@@ -125,8 +125,14 @@ function effectiveAuth(request, collection) {
 	return { auth: request.auth ?? { mode: "none" }, source: "request" };
 }
 
-export function compileRequest({ request, collection, environment, authOverride, secrets = new Map() }) {
+export function compileRequest({ request, collection, environment, authOverride, secrets = new Map(), variableOverlay = null }) {
 	const map = variableMap(collection, environment, secrets);
+	if (variableOverlay) {
+		for (const [key, value] of variableOverlay) {
+			if (value === null) map.delete(key);
+			else map.set(key, { value: String(value), scope: "script" });
+		}
+	}
 	const method = String(request?.method ?? "").toUpperCase();
 	if (!METHODS.includes(method)) throw new AppError(400, "METHOD_INVALID", "Choose a supported HTTP method.");
 	const missing = Object.assign(new Set(), { fields: new Set() });

@@ -2307,3 +2307,114 @@ dialog::backdrop {
 		max-width: 116px;
 	}
 }
+
+.script-editor {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.script-textarea {
+	width: 100%;
+	min-height: 220px;
+	resize: vertical;
+	background: var(--field);
+	color: var(--ink);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	padding: 12px;
+	font-family: "Cascadia Code", Consolas, "Courier New", monospace;
+	font-size: 13px;
+	line-height: 1.5;
+	tab-size: 2;
+}
+
+.script-textarea:focus-visible {
+	outline: 2px solid var(--brand);
+	outline-offset: 1px;
+}
+
+.script-reference {
+	color: var(--muted);
+	font-size: 12px;
+}
+
+.script-reference summary {
+	cursor: pointer;
+	color: var(--ink);
+	font-weight: 600;
+}
+
+.script-hints {
+	margin: 8px 0;
+	padding-left: 18px;
+	display: grid;
+	gap: 4px;
+}
+
+.script-results {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding: 12px 16px;
+}
+
+.script-summary {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.script-phase {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.script-phase-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-weight: 600;
+}
+
+.script-test-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: grid;
+	gap: 6px;
+}
+
+.script-test-list li {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 8px;
+	background: var(--surface-raised);
+	border: 1px solid var(--divider);
+	border-radius: var(--radius-sm);
+	padding: 8px 10px;
+}
+
+.script-test-name.passed {
+	color: var(--success);
+}
+
+.script-test-name.failed {
+	color: var(--danger);
+}
+
+.script-console {
+	margin: 0;
+	max-height: 220px;
+	overflow: auto;
+	background: var(--surface-muted);
+	border: 1px solid var(--divider);
+	border-radius: var(--radius-sm);
+	padding: 10px;
+	font-family: "Cascadia Code", Consolas, "Courier New", monospace;
+	font-size: 12px;
+	white-space: pre-wrap;
+	word-break: break-word;
+}

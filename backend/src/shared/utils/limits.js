@@ -31,6 +31,14 @@ export const LIMITS = {
 	historySearchMaxLength: 120,
 	historyPageDefault: 50,
 	historyPageMax: 100,
+	scriptSourceBytes: 32 * 1024,
+	scriptTimeoutMs: 1500,
+	scriptConsoleEntries: 100,
+	scriptTextFieldBytes: 4 * 1024,
+	scriptMutations: 100,
+	scriptTests: 100,
+	scriptOutputBytes: 32 * 1024,
+	scriptResponseBodyBytes: 64 * 1024,
 };
 
 export const utf8Bytes = (value) => Buffer.byteLength(String(value ?? ""), "utf8");
