@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
 	authExample,
 	compressedExample,
+	cookieEcho,
 	createOrder,
 	datasetTokens,
 	deleteOrder,
@@ -18,6 +19,7 @@ import {
 	getOrder,
 	gzip,
 	listOrders,
+	setCookies,
 	slow,
 	statusCode,
 	updateOrder,
@@ -40,6 +42,8 @@ demoRouter.get("/v1/status/:code", statusCode);
 demoRouter.get("/v1/slow", slow);
 demoRouter.get("/v1/gzip", gzip);
 demoRouter.get("/v1/samples/:kind", formatSamples);
+demoRouter.get("/v1/cookies/set", setCookies);
+demoRouter.get("/v1/cookies/echo", cookieEcho);
 demoRouter.get("/v1/:dataset/orders", listOrders);
 demoRouter.post("/v1/:dataset/orders", createOrder);
 demoRouter.get("/v1/:dataset/orders/:orderId", getOrder);
