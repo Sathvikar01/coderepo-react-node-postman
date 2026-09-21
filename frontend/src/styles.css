@@ -1794,6 +1794,151 @@ dialog::backdrop {
 	font-size: 12.5px;
 }
 
+/* cURL import */
+.import-dialog-modal {
+	width: fit-content;
+	max-width: min(720px, 94vw);
+}
+.import-dialog {
+	width: min(720px, 94vw);
+}
+.import-hint {
+	margin: 0;
+	color: var(--muted);
+	font-size: 12.5px;
+	line-height: 1.5;
+}
+.import-field {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.import-field > span {
+	color: var(--muted);
+	font-size: 12.5px;
+}
+.import-field textarea {
+	width: 100%;
+	min-height: 128px;
+	padding: 12px 14px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: var(--field);
+	color: var(--ink-strong);
+	font-family: "SFMono-Regular", Consolas, monospace;
+	font-size: 12.5px;
+	line-height: 1.55;
+	resize: vertical;
+}
+.import-field textarea:focus {
+	border-color: var(--blue);
+	background: var(--surface);
+	outline: 0;
+}
+.import-preview {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 12px 14px;
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	background: var(--surface-muted);
+}
+.import-empty {
+	margin: 0;
+	color: var(--quiet);
+	font-size: 12.5px;
+}
+.import-summary {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+}
+.import-url {
+	min-width: 0;
+	flex: 1;
+	overflow-wrap: anywhere;
+	color: var(--ink-strong);
+	font-size: 12.5px;
+}
+.import-facts {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 20px;
+	margin: 0;
+}
+.import-facts div {
+	display: flex;
+	gap: 6px;
+	font-size: 12px;
+}
+.import-facts dt {
+	color: var(--quiet);
+}
+.import-facts dd {
+	margin: 0;
+	color: var(--ink);
+}
+.import-headers {
+	display: flex;
+	max-height: 120px;
+	flex-direction: column;
+	gap: 4px;
+	margin: 0;
+	padding: 0;
+	overflow-y: auto;
+	list-style: none;
+}
+.import-headers li {
+	display: flex;
+	gap: 8px;
+	font-size: 12px;
+}
+.import-headers span {
+	color: var(--muted);
+}
+.import-headers code {
+	overflow-wrap: anywhere;
+	color: var(--ink);
+}
+.import-body {
+	max-height: 120px;
+	margin: 0;
+	padding: 10px 12px;
+	overflow: auto;
+	border-radius: 8px;
+	background: var(--field);
+	color: var(--ink);
+	font-size: 12px;
+	white-space: pre-wrap;
+}
+.import-issues {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.import-issues li {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	font-size: 12.5px;
+	line-height: 1.45;
+}
+.import-issues svg {
+	flex: none;
+	margin-top: 2px;
+}
+.import-warnings li {
+	color: var(--warning);
+}
+.import-errors li {
+	color: var(--danger);
+}
+
 /* Environments drawer */
 .environment-row {
 	display: flex;

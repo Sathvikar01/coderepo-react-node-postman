@@ -1,10 +1,15 @@
 import { ConfirmationDialog } from "../../shared/components/ConfirmationDialog.jsx";
 import { CollectionSettingsDialog, NewCollectionDialog, RenameDialog, SaveRequestDialog } from "../collections/CollectionDialogs.jsx";
+import { ImportCurlDialog } from "../import/ImportCurlDialog.jsx";
 
 // Renders whichever workspace dialog is currently open. All state and side effects stay
 // with the caller; this component only maps dialog.kind to the right surface.
 export function WorkspaceDialogs({ actions, collections, dialog, dialogError, busy, activeTab, onClose }) {
 	if (!dialog) return null;
+
+	if (dialog.kind === "import-curl") {
+		return <ImportCurlDialog onCancel={onClose} onImport={actions.importCurl} />;
+	}
 
 	if (dialog.kind === "save-request") {
 		const draftRequest = dialog.request ?? activeTab?.request;
