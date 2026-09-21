@@ -2,6 +2,7 @@ import { useState } from "react";
 import { MaterialIcon } from "../../shared/components/MaterialIcon.jsx";
 import { SelectMenu } from "../../shared/components/SelectMenu.jsx";
 import { useRovingTabs } from "../../shared/hooks/useRovingTabs.js";
+import { ScriptEditor } from "../scripts/ScriptEditor.jsx";
 import { KeyValueEditor } from "./KeyValueEditor.jsx";
 
 const METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
@@ -199,6 +200,8 @@ export function RequestBuilder({
 		{ id: "headers", label: "Headers", badge: countEnabled(request.headers) },
 		{ id: "body", label: "Body", badge: request.body.mode === "none" ? 0 : 1 },
 		{ id: "auth", label: "Auth", badge: request.auth.mode === "inherit" ? 0 : 1 },
+		{ id: "preRequest", label: "Pre-request", badge: request.scripts?.preRequest?.trim() ? 1 : 0 },
+		{ id: "tests", label: "Tests", badge: request.scripts?.test?.trim() ? 1 : 0 },
 		{ id: "settings", label: "Settings", badge: 0 },
 	];
 	return (
@@ -289,6 +292,20 @@ export function RequestBuilder({
 						collectionAuth={collectionAuth}
 						onAuthChange={(auth) => onChange({ auth })}
 						onOverrideChange={onOverrideChange}
+					/>
+				)}
+				{section === "preRequest" && (
+					<ScriptEditor
+						kind="preRequest"
+						value={request.scripts?.preRequest ?? ""}
+						onChange={(preRequest) => onChange({ scripts: { test: request.scripts?.test ?? "", preRequest } })}
+					/>
+				)}
+				{section === "tests" && (
+					<ScriptEditor
+						kind="test"
+						value={request.scripts?.test ?? ""}
+						onChange={(test) => onChange({ scripts: { preRequest: request.scripts?.preRequest ?? "", test } })}
 					/>
 				)}
 				{section === "settings" && (

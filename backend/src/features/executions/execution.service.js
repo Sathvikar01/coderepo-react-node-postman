@@ -8,6 +8,7 @@ import { environmentService } from "../environments/environment.service.js";
 import { historyService } from "../history/history.service.js";
 import { fingerprintKeyId, fingerprintOf } from "../history/fingerprint.js";
 import { localRuntimeService } from "../local-runtime/local-runtime.service.js";
+import { composeScriptResults, mergePostResponseResults, scriptService } from "../scripts/script-runner.js";
 import { operationRegistry } from "./active-registry.js";
 import { performRequest } from "./http-transport.js";
 import { captureBody } from "./response-capture.js";
@@ -73,6 +74,7 @@ export function terminalResult(record) {
 		snapshot: record.snapshot ?? null,
 		compileTrace: record.compileTrace ?? [],
 		warnings: record.warnings ?? [],
+		scriptResults: record.snapshot?.scriptResults ?? null,
 		historyId: record.executionId,
 		visible: record.visible !== false,
 		localAccess: record.snapshot?.localAccess === true,
@@ -199,6 +201,15 @@ export function createExecutionService({
 		if (!effectiveRequest) throw new AppError(404, "REQUEST_NOT_FOUND", "The request to send does not exist in this collection.");
 		const environment = await resolveEnvironment(profileId, context.environmentId, context.environmentRevision);
 
+		const preScript = scriptService.runPreRequest({
+			request: effectiveRequest,
+			collection: resolved.collection,
+			environment: environment.environment,
+		});
+		const workingRequest = preScript.request;
+		const scriptWarnings = [...preScript.warnings];
+		let scriptResults = preScript.phase ? composeScriptResults({ preRequest: preScript.phase }) : null;
+
 		const fingerprint = fingerprintOf({
 			request: effectiveRequest,
 			authOverride: authOverride ?? null,
@@ -226,7 +237,7 @@ export function createExecutionService({
 		const deadlineAt = Date.now() + timeoutMs;
 
 		const snapshot = {
-			displayUrl: effectiveRequest.urlTemplate,
+			displayUrl: workingRequest.urlTemplate,
 			source: resolved.source,
 			environment: environment.source,
 			collectionDefaults: resolved.collection
@@ -254,7 +265,7 @@ export function createExecutionService({
 				status: "running",
 				effectCertainty: "not_dispatched",
 				persistence: { state: "saved" },
-				request: sanitizeRequestForHistory(effectiveRequest),
+				request: sanitizeRequestForHistory(workingRequest),
 				context: { tabId, draftVersion, source: resolved.source, environment: environment.source },
 				snapshot,
 				startedAt,
@@ -292,7 +303,7 @@ export function createExecutionService({
 
 		const preDispatchFailure = async (outcome, code, message, details, compiledResult = null) => {
 			const compileTrace = compiledResult?.trace ?? [];
-			const warnings = compiledResult?.warnings ?? [];
+			const warnings = [...(compiledResult?.warnings ?? []), ...scriptWarnings];
 			const error = { code, message, details: details ?? null };
 			const persistence = await persist({
 				outcome,
@@ -302,6 +313,7 @@ export function createExecutionService({
 				persistence: { state: "saved" },
 				compileTrace,
 				warnings,
+				"snapshot.scriptResults": scriptResults,
 			});
 			registry.release(executionId);
 			if (persistence.record) return { ...terminalResult(persistence.record), tabId, draftVersion };
@@ -319,6 +331,7 @@ export function createExecutionService({
 				finishedAt: new Date(),
 				compileTrace,
 				warnings,
+				scriptResults,
 			};
 		};
 
@@ -349,11 +362,12 @@ export function createExecutionService({
 		let compiled;
 		try {
 			compiled = compileRequest({
-				request: effectiveRequest,
+				request: workingRequest,
 				collection: resolved.collection,
 				environment: environment.environment,
 				authOverride,
 				secrets,
+				variableOverlay: preScript.variables,
 			});
 			compiled.redaction.values.push(...secretValues);
 		} catch (error) {
@@ -433,6 +447,20 @@ export function createExecutionService({
 			}
 		}
 
+		const postScript = response
+			? scriptService.runPostResponse({
+					request: workingRequest,
+					response,
+					collection: resolved.collection,
+					environment: environment.environment,
+					variables: preScript.variables,
+				})
+			: scriptService.skippedPostResponse(workingRequest);
+		if (postScript.phase || postScript.tests.length) {
+			scriptResults = mergePostResponseResults(scriptResults, postScript.phase, postScript.tests);
+		}
+		scriptWarnings.push(...postScript.warnings);
+
 		const finishedAt = new Date();
 		const warnings = [
 			...(compiled.warnings ?? []),
@@ -445,6 +473,7 @@ export function createExecutionService({
 					]
 				: []),
 			...(response?.warnings ?? []),
+			...scriptWarnings,
 		];
 		const persistence = await persist({
 			outcome,
@@ -457,6 +486,7 @@ export function createExecutionService({
 			...(localAccess ? { "snapshot.localAccess": true } : {}),
 			"snapshot.effectiveAuth": compiled.authSource === "override" ? null : sanitizeAuthForHistory(compiled.authTemplate),
 			"snapshot.requestHeaders": compiled.headers.map((header) => header.name),
+			"snapshot.scriptResults": scriptResults,
 			compileTrace: compiled.trace,
 			warnings,
 		});
@@ -479,6 +509,7 @@ export function createExecutionService({
 			compileTrace: compiled.trace,
 			warnings,
 			localAccess,
+			scriptResults,
 		};
 	}
 

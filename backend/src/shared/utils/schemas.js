@@ -88,6 +88,20 @@ const bodySchema = z.discriminatedUnion("mode", [
 	z.object({ mode: z.literal("urlencoded"), rows: rowsSchema }).strict(),
 ]);
 
+const scriptSource = (label) =>
+	z
+		.string()
+		.refine((value) => utf8Bytes(value) <= LIMITS.scriptSourceBytes, `${label} scripts are limited to 32 KiB.`)
+		.default("");
+
+export const scriptsSchema = z
+	.object({
+		preRequest: scriptSource("Pre-request"),
+		test: scriptSource("Test"),
+	})
+	.strict()
+	.default({ preRequest: "", test: "" });
+
 export const requestDefinitionSchema = z
 	.object({
 		schemaVersion: z.literal(1),
@@ -103,6 +117,7 @@ export const requestDefinitionSchema = z
 		headers: rowsSchema,
 		body: bodySchema,
 		auth: authSchema,
+		scripts: scriptsSchema,
 		settings: z.object({ timeoutMs: z.number().int().min(100).max(30000) }).strict(),
 	})
 	.strict()

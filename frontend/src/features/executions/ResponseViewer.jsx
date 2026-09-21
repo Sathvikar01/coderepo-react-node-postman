@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { MaterialIcon } from "../../shared/components/MaterialIcon.jsx";
 import { useRovingTabs } from "../../shared/hooks/useRovingTabs.js";
 import { formatBytes, formatDuration, OUTCOME_LABELS, statusClass } from "../../shared/utils/format.js";
+import { ScriptResults } from "../scripts/ScriptResults.jsx";
+import { scriptCounts, scriptResultsOf } from "../scripts/script-results.js";
 import { bodyNotice, describeBody } from "./body-view.js";
 import { JsonTree } from "./JsonTree.jsx";
 import { RawView } from "./RawView.jsx";
@@ -156,6 +158,8 @@ export function ResponseViewer({ onCopyUrl, result }) {
 	const status = response?.status ?? null;
 	const errorMessage = result.error?.message;
 	const hasLocation = response?.headers?.some((header) => header.name.toLowerCase() === "location");
+	const scriptResults = scriptResultsOf(result);
+	const scriptCount = scriptResults ? scriptCounts(scriptResults) : null;
 	return (
 		<section aria-label="Response" className="response-area">
 			<div className="response-toolbar">
@@ -236,6 +240,21 @@ export function ResponseViewer({ onCopyUrl, result }) {
 				>
 					Details
 				</button>
+				{scriptResults && (
+					<button
+						aria-controls="response-panel-tests"
+						aria-selected={tab === "tests"}
+						className="editor-tab"
+						id="response-tab-tests"
+						role="tab"
+						tabIndex={tab === "tests" ? 0 : -1}
+						type="button"
+						onClick={() => setTab("tests")}
+					>
+						Tests
+						<span className="badge">{scriptCount.passed + scriptCount.failed}</span>
+					</button>
+				)}
 			</div>
 			<div
 				aria-labelledby={`response-tab-${tab}`}
@@ -261,6 +280,7 @@ export function ResponseViewer({ onCopyUrl, result }) {
 					))}
 				{tab === "headers" && <HeadersPanel headers={response?.headers} />}
 				{tab === "details" && <DetailsPanel result={result} />}
+				{tab === "tests" && <ScriptResults results={scriptResults} />}
 			</div>
 		</section>
 	);
