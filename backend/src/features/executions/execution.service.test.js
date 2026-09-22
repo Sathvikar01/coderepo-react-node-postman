@@ -142,12 +142,20 @@ describe("execution pipeline order", () => {
 		expect(result.outcome).toBe("response");
 		expect(result.response.status).toBe(200);
 		expect(result.persistence).toEqual({ state: "saved" });
+		expect(result.receipt).toMatchObject({
+			schemaVersion: 1,
+			kind: "tracer.execution-receipt",
+			executionId: input.executionId,
+			outcome: "response",
+			policy: { decision: "allowed", version: "1.0", local: false },
+		});
 
 		const stored = [...history.records.values()][0];
 		expect(stored.status).toBe("terminal");
 		expect(stored.outcome).toBe(result.outcome);
 		expect(stored.effectCertainty).toBe(result.effectCertainty);
 		expect(stored.response.status).toBe(result.response.status);
+		expect(stored.receipt).toEqual(result.receipt);
 		expect(history.admissions).toBe(1);
 	});
 
