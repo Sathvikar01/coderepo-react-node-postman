@@ -15,5 +15,6 @@ artifacts/
 CLAUDE.md
 .claude/
 
-# Local AI transcript export (kept out of git and GitHub by request; copied into the submission archive only)
-transcripts/
+# AI transcripts are committed under /transcripts for HackerRank submission.
+!transcripts/
+!transcripts/log.txt
