@@ -2491,3 +2491,496 @@ Actions:
 * Edited frontend/src/App.jsx (added scriptResults passthrough in openHistoryEntry inspected object)
 * Ran CDP browser verification; captured %TEMP%\tracer-phase12-tests.png
 * Ran bun test, node --check on modified backend files, bun run build
+* Appended transcript log entries
+
+Context:
+tool=opencode
+branch=phase12/assertions-testing
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=main
+parent_agent=none
+
+## [2026-09-22T05:32:59+05:30] SESSION START
+
+tool=opencode
+Repo Root: C:\Users\arsat\Downloads\postman
+Branch: phase12/assertions-testing
+Worktree: main
+Parent Agent: none
+Language: node
+Time Remaining: 0d 17h 59m
+
+## [2026-09-22T06:06:19+05:30] Phase 12 rebase onto Phase 16 main + portable assertion integration
+
+User Prompt (verbatim, secrets redacted):
+Phase 16 is now merged into main @ 1fb72ee. Your Phase 12 implementation already passed locally. Do NOT rewrite it. Work on phase12/assertions-testing. Goal: integrate the completed Phase 12 assertion model with the newly merged Phase 16 portable-project boundary, then commit and open the PR. [rebase safely; map portable assertions envelope into Phase 12 request assertion field on import; export Phase 12 definitions into the versioned envelope; preserve IDs/names/order; round-trip every assertion type; do not duplicate schema semantics; keep Phase 12 authoritative; add integration tests; run gates; commit, push, open PR; finish with PHASE 12 VERDICT: PASS or BLOCKED]
+
+Agent Response Summary:
+Preserved the uncommitted Phase 12 work in a stash, fast-forwarded local main to origin/main @ 1fb72ee, and rebased phase12/assertions-testing (Phase 11 commit skipped as already merged). Stash pop produced two genuine integration conflicts (limits.js, styles.css), resolved as unions of Phase 9 cookie limits/CSS and Phase 12 assertion limits/CSS. Integrated Phase 16's portable boundary with Phase 12: export wraps each request's Phase 12 assertion definitions into the tracer.assertions/1 envelope (empty arrays stripped), import maps the envelope back onto the Phase 12 request assertion field before domain validation, and the deferred.assertions placeholder was removed. Phase 12 request schema remains the sole semantic authority. Added project-assertions-integration.test.js covering full round-trip of all assertion types, order/IDs/names, malformed envelope, unknown type, missing target, unsupported version, and historical-result non-export.
+
+Actions:
+* git stash push -u; git branch -f main origin/main; git rebase main; git stash pop; resolved conflicts in limits.js and styles.css
+* Edited backend/src/features/projects/project-export.js, project-import.js, project-schema.js
+* Edited project-roundtrip.test.js; created project-assertions-integration.test.js
+* Ran bun test (652 pass / 1 skip / 0 fail), backend syntax on all 123 files, frontend build, focused projects suite (46 pass), CDP browser smoke at 375/768/1024/1440 (SMOKE PASS)
+* Committed 1c91c2e
+
+Context:
+tool=opencode
+branch=phase12/assertions-testing
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=main
+parent_agent=none
+
+## [2026-09-22T06:07:03+05:30] Phase 12 commit, push, and PR created
+
+User Prompt (normalized, secrets redacted):
+Finish the current phase, commit the completed work, push the branch, and open the PR.
+
+Agent Response Summary:
+Finished the remaining integration, committed Phase 12 + Phase 16 portable-project integration as 1c91c2e on phase12/assertions-testing, pushed to origin, and opened the PR against main. Waiting on CI Baseline Gate before issuing the final verdict.
+
+Actions:
+* git commit 1c91c2e; git push -u origin phase12/assertions-testing; gh pr create --base main
+* Appended session/turn logs
+
+Context:
+tool=opencode
+branch=phase12/assertions-testing
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=main
+parent_agent=none
+
+## [2026-09-22T06:09:25+05:30] Phase 12 PR opened and Baseline Gate green
+
+User Prompt (normalized, secrets redacted):
+Continue with the remaining concrete steps for the current phase; stop only if there is a real blocker or missing requirement.
+
+Agent Response Summary:
+PR #15 (phase12/assertions-testing -> main) was opened after a retry with a fully-qualified head ref; the first gh pr create attempt failed with a transient GraphQL error. The contract/Baseline Gate check ran on GitHub Actions and passed in 51s. All phase exit criteria are met with fresh evidence.
+
+Actions:
+* gh pr create -> https://github.com/Sathvikar01/coderepo-react-node-postman/pull/15
+* gh pr checks -> contract pass (run 35672748634)
+* Appended this log entry
+
+Evidence:
+* commit=1c91c2e on phase12/assertions-testing (parent 1fb72ee = origin/main)
+* bun test 652 pass / 1 skip / 0 fail; backend node --check clean; frontend build ok; browser smoke PASS at 375/768/1024/1440
+* GitHub Actions contract job: PASS
+
+Context:
+tool=opencode
+branch=phase12/assertions-testing
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=main
+parent_agent=none
+
+## [2026-09-22T06:15:09+05:30] SESSION START
+
+tool=Codex
+Repo Root: C:\Users\arsat\Downloads\postman
+Branch: phase12/assertions-testing
+Worktree: C:\Users\arsat\Downloads\postman
+Parent Agent: none
+Language: node
+Time Remaining: 0d 17h 16m
+
+## [2026-09-22T06:15:10+05:30] Flight Recorder implementation authorization check
+
+User Prompt (normalized, secrets redacted):
+Continue the current authorized phase from the latest verified checkpoint.
+
+Agent Response Summary:
+Interpreted the request as approval to implement the proposed API Flight Recorder suite. Inspected the active branch, worktrees, roadmap, and dependencies and found that Phase 16 and Phase 19 are on main while Phase 12 is implemented on the current phase12 branch. No code was changed because the requested subsystem has no authorized canonical phase or branch, and implementing it on phase12 would violate the repository's explicit ownership boundary.
+
+Actions:
+* Inspected git branch, status, history, and worktrees
+* Read executing-plans, writing-plans, test-driven-development, worktree, and verification skill instructions
+* Checked roadmap dependencies and current phase ownership
+* Did not modify repository files
+
+Context:
+tool=Codex
+branch=phase12/assertions-testing
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=C:\Users\arsat\Downloads\postman
+parent_agent=none
+
+## [2026-09-22T10:37:54.855+05:30] SESSION START
+
+tool=pi
+Repo Root: C:\Users\arsat\Downloads\postman
+Branch: phase28/flight-recorder-acceptance
+Worktree: C:\Users\arsat\Downloads\postman
+Parent Agent: none
+Language: node
+Time Remaining: 0d 12h 54m
+
+## [2026-09-22T10:38:36.333+05:30] Phase 28 Flight Recorder acceptance
+
+User Prompt (verbatim, secrets redacted):
+# Phase 28 — Flight Recorder Acceptance
+
+Add Phase 28 to `AGENTS.md`, then work on:
+
+`phase28/flight-recorder-acceptance`
+
+Base: latest `main`.
+
+## Goal
+
+Prove and polish the complete Flight Recorder flow:
+
+`Passport → Compare → Minimize → Capsule → Reproduce`
+
+No new unrelated features.
+
+## Build one deterministic demo
+
+Using only local seeded infrastructure:
+
+1. successful request
+2. make one subtle change
+3. request fails
+4. compare the two runs
+5. identify the first meaningful divergence
+6. minimize to the smallest reproducing request
+7. export a redacted reproduction capsule
+8. import it through the Phase 7 boundary
+9. open as dirty draft
+10. manually reproduce the failure
+
+## Verify
+
+* Execution Passports remain immutable after request/env/auth/cookie/assertion changes
+* comparisons handle request/env/auth/script/cookie/DNS/policy/response changes
+* contract diff catches removed fields, type changes, unexpected statuses, required-header changes
+* minimizer respects budgets, cancellation, flaky predicates, SSRF and unsafe-method restrictions
+* mutating probes only run against approved local/mock targets
+* capsules round-trip without semantic drift
+* capsule import never auto-Sends or auto-Saves
+* no resolved secrets anywhere in passports, comparisons, capsules, minimizer records, history or errors
+
+## UX
+
+Polish only what is necessary so users can clearly find:
+
+* Passport
+* Compare
+* Minimize
+* Export Capsule
+
+Verify keyboard use and widths:
+
+375 / 768 / 1024 / 1440
+
+## Product copy
+
+Update README positioning to:
+
+**Tracer — API Flight Recorder**
+
+Core flow:
+
+`record → compare → minimize → reproduce`
+
+Keep HackerRank/run instructions intact.
+
+## Gate
+
+Run:
+
+* `bun install --frozen-lockfile`
+* `bun test`
+* backend syntax
+* frontend build
+* isolated seed/reset
+* full Flight Recorder demo
+* baseline regressions
+* responsive browser smoke
+* GitHub Actions
+* `skills/validate/SKILL.md`
+
+Fix only proven bugs. No broad refactors or dependency changes.
+
+Open PR to `main`.
+
+Finish exactly:
+
+`PHASE 28 VERDICT: PASS — FLIGHT RECORDER ACCEPTED`
+
+or
+
+`PHASE 28 VERDICT: BLOCKED`
+
+Agent Response Summary:
+Added Phase 28 to AGENTS.md (phase map, dependency 27→28, ownership, executable spec, roadmap state), then built branch phase28/flight-recorder-acceptance from latest main (8fe4026) and proved the complete Flight Recorder flow with one deterministic demo (`bun run demo:flight-recorder`, 47/47 checks twice, self-cleaning) plus an acceptance matrix suite. Three proven bugs were fixed narrowly with regression tests: comparisons ignored the receipt tests block so script/assertion outcome divergence was invisible; policy-blocked runs recorded policy "not_evaluated" on their passports; and capsule imports bypassed the Phase 7 normalized import boundary (now routed through import-draft.js, which preserves auth/scripts/assertions so imports round-trip without semantic drift). UX polish reordered recorder tabs to Passport/Compare/Minimize/Capsule with explicit Export/Import Capsule sections, README was repositioned as "Tracer — API Flight Recorder" (record → compare → minimize → reproduce), and the full gate passed: 700 tests 0 fail, syntax, build, seed/reset + restart reset, demo 47/47, Chrome CDP smoke 15/15 at 375/768/1024/1440 with keyboard navigation, GitHub Actions Baseline Gate run 35694335008 success on PR #17, and a skills/validate audit (31 PASS / 0 FAIL / 0 MANUAL) reported outside the repo.
+
+Actions:
+* Edited AGENTS.md (Phase 28 entries) and committed "Authorize Phase 28 flight recorder acceptance"
+* Modified backend run-comparison.js + execution.service.js and their tests (proven bugs with regressions)
+* Modified frontend import-draft.js, flight-recorder-model.js, FlightRecorderDialog.jsx, App.jsx and tests
+* Created backend/src/features/execution-intelligence/flight-recorder-demo.js and flight-recorder-acceptance.test.js
+* Updated README.md positioning and package.json (demo script only; no dependency changes)
+* Ran bun install --frozen-lockfile, bun test, node --check, frontend build, seed/reset, demo x2 (47/47), Chrome CDP browser smoke (15/15, screenshots in %TEMP%/tracer-smoke/shots)
+* Repaired a local (non-repo) missing bun.cmd shim so the declared `bun start` runs on this Windows host
+* Opened PR #17 to main; Baseline Gate run 35694335008 green
+* Wrote the validation report to C:/Users/arsat/hackerrank_postman/validation/code-repo-validation-report.md
+
+Context:
+tool=pi
+branch=phase28/flight-recorder-acceptance
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=C:\Users\arsat\Downloads\postman
+parent_agent=none
+
+## [2026-09-22T13:29:38.843+05:30] SESSION START
+
+tool=pi
+Repo Root: C:\Users\arsat\Downloads\postman
+Branch: phase17/git-native
+Worktree: C:/Users/arsat/Downloads/postman-phase17
+Parent Agent: none
+Language: node
+Time Remaining: 0d 10h 02m
+
+## [2026-09-22T13:29:54.754+05:30] Phase 17 assignment — Git-Native Workflow
+
+User Prompt (verbatim, secrets redacted):
+# Phase 17 — Git-Native Workflow
+
+Work on:
+
+`phase17/git-native`
+
+Base: latest `main`.
+
+Run in parallel with Phase 13.
+
+## Goal
+
+Make `TracerProjectV1` clean to version, diff, review, and re-import through Git.
+
+Do NOT make Git the runtime database.
+
+## Implement
+
+* deterministic project file layout
+* stable filenames/IDs
+* canonical serialization
+* meaningful human-readable diffs
+* validate changed project files
+* import validated changes back into Tracer
+* clear conflict/error handling
+* project fingerprint/hash visibility
+
+Prefer a structure such as:
+
+`tracer-project/`
+
+* project metadata
+* collections
+* environments
+* examples
+
+Choose the smallest layout that produces useful Git diffs.
+
+## Requirements
+
+Preserve exactly:
+
+* ordered query params
+* duplicate headers
+* request/folder IDs
+* variables/auth references
+* scripts
+* assertions
+* examples
+
+Never export:
+
+* resolved secrets
+* cookies
+* execution history
+* transient UI state
+* Mongo `_id`
+* send-only overrides
+
+Unknown/malformed/version-incompatible files must fail closed.
+
+## Git safety
+
+Do NOT execute arbitrary Git commands from project content.
+
+No shell injection.
+
+Git integration may inspect/diff portable files, but project data must never control commands or filesystem paths outside its project boundary.
+
+## Tests
+
+Cover:
+
+* export twice → identical files
+* small request edit → small meaningful diff
+* rename/move without identity loss
+* duplicate headers/query params
+* assertion/script/example round-trip
+* malformed file
+* unsupported version
+* filename/path traversal attempts
+* secret leakage scan
+* merge-conflict text rejected safely
+* import after valid external edit
+
+Run:
+
+* `bun test`
+* backend syntax
+* frontend build if touched
+* browser smoke if UI added
+* GitHub Actions / Baseline Gate
+
+No broad refactors or new dependencies.
+
+Open PR to `main`.
+
+Finish exactly:
+
+`PHASE 17 VERDICT: PASS`
+
+or
+
+`PHASE 17 VERDICT: BLOCKED`
+
+Agent Response Summary:
+Phase 17 was authorized as an isolated Git-native portable-project workflow, explicitly allowed to run in parallel with Phase 13 while keeping Git out of the runtime database path.
+
+Actions:
+* Created the Phase 17 worktree/branch from the authorized base.
+* Preserved the runtime/persistence boundary and limited ownership to Git-native project representation/workflow files.
+
+Context:
+tool=pi
+branch=main
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=main
+parent_agent=none
+repo_anchor=cc8dc56
+
+## [2026-09-22T14:10:47+05:30] Phase 17 git-native workflow implemented
+
+User Prompt (normalized, secrets redacted):
+Continue the current authorized phase from the latest verified checkpoint.
+
+Agent Response Summary:
+Implemented Phase 17 (Git-Native Workflow) on branch phase17/git-native in an isolated worktree based on latest main. Added backend/src/features/git-native/ (deterministic multi-file layout, stable pretty JSON, path/conflict/secret safety, id-based rename-aware diff, bounded disk layer) plus a Git-free backend/src/scripts/git-native.js CLI (export/validate/import/diff/fingerprint). Built 60 new tests covering determinism, round-trip invariants (ordered query params, duplicate headers, IDs, variables, auth refs, scripts, assertions, examples), rename/move identity, meaningful small diffs, fingerprint/hash visibility, and fail-closed handling of malformed/unsupported-version/path-traversal/merge-conflict/secret-leakage inputs. Full backend suite: 497 pass, 0 fail.
+
+Actions:
+* created backend/src/features/git-native/{index,project-text,project-layout,project-diff,project-fs}.js
+* created backend/src/features/git-native/{project-git-native.test,project-safety.test,project-fs.test}.js and test-fixtures.js
+* created backend/src/scripts/git-native.js and git-native.test.js (Git-free CLI)
+* ran bun test (497 pass, 0 fail) and module syntax/link checks
+
+Context:
+tool=pi
+branch=phase17/git-native
+repo_root=C:/Users/arsat/Downloads/postman-phase17
+worktree=C:/Users/arsat/Downloads/postman-phase17
+parent_agent=none
+
+## [2026-09-22T14:23:16+05:30] Phase 17 complete: PR #18 opened, Baseline Gate green
+
+User Prompt (normalized, secrets redacted):
+Continue the current authorized phase from the latest verified checkpoint.
+
+Agent Response Summary:
+Committed Phase 17 as 6cc1f35 on phase17/git-native and opened PR #18 to main. Verified the GitHub repo is PRIVATE before pushing. The Baseline Gate workflow ran on the PR and passed (contract job success). Full backend suite 497 pass / 0 fail (one pre-existing timing-sensitive flake observed once under load; two subsequent runs clean). No frontend code touched, so frontend build and browser smoke correctly skipped. All Phase 17 deliverables met.
+
+Actions:
+* committed 6cc1f35 and pushed branch phase17/git-native
+* opened PR #18 to main (repo confirmed PRIVATE)
+* confirmed Baseline Gate workflow success on the PR
+* ran full backend suite (497 pass, 0 fail)
+
+Context:
+tool=pi
+branch=phase17/git-native
+repo_root=C:/Users/arsat/Downloads/postman-phase17
+worktree=C:/Users/arsat/Downloads/postman-phase17
+parent_agent=none
+
+## [2026-09-22T12:35:15.429+05:30] SESSION START
+
+tool=pi
+Repo Root: C:\Users\arsat\Downloads\postman
+Branch: phase13/collection-runner
+Worktree: C:\Users\arsat\Downloads\postman
+Parent Agent: none
+Language: node
+Time Remaining: 0d 10h 56m
+
+## [2026-09-22T12:35:18.512+05:30] Phase 13 assignment: collection runner
+
+User Prompt (verbatim, secrets redacted):
+# Phase 13 — Collection Runner
+
+Work on:
+
+`phase13/collection-runner`
+
+Base: latest `main`.
+
+## Goal
+
+Run ordered request sets using the existing execution pipeline.
+
+Do NOT create another transport/execution path.
+
+## Support
+
+* choose collection/folder/requests
+* deterministic request order
+* bounded iterations
+* environment selection
+* scripts + assertions
+* cookies/auth/variables
+* stop-on-failure or continue
+* cancellation
+* per-request result
+* run summary
+* rerun
+
+Every request must still use the normal:
+
+`compile → policy → DNS → transport → capture → history`
+
+## Variables
+
+Define clear scopes:
+
+`initial → collection/environment → run → request/script`
+
+Variable changes during the run must propagate deterministically to later requests without corrupting persisted environments unless explicitly saved.
+
+## Results
+
+Record:
+
+* request
+* execution ID
+* status/outcome
+* assertion counts
+* duration
+* failure reason
+
+Runner results must link back to Execution Passports so Flight Recorder debugging works naturally.
+
+## Safety
+
+* preserve SSRF/local-runtime rules
+* existing timeout/cancel limits
+* no secret leakage
+* bounded request/iteration count
+* stop runaway runs
+* mutating requests rema
