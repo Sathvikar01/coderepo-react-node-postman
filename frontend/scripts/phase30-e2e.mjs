@@ -112,7 +112,7 @@ await waitFor('document.querySelector("#workspace-email") !== null', "login scre
 await setInput("#workspace-email", "alex.morgan@example.test");
 await setInput("#workspace-password", "password123");
 await evaluate('document.querySelector(".workspace-login-card form").requestSubmit(); true');
-await waitFor('document.querySelector("[aria-label^=\"Continue as\"]") !== null', "profile picker");
+await waitFor('[...document.querySelectorAll("button")].some((node) => node.getAttribute("aria-label")?.startsWith("Continue as"))', "profile picker");
 await click('[aria-label^="Continue as"]', "profile");
 await waitFor('document.querySelector(".app-shell") !== null', "workspace");
 pass("login -> profile -> workspace");
@@ -136,9 +136,9 @@ await retry(async () => (await evaluate('document.documentElement.dataset.theme 
 pass("theme button works");
 
 await clickButtonText("History");
-await retry(() => evaluate('document.querySelector(".sidebar-tab[aria-selected=\"true\"]")?.textContent.includes("History")'), "History tab");
+await retry(() => evaluate("document.querySelector('.sidebar-tab[aria-selected=true]')?.textContent.includes('History')"), "History tab");
 await click('[aria-label="Open collections"]', "Collections rail command");
-await retry(() => evaluate('document.querySelector(".sidebar-tab[aria-selected=\"true\"]")?.textContent.includes("Collections")'), "Collections tab");
+await retry(() => evaluate("document.querySelector('.sidebar-tab[aria-selected=true]')?.textContent.includes('Collections')"), "Collections tab");
 pass("Collections rail command changes resource mode");
 
 await click('[aria-label="Import cURL"]', "Import");
@@ -178,7 +178,7 @@ await clickButtonText("History");
 await waitFor('document.querySelector(".history-item") !== null', "history entry");
 await clickButtonText("Analyze");
 await waitFor('document.querySelector(".flight-recorder-dialog") !== null', "Flight Recorder");
-const recorderTabs = await evaluate('[...document.querySelectorAll(".flight-recorder-dialog [role=\"tab\"]")].map((node) => node.textContent.trim()).join("|")');
+const recorderTabs = await evaluate("[...document.querySelectorAll('.flight-recorder-dialog [role=tab]')].map((node) => node.textContent.trim()).join('|')");
 for (const expected of ["Passport", "Compare", "Minimize", "Capsule"]) {
 	if (!recorderTabs.includes(expected)) throw new Error("Flight Recorder missing " + expected);
 }
