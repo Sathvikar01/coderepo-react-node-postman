@@ -92,7 +92,7 @@ jobs:
           cat /tmp/tracer.log
           exit 1
       - name: Install external Locust
-        run: python -m pip install --disable-pip-version-check locust==2.31.8
+        run: python -m pip install --disable-pip-version-check locust==2.31.8 zope.event zope.interface
       - name: Light, moderate, burst load
         shell: bash
         env:
