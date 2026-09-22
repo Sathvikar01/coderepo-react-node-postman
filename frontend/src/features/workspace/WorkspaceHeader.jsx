@@ -54,7 +54,13 @@ export function WorkspaceHeader({
 					<MaterialIcon size={18}>content_paste_go</MaterialIcon>
 					<span className="button-label">Import cURL</span>
 				</button>
-				<button className="button" type="button" onClick={onOpenEnvironments}>
+				<button
+					aria-label="Environments"
+					className="button"
+					title="Manage environments"
+					type="button"
+					onClick={onOpenEnvironments}
+				>
 					<MaterialIcon size={18}>edit</MaterialIcon>
 					<span className="button-label">Environments</span>
 				</button>

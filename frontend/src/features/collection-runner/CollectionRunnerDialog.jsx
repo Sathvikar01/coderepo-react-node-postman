@@ -308,7 +308,7 @@ export function CollectionRunnerDialog({
 									</p>
 								)}
 								<div aria-hidden="true" className="run-progress">
-									<span style={{ width: `${progress.percent}%` }} />
+									<span style={{ transform: `scaleX(${progress.percent / 100})` }} />
 								</div>
 								{finished && (
 									<>

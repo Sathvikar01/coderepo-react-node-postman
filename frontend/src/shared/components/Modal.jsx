@@ -4,12 +4,18 @@ import { popDialog, pushDialog } from "./dialog-stack.js";
 export function Modal({ children, className = "", label = "Tracer dialog", labelledBy, onClose }) {
 	const reference = useRef(null);
 	const closeReference = useRef(onClose);
+	const openerReference = useRef(null);
 	useEffect(() => {
 		closeReference.current = onClose;
 	}, [onClose]);
 	useEffect(() => {
 		const dialog = reference.current;
-		const opener = document.activeElement;
+		// Capture the trigger once per dialog instance. This effect runs twice under
+		// StrictMode, and on the second run focus has already moved into the dialog,
+		// so re-reading activeElement would return the dialog's own field.
+		if (openerReference.current === null && document.activeElement instanceof HTMLElement) {
+			openerReference.current = document.activeElement;
+		}
 		const token = { onClose: () => closeReference.current() };
 		pushDialog(token);
 		if (!dialog.open) dialog.showModal();
@@ -24,7 +30,9 @@ export function Modal({ children, className = "", label = "Tracer dialog", label
 		return () => {
 			popDialog(token);
 			dialog.removeEventListener("cancel", cancel);
-			if (opener instanceof HTMLElement && document.contains(opener)) opener.focus();
+			// Returning focus to the trigger keeps keyboard users where they were.
+			const opener = openerReference.current;
+			if (opener && document.contains(opener) && opener !== document.activeElement) opener.focus();
 		};
 	}, []);
 	return (

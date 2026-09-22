@@ -269,13 +269,22 @@
 	font-size: 12px;
 }
 .docs-notice {
+	display: flex;
+	gap: 8px;
+	align-items: flex-start;
 	margin: 8px 0;
-	padding: 8px 10px;
-	border-left: 2px solid var(--warning);
-	border-radius: 6px;
-	background: var(--warning-container);
+	padding: 8px 12px;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	background: var(--surface-muted);
 	color: var(--ink);
 	font-size: 12px;
+	line-height: 1.5;
+}
+.docs-notice[role="status"] {
+	border-color: var(--success);
+	background: var(--success-container);
+	color: var(--success);
 }
 .docs-empty {
 	display: flex;
