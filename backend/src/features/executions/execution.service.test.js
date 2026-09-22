@@ -544,3 +544,40 @@ describe("execution deadline and cancellation coverage", () => {
 		expect(status.outcome).toBe("response");
 	});
 });
+
+describe("collection runner scope hook", () => {
+	test("run-scope writes and initial values feed compilation and are returned to the runner", async () => {
+		const history = fakeHistory();
+		const { service, calls } = makeService({ history });
+		const result = await service.send(
+			nextProfile(),
+			sendInput({
+				request: draft({
+					urlTemplate: "https://example.test/{{path}}",
+					scripts: {
+						preRequest: 'pm.variables.set("path", "two");',
+						test: 'pm.variables.set("token", "t1");',
+					},
+				}),
+			}),
+			{ rateLimit: false, runScope: { initial: new Map([["path", "one"]]), writes: new Map() } },
+		);
+
+		// The pre-request write shadows the initial value for this request, and both
+		// script phases report their writes back for propagation to later run steps.
+		expect(calls.policy[0].url).toBe("https://example.test/two");
+		expect(result.compileTrace).toContainEqual({ field: "url", variable: "path", scope: "script" });
+		expect(result.variableWrites).toEqual([
+			{ key: "path", value: "two" },
+			{ key: "token", value: "t1" },
+		]);
+		expect(result.outcome).toBe("response");
+	});
+
+	test("without the run scope hook a plain send exposes no variable writes", async () => {
+		const history = fakeHistory();
+		const { service } = makeService({ history });
+		const result = await service.send(nextProfile(), sendInput());
+		expect(result.variableWrites).toBeUndefined();
+	});
+});

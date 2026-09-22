@@ -23,10 +23,29 @@ function plainScope(variables) {
 	return scope;
 }
 
-export function scriptVariableScopes(collection, environment) {
+function plainValues(variables) {
+	const scope = {};
+	for (const [key, value] of variables ?? []) {
+		if (value === null) continue;
+		scope[key] = String(value);
+	}
+	return scope;
+}
+
+// Script-visible precedence, lowest to highest: initial (run inputs) -> collection
+// -> environment -> variable writes (run-scope writes plus this request's script
+// writes). A null write unsets the key from the merged view. The collection and
+// environment views stay the persisted scopes: scripts can read them but a write
+// never mutates them.
+export function scriptVariableScopes(collection, environment, { initial = null, writes = null } = {}) {
 	const collectionScope = plainScope(collection?.variables);
 	const environmentScope = plainScope(environment?.variables);
-	return { collection: collectionScope, environment: environmentScope, merged: { ...collectionScope, ...environmentScope } };
+	const merged = { ...plainValues(initial), ...collectionScope, ...environmentScope };
+	for (const [key, value] of writes ?? []) {
+		if (value === null) delete merged[key];
+		else merged[key] = String(value);
+	}
+	return { collection: collectionScope, environment: environmentScope, merged };
 }
 
 function secretReferenceKeys(collection, environment) {
@@ -162,10 +181,10 @@ export function mergePostResponseResults(results, postResponse, tests) {
 }
 
 export function createScriptService({ sandbox = runSandboxedScript } = {}) {
-	function runPreRequest({ request, collection, environment }) {
+	function runPreRequest({ request, collection, environment, variables = null, initialVariables = null }) {
 		const definition = scriptDefinitionOf(request);
 		if (!definition.preRequest.trim()) return { request, variables: new Map(), phase: null, warnings: [] };
-		const scope = scriptVariableScopes(collection, environment);
+		const scope = scriptVariableScopes(collection, environment, { initial: initialVariables, writes: variables });
 		const outcome = sandbox({
 			source: definition.preRequest,
 			phase: "prerequest",
@@ -188,43 +207,37 @@ export function createScriptService({ sandbox = runSandboxedScript } = {}) {
 		}
 		const warnings = [];
 		const headers = applyHeaderMutations(request?.headers ?? [], outcome.output.headers, warnings);
-		const variables = new Map();
-		applyVariableWrites(variables, outcome.output.variables, secretReferenceKeys(collection, environment), warnings);
+		const writes = new Map();
+		applyVariableWrites(writes, outcome.output.variables, secretReferenceKeys(collection, environment), warnings);
 		const phase = phaseRecord(outcome.error ? "error" : "passed", outcome.error, outcome.output);
 		if (outcome.error) warnings.push(phaseWarning("Pre-request", outcome.error));
 		return {
 			request: headers.changed ? { ...request, headers: headers.rows } : request,
-			variables,
+			variables: writes,
 			phase,
 			warnings,
 		};
 	}
 
-	function runPostResponse({ request, response, collection, environment, variables = null }) {
+	function runPostResponse({ request, response, collection, environment, variables = null, initialVariables = null }) {
 		const definition = scriptDefinitionOf(request);
 		const assertions = assertionsDefinitionOf(request);
 		const hasScript = Boolean(definition.test.trim());
-		if (!hasScript && assertions.length === 0) return { phase: null, tests: [], warnings: [] };
+		if (!hasScript && assertions.length === 0) return { phase: null, tests: [], warnings: [], variables: new Map() };
 		const view = responseView(response);
 		const warnings = [];
+		const writes = new Map();
 		let phase = phaseRecord("passed", null, null);
 		let tests = [];
 		if (hasScript) {
-			const scope = scriptVariableScopes(collection, environment);
-			const merged = { ...scope.merged };
-			if (variables) {
-				for (const [key, value] of variables) {
-					if (value === null) delete merged[key];
-					else merged[key] = String(value);
-				}
-			}
+			const scope = scriptVariableScopes(collection, environment, { initial: initialVariables, writes: variables });
 			const outcome = sandbox({
 				source: definition.test,
 				phase: "test",
 				input: {
 					phase: "test",
 					request: requestView(request),
-					variables: merged,
+					variables: scope.merged,
 					collection: scope.collection,
 					environment: scope.environment,
 					response: view,
@@ -234,22 +247,21 @@ export function createScriptService({ sandbox = runSandboxedScript } = {}) {
 				phase = phaseRecord("error", outcome.error, null);
 				warnings.push(phaseWarning("Test", outcome.error));
 			} else {
-				const scratch = new Map();
-				applyVariableWrites(scratch, outcome.output.variables, secretReferenceKeys(collection, environment), warnings);
+				applyVariableWrites(writes, outcome.output.variables, secretReferenceKeys(collection, environment), warnings);
 				phase = phaseRecord(outcome.error ? "error" : "passed", outcome.error, outcome.output);
 				if (outcome.error) warnings.push(phaseWarning("Test", outcome.error));
 				tests = outcome.output.tests;
 			}
 		}
 		tests = tests.concat(evaluateAssertions(assertions, view));
-		return { phase, tests, warnings };
+		return { phase, tests, warnings, variables: writes };
 	}
 
 	function skippedPostResponse(request) {
 		const definition = scriptDefinitionOf(request);
 		if (!definition.test.trim() && assertionsDefinitionOf(request).length === 0)
-			return { phase: null, tests: [], warnings: [] };
-		return { phase: phaseRecord("skipped", null, null), tests: [], warnings: [] };
+			return { phase: null, tests: [], warnings: [], variables: new Map() };
+		return { phase: phaseRecord("skipped", null, null), tests: [], warnings: [], variables: new Map() };
 	}
 
 	return { runPreRequest, runPostResponse, skippedPostResponse };

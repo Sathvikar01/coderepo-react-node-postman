@@ -3,6 +3,7 @@ import { WorkspaceLogin } from "./features/auth/WorkspaceLogin.jsx";
 import { authApi } from "./features/auth/auth.api.js";
 import { CollectionsSidebar } from "./features/collections/CollectionsSidebar.jsx";
 import { collectionApi } from "./features/collections/collection.api.js";
+import { CollectionRunnerDialog } from "./features/collection-runner/CollectionRunnerDialog.jsx";
 import { CookiePanel } from "./features/cookies/CookiePanel.jsx";
 import {
 	addFolder,
@@ -102,6 +103,7 @@ export default function App() {
 	const [toasts, setToasts] = useState([]);
 	const [historyRefresh, setHistoryRefresh] = useState(0);
 	const [flightRecorder, setFlightRecorder] = useState(null);
+	const [runner, setRunner] = useState(null);
 	const [comparisonBaseId, setComparisonBaseId] = useState(null);
 	const [examplesVersion, setExamplesVersion] = useState(0);
 	const [exampleDialog, setExampleDialog] = useState(null);
@@ -922,7 +924,7 @@ export default function App() {
 	};
 
 	const shortcutHandlers = useRef({ send: null, saveDraft: null, dialogOpen: false });
-	shortcutHandlers.current = { send, saveDraft, dialogOpen: Boolean(dialog || flightRecorder) };
+	shortcutHandlers.current = { send, saveDraft, dialogOpen: Boolean(dialog || flightRecorder || runner) };
 
 	useEffect(() => {
 		const onKeyDown = (event) => {
@@ -1116,10 +1118,25 @@ export default function App() {
 		/>
 	) : null;
 
+	const runnerNode = runner ? (
+		<CollectionRunnerDialog
+			activeEnvironmentId={state.activeEnvironmentId}
+			collection={runner.collection}
+			environments={environments}
+			folderId={runner.folderId}
+			onClose={() => setRunner(null)}
+			onCompare={(baseExecutionId, candidateExecutionId) => {
+				setFlightRecorder({ executionId: candidateExecutionId, comparisonIds: { baseExecutionId, candidateExecutionId } });
+			}}
+			onOpenPassport={(executionId) => setFlightRecorder({ executionId, comparisonIds: null })}
+		/>
+	) : null;
+
 	return (
 		<div className="app-shell">
 			{exampleDialogNode}
 			{flightRecorderNode}
+			{runnerNode}
 			<WorkspaceHeader
 				account={account}
 				activeEnvironmentId={state.activeEnvironmentId}
@@ -1255,6 +1272,14 @@ export default function App() {
 								if (index === -1 || target < 0 || target >= order.length) return;
 								[order[index], order[target]] = [order[target], order[index]];
 								savePreferences({ collectionOrder: order });
+							}}
+							onRunCollection={(collection) => {
+								setRunner({ collection, folderId: null });
+								setSidebarOpen(false);
+							}}
+							onRunFolder={(collection, folder) => {
+								setRunner({ collection, folderId: folder.id });
+								setSidebarOpen(false);
 							}}
 						/>
 					) : sidebarTab === "history" ? (

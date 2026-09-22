@@ -17,8 +17,27 @@ export const MANAGED_TRANSPORT_HEADERS = new Set([
 ]);
 const TOKEN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
 
-function variableMap(collection, environment, secrets = new Map()) {
+function secretReferenceKeySet(collection, environment) {
+	const keys = new Set();
+	for (const variable of [...(collection?.variables ?? []), ...(environment?.variables ?? [])]) {
+		if (variable.kind === "secretRef") keys.add(variable.key);
+	}
+	return keys;
+}
+
+// Variable scope precedence, lowest to highest: initial (run inputs) -> collection
+// -> environment -> variable overlay (run-scope writes, then request/script writes).
+// Initial values never shadow a declared secret reference, so a run input cannot
+// quietly substitute a secret slot.
+function variableMap(collection, environment, secrets = new Map(), base = null) {
 	const map = new Map();
+	if (base && base.size > 0) {
+		const reserved = secretReferenceKeySet(collection, environment);
+		for (const [key, value] of base) {
+			if (value === null || reserved.has(key)) continue;
+			map.set(key, { value: String(value), scope: "initial" });
+		}
+	}
 	for (const variable of collection?.variables ?? []) {
 		if (variable.enabled !== false) {
 			if (variable.kind === "plain") map.set(variable.key, { value: variable.value ?? "", scope: "collection" });
@@ -125,8 +144,8 @@ function effectiveAuth(request, collection) {
 	return { auth: request.auth ?? { mode: "none" }, source: "request" };
 }
 
-export function compileRequest({ request, collection, environment, authOverride, secrets = new Map(), variableOverlay = null }) {
-	const map = variableMap(collection, environment, secrets);
+export function compileRequest({ request, collection, environment, authOverride, secrets = new Map(), variableOverlay = null, variableBase = null }) {
+	const map = variableMap(collection, environment, secrets, variableBase);
 	if (variableOverlay) {
 		for (const [key, value] of variableOverlay) {
 			if (value === null) map.delete(key);

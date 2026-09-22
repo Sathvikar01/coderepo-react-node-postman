@@ -625,13 +625,14 @@ Unless a phase explicitly requires more, every implementation phase must:
 
 ### 10.5 Current roadmap state
 
-As of the Phase 28 assignment:
+As of the Phase 13 assignment:
 
-- Phases **1–9, 11–12, 16, 18–19, 22, and 27: COMPLETE / MERGED**.
+- Phases **1–9, 11–12, 16, 18–19, 22, and 27–28: COMPLETE / MERGED**.
 - Phases **1–6: PROTECTED / FROZEN baseline**.
 - Phase **27: MERGED** as `8fe4026` (Execution Intelligence / API Flight Recorder).
-- Phase **28: ACTIVE** on `phase28/flight-recorder-acceptance`, based on latest `main` after the Phase 27 merge.
-- Phases **10 and 23: INACTIVE** and must not be resumed as part of Phase 28.
+- Phase **28: MERGED** as `0a630e2` (Flight Recorder Acceptance).
+- Phase **13: ACTIVE** on `phase13/collection-runner`, based on latest `main` after the Phase 28 merge.
+- Phases **10 and 23: INACTIVE** and must not be resumed as part of Phase 13.
 - Other phases remain governed by their dependency chains and explicit user assignment.
 
 The user may advance this state over time. When a phase passes and merges, update only this subsection plus any dependency/ownership facts that actually changed; do not rewrite historical phase definitions.

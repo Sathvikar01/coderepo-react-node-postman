@@ -129,6 +129,9 @@ export function createExecutionService({
 	history = historyService,
 	localRuntime = localRuntimeService,
 	cookies = cookieService,
+	collections = collectionRepository,
+	environments = environmentRepository,
+	environmentSecrets = environmentService,
 } = {}) {
 	const targetPolicy = policy ?? createTargetPolicy();
 
@@ -153,7 +156,7 @@ export function createExecutionService({
 			};
 		}
 		if (!context.collectionId) return { request: draftRequest, collection: null, source: { type: "scratch" } };
-		const collection = await collectionRepository.findById(context.collectionId, profileId);
+		const collection = await collections.findById(context.collectionId, profileId);
 		if (!collection) throw new AppError(404, "COLLECTION_NOT_FOUND", "The requested collection does not exist.");
 		if (context.collectionRevision !== undefined && context.collectionRevision !== collection.revision) {
 			throw new AppError(
@@ -177,7 +180,7 @@ export function createExecutionService({
 
 	async function resolveEnvironment(profileId, environmentId, environmentRevision) {
 		if (!environmentId) return { environment: null, source: null };
-		const environment = await environmentRepository.findById(environmentId, profileId);
+		const environment = await environments.findById(environmentId, profileId);
 		if (!environment) throw new AppError(404, "ENVIRONMENT_NOT_FOUND", "The requested environment does not exist.");
 		if (environmentRevision !== undefined && environmentRevision !== environment.revision) {
 			throw new AppError(
@@ -195,6 +198,19 @@ export function createExecutionService({
 	async function send(profileId, input, internal = {}) {
 		if (internal.rateLimit !== false) registry.rateLimit(profileId, "send");
 		const { executionId, tabId, draftVersion, request, context = {}, authOverride } = input;
+		// Collection-runner scope hook. `initial` is the lowest-precedence run input
+		// layer; `writes` shadows persisted scopes for the whole run. Both stay in
+		// memory: a run never mutates persisted collection or environment scopes.
+		const runInitial = internal.runScope?.initial ?? null;
+		const runWrites = internal.runScope?.writes ? new Map(internal.runScope.writes) : new Map();
+		let postWrites = new Map();
+		const exposeWrites = (payload) =>
+			internal.runScope
+				? {
+						...payload,
+						variableWrites: [...preScript.variables, ...postWrites].map(([key, value]) => ({ key, value })),
+					}
+				: payload;
 		const timeoutMs = Math.min(
 			Math.max(request?.settings?.timeoutMs ?? getConfig().execution.defaultTimeoutMs, getConfig().execution.minTimeoutMs),
 			getConfig().execution.maxTimeoutMs,
@@ -209,8 +225,12 @@ export function createExecutionService({
 			request: effectiveRequest,
 			collection: resolved.collection,
 			environment: environment.environment,
+			variables: runWrites,
+			initialVariables: runInitial,
 		});
 		const workingRequest = preScript.request;
+		const requestOverlay = new Map(runWrites);
+		for (const [key, value] of preScript.variables) requestOverlay.set(key, value);
 		const scriptWarnings = [...preScript.warnings];
 		let scriptResults = preScript.phase ? composeScriptResults({ preRequest: preScript.phase }) : null;
 
@@ -233,7 +253,7 @@ export function createExecutionService({
 				throw new AppError(409, "EXECUTION_ID_CONFLICT", "This execution identifier is already used with different input.");
 			if (existing.status === "running") throw new AppError(409, "EXECUTION_RUNNING", "This execution is already running.");
 			if (existing.visible === false) throw new AppError(410, "RESULT_REMOVED", "The stored result for this execution was removed.");
-			return { ...terminalResult(existing), duplicate: true, tabId, draftVersion };
+			return exposeWrites({ ...terminalResult(existing), duplicate: true, tabId, draftVersion });
 		}
 
 		const controller = registry.reserve(profileId, executionId);
@@ -301,7 +321,7 @@ export function createExecutionService({
 				if (winner?.status === "running") throw new AppError(409, "EXECUTION_RUNNING", "This execution is already running.");
 				if (winner && winner.fingerprint !== fingerprint)
 					throw new AppError(409, "EXECUTION_ID_CONFLICT", "This execution identifier is already used with different input.");
-				if (winner) return { ...terminalResult(winner), duplicate: true, tabId, draftVersion };
+				if (winner) return exposeWrites({ ...terminalResult(winner), duplicate: true, tabId, draftVersion });
 			}
 			throw new AppError(503, "DATABASE_UNAVAILABLE", "The execution could not be recorded. Try again.");
 		}
@@ -354,8 +374,8 @@ export function createExecutionService({
 				"snapshot.scriptResults": scriptResults,
 			});
 			registry.release(executionId);
-			if (persistence.record) return { ...terminalResult(persistence.record), tabId, draftVersion };
-			return {
+			if (persistence.record) return exposeWrites({ ...terminalResult(persistence.record), tabId, draftVersion });
+			return exposeWrites({
 				executionId,
 				tabId,
 				draftVersion,
@@ -371,7 +391,7 @@ export function createExecutionService({
 				warnings,
 				scriptResults,
 				receipt,
-			};
+			});
 		};
 
 		const semanticFailure = (code, message, details) =>
@@ -381,7 +401,7 @@ export function createExecutionService({
 		const secrets = new Map();
 		for (const variable of resolved.collection?.variables ?? []) {
 			if (variable.enabled !== false && variable.kind === "secretRef" && variable.alias) {
-				const secret = environmentService.resolveSecretAlias(profileId, variable.alias);
+				const secret = environmentSecrets.resolveSecretAlias(profileId, variable.alias);
 				if (secret) {
 					secrets.set(variable.key, secret);
 					secretValues.push(secret);
@@ -390,7 +410,7 @@ export function createExecutionService({
 		}
 		for (const variable of environment.environment?.variables ?? []) {
 			if (variable.enabled !== false && variable.kind === "secretRef" && variable.alias) {
-				const secret = environmentService.resolveSecretAlias(profileId, variable.alias);
+				const secret = environmentSecrets.resolveSecretAlias(profileId, variable.alias);
 				if (secret) {
 					secrets.set(variable.key, secret);
 					secretValues.push(secret);
@@ -406,7 +426,8 @@ export function createExecutionService({
 				environment: environment.environment,
 				authOverride,
 				secrets,
-				variableOverlay: preScript.variables,
+				variableOverlay: requestOverlay,
+				variableBase: runInitial,
 			});
 			compiled.redaction.values.push(...secretValues);
 		} catch (error) {
@@ -518,9 +539,11 @@ export function createExecutionService({
 					response,
 					collection: resolved.collection,
 					environment: environment.environment,
-					variables: preScript.variables,
+					variables: requestOverlay,
+					initialVariables: runInitial,
 				})
 			: scriptService.skippedPostResponse(workingRequest);
+		postWrites = postScript.variables ?? new Map();
 		if (postScript.phase || postScript.tests.length) {
 			scriptResults = mergePostResponseResults(scriptResults, postScript.phase, postScript.tests);
 		}
@@ -571,8 +594,8 @@ export function createExecutionService({
 			receipt,
 		});
 		registry.release(executionId);
-		if (persistence.record) return { ...terminalResult(persistence.record), tabId, draftVersion };
-		return {
+		if (persistence.record) return exposeWrites({ ...terminalResult(persistence.record), tabId, draftVersion });
+		return exposeWrites({
 			executionId,
 			tabId,
 			draftVersion,
@@ -591,7 +614,7 @@ export function createExecutionService({
 			localAccess,
 			scriptResults,
 			receipt,
-		};
+		});
 	}
 
 	return {
