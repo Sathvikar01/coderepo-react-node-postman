@@ -1152,7 +1152,10 @@ export default function App() {
 				onOpenEnvironments={() => openDialog({ kind: "environments" })}
 				onOpenImport={() => openDialog({ kind: "import-curl" })}
 				onOpenLocalRuntime={() => openDialog({ kind: "local-runtime" })}
-				onToggleSidebar={() => setSidebarOpen((current) => !current)}
+				onToggleSidebar={() => {
+					setSidebarTab("collections");
+					setSidebarOpen(true);
+				}}
 				onToggleTheme={() =>
 					setTheme((current) => {
 						const next = current === "dark" ? "light" : "dark";
