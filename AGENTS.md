@@ -296,6 +296,13 @@ This section is the repo-level source of truth for phase numbers. Agents must no
 | 28 | Flight Recorder Acceptance | Prove and polish the complete Passport → Compare → Minimize → Capsule → Reproduce flow with one deterministic local demo. No new unrelated features. |
 | 29 | Product UI/UX Polish | Raise the shipped frontend to an intentional, distinctive developer-tool standard. Presentation only: no new features, no behavioural or data changes, no new dependencies. |
 | 30 | Complete UI/UX Rebuild | Replace Tracer's frontend presentation and interaction model from scratch while preserving product behavior, contracts, and security semantics. |
+| 31 | Counterfactual Cause Verification | Upgrade Flight Recorder from “these things changed” to “this specific change was experimentally shown to reproduce/remove the failure” via bounded interventions through the normal execution pipeline. |
+| 32 | Structured Delta Debugger | Systematically shrink the failing difference to the smallest reproducing structured delta. |
+| 33 | Regression Timeline / Boundary Finder | Locate the boundary between working and failing states across recorded runs and identify the regression frontier. |
+| 34 | Reproduction Stability | Measure and characterize how reliably a failure reproduces, separating stable failures from flaky ones. |
+| 35 | Investigation Engine | Orchestrate counterfactual cause verification, structured delta debugging, boundary finding, and reproduction stability into one investigation engine. |
+| 36 | Investigation UX / Product Positioning | Surface the investigation flow in the product UI and position it so cause evidence is findable, legible, and trustworthy. |
+| 37 | Investigation Acceptance + Submission Freeze | Accept the complete investigation flow end to end and freeze the final HackerRank submission. |
 
 ### 10.2 Dependency graph
 
@@ -308,6 +315,7 @@ Mandatory chains:
 - `22 → 23`
 - `12 + 16 + 18 + 19 → 27`
 - `27 → 28` (Phase 28 accepts and polishes the merged Flight Recorder; it may not reimplement it)
+- Phases 31–37 form the investigation track built on the merged Flight Recorder; their execution order is fixed in the investigation track block below.
 - Phase 20 should reuse runner/CLI semantics from 13–15 rather than invent a second execution model.
 - Phases 24–26 start only after the platform foundations they depend on have converged; 24, 25, and 26 may later run in parallel if ownership is non-overlapping.
 
@@ -321,6 +329,15 @@ Current safe parallel expansion lanes after Phase 7:
 - Phase 22 — Generated API Documentation
 
 These lanes are parallel-safe only when they obey §10.3 ownership and do not opportunistically edit another lane's files.
+
+Investigation track execution order (Phases 31–37, canonical):
+
+- Phases 31–34 branch from the same approved `main` and may run in parallel.
+- They must use isolated worktrees and avoid shared integration files.
+- Merge order after PASS: `31 → 32 → 33 → 34`, rebasing each branch before merge.
+- Phase 35 starts only after all four (31–34) are merged.
+- Phase 36 depends on Phase 35.
+- Phase 37 depends on Phase 36.
 
 ### 10.3 Branch and ownership rules
 
@@ -345,6 +362,13 @@ Current parallel branches:
 | 28 | `phase28/flight-recorder-acceptance` | Flight Recorder demo/acceptance artifacts under `**/execution-intelligence/**`; narrow import-boundary, workspace, and recorder UI changes only where a proven gap requires them |
 | 29 | `phase29/ui-ux-polish` | `frontend/src/**` presentation: stylesheets, tokens, and shared component markup/ARIA only where a proven accessibility defect requires it; no backend files, no feature or workflow logic |
 | 30 | `phase30/ui-rebuild-rescue` | Frontend-wide replacement presentation and interaction model under `frontend/src/**`; no backend, API, persistence, execution, runner/CLI, or Flight Recorder contract changes |
+| 31 | `phase31/counterfactual-cause` | `backend/src/features/execution-intelligence/counterfactual/**` in isolated worktree `../postman-p31`; shared routes, frontend, and `run-comparison.js` stay off-limits unless a proven contract seam requires a narrow change |
+| 32 | `phase32/<short-name>` | Structured Delta Debugger lane; exact branch/paths fixed at assignment; isolated worktree, no shared integration files |
+| 33 | `phase33/<short-name>` | Regression Timeline / Boundary Finder lane; exact branch/paths fixed at assignment; isolated worktree, no shared integration files |
+| 34 | `phase34/<short-name>` | Reproduction Stability lane; exact branch/paths fixed at assignment; isolated worktree, no shared integration files |
+| 35 | `phase35/<short-name>` | Investigation Engine; starts only after Phases 31–34 are merged |
+| 36 | `phase36/<short-name>` | Investigation UX / Product Positioning; depends on Phase 35 |
+| 37 | `phase37/<short-name>` | Investigation Acceptance + Submission Freeze; depends on Phase 36 |
 
 Shared/high-conflict files are integrator-owned unless the phase cannot be completed without a narrow change:
 
@@ -632,6 +656,61 @@ When the user assigns a phase, the agent MUST execute the matching specification
 - **Load test:** run Locust against local seeded infrastructure only for safe representative API/read/execution flows; report throughput, p50, p95, p99, failure rate, and error types for light, moderate, and short-burst loads. Keep Locust outside application dependencies.
 - **Exit:** clean install, full `bun test`, backend syntax, frontend tests/build, seed/reset, real runtime, complete E2E, responsive/theme matrix, Flight Recorder demo, Locust smoke, `skills/validate/SKILL.md`, and GitHub Actions/Baseline Gate are green; open a PR to `main` and finish with `PHASE 30 VERDICT: PASS — UI/UX REBUILT AND VERIFIED` or `PHASE 30 VERDICT: BLOCKED`.
 
+#### Phase 31 — Counterfactual Cause Verification
+- **Branch:** `phase31/counterfactual-cause`.
+- **Worktree:** `../postman-p31`, started from the latest approved `origin/main`.
+- **Execution order:** parallel-safe lane with Phases 32–34 per §10.2; merges first in the `31 → 32 → 33 → 34` order, rebasing before merge.
+- **Goal:** upgrade Flight Recorder from “these things changed” to “this specific change was experimentally shown to reproduce/remove the failure.”
+- **Do:** inspect the current `run-comparison.js`, execution receipts/history, execution service, and the minimizer safety model; build an isolated module under `backend/src/features/execution-intelligence/counterfactual/**` (do NOT wire frontend/routes yet). Given known-good execution A and failing execution B: compute deterministic material deltas; convert replayable deltas into bounded intervention candidates; re-run through the NORMAL execution pipeline only; test one controlled intervention at a time; classify each delta as `causal`, `not_causal`, `inconclusive`, or `not_replayable`; store exact probe execution IDs/evidence.
+- **Replayable deltas (initial):** query rows, non-secret headers, JSON body fields, URL/path where safely reconstructable, and other deterministic request fields already present in history.
+- **Invariants:** never reconstruct or expose resolved secrets; environment/auth/cookie/script differences that cannot be replayed truthfully are `not_replayable`, not guessed; bounded probes with a hard probe limit and cancellation; fail closed; probes use the normal SSRF/policy/compiler/transport path; safe methods automatically; mutating requests only against approved local/mock targets. No AI causality claims and no probability/confidence score: a change is called `causal` only when intervention evidence proves it.
+- **Primary ownership:** `backend/src/features/execution-intelligence/counterfactual/**`.
+- **Avoid editing:** shared routes, frontend, and `run-comparison.js`, unless absolutely required for a proven contract seam.
+- **Tests:** one changed header causes failure; unrelated changed header rejected as cause; multiple changed fields; unreplayable secret/auth delta; flaky result → `inconclusive`; probe budget; cancellation; unsafe mutating request; SSRF; zero secret leakage; deterministic output.
+- **Exit:** run relevant tests plus the full `bun test`; finish with `PHASE 31 VERDICT: PASS` or `PHASE 31 VERDICT: BLOCKED`. Do not merge unless PASS.
+
+#### Phase 32 — Structured Delta Debugger
+- **Branch:** `phase32/<short-name>` (canonical naming; exact short name fixed at assignment).
+- **Execution order:** parallel lane with Phases 31/33/34 from the same approved `main`; merges second in the `31 → 32 → 33 → 34` order, rebasing before merge.
+- **Goal:** systematically shrink the failing difference to the smallest reproducing structured delta.
+- **Specification status:** roadmap-registered only. The executable specification is registered when the user assigns this phase; until then no implementation is authorized.
+- **Exit:** `PHASE 32 VERDICT: PASS` or `PHASE 32 VERDICT: BLOCKED`. Do not merge unless PASS.
+
+#### Phase 33 — Regression Timeline / Boundary Finder
+- **Branch:** `phase33/<short-name>` (canonical naming; exact short name fixed at assignment).
+- **Execution order:** parallel lane with Phases 31/32/34 from the same approved `main`; merges third in the `31 → 32 → 33 → 34` order, rebasing before merge.
+- **Goal:** locate the boundary between working and failing states across recorded runs and identify the regression frontier.
+- **Specification status:** roadmap-registered only. The executable specification is registered when the user assigns this phase; until then no implementation is authorized.
+- **Exit:** `PHASE 33 VERDICT: PASS` or `PHASE 33 VERDICT: BLOCKED`. Do not merge unless PASS.
+
+#### Phase 34 — Reproduction Stability
+- **Branch:** `phase34/<short-name>` (canonical naming; exact short name fixed at assignment).
+- **Execution order:** parallel lane with Phases 31–33 from the same approved `main`; merges fourth in the `31 → 32 → 33 → 34` order, rebasing before merge.
+- **Goal:** measure and characterize how reliably a failure reproduces, separating stable failures from flaky ones.
+- **Specification status:** roadmap-registered only. The executable specification is registered when the user assigns this phase; until then no implementation is authorized.
+- **Exit:** `PHASE 34 VERDICT: PASS` or `PHASE 34 VERDICT: BLOCKED`. Do not merge unless PASS.
+
+#### Phase 35 — Investigation Engine
+- **Branch:** `phase35/<short-name>` (canonical naming; exact short name fixed at assignment).
+- **Dependency:** starts only after Phases 31–34 are all merged.
+- **Goal:** orchestrate counterfactual cause verification, structured delta debugging, boundary finding, and reproduction stability into one investigation engine.
+- **Specification status:** roadmap-registered only. The executable specification is registered when the user assigns this phase; until then no implementation is authorized.
+- **Exit:** `PHASE 35 VERDICT: PASS` or `PHASE 35 VERDICT: BLOCKED`. Do not merge unless PASS.
+
+#### Phase 36 — Investigation UX / Product Positioning
+- **Branch:** `phase36/<short-name>` (canonical naming; exact short name fixed at assignment).
+- **Dependency:** Phase 35 merged.
+- **Goal:** surface the investigation flow in the product UI and position it so cause evidence is findable, legible, and trustworthy.
+- **Specification status:** roadmap-registered only. The executable specification is registered when the user assigns this phase; until then no implementation is authorized.
+- **Exit:** `PHASE 36 VERDICT: PASS` or `PHASE 36 VERDICT: BLOCKED`. Do not merge unless PASS.
+
+#### Phase 37 — Investigation Acceptance + Submission Freeze
+- **Branch:** `phase37/<short-name>` (canonical naming; exact short name fixed at assignment).
+- **Dependency:** Phase 36 merged.
+- **Goal:** accept the complete investigation flow end to end and freeze the final HackerRank submission.
+- **Specification status:** roadmap-registered only. The executable specification is registered when the user assigns this phase; until then no implementation is authorized.
+- **Exit:** `PHASE 37 VERDICT: PASS` or `PHASE 37 VERDICT: BLOCKED`. Do not merge unless PASS.
+
 ### 10.7 Common phase completion gate
 
 Unless a phase explicitly requires more, every implementation phase must:
@@ -649,7 +728,7 @@ Unless a phase explicitly requires more, every implementation phase must:
 
 ### 10.5 Current roadmap state
 
-As of the Phase 30 assignment:
+As of the Phase 31–37 roadmap registration:
 
 - Phases **1–9, 11–12, 16, 18–19, 22, and 27–28: COMPLETE / MERGED**.
 - Phases **1–6: PROTECTED / FROZEN baseline**.
@@ -659,6 +738,7 @@ As of the Phase 30 assignment:
 - Phase **29: MERGED** as `ba412ff` (Product UI/UX Polish).
 - Phase **29 owns presentation**: it is frontend-wide and overlaps every frontend feature path, so it merges before other frontend phases rebase; it adds no capability and changes no contract.
 - Phase **30: COMPLETE / MERGED** as `a72ccb6` (UI/UX rebuild + browser E2E + Locust verification).
+- Phases **31–37 (Investigation track): ROADMAP-REGISTERED** (roadmap documentation only; no implementation started). Phases 31–34 are parallel lanes from the same approved `main` in isolated worktrees, avoiding shared integration files; merge order after PASS is `31 → 32 → 33 → 34`, rebasing each before merge; Phase 35 starts only after all four are merged; Phase 36 depends on 35; Phase 37 depends on 36 (see §10.2).
 - Phases **10 and 23: INACTIVE** and must not be resumed as part of Phase 30.
 - Phase **13: MERGED** as `e75d306` (Collection Runner).
 - Phase **14: MERGED** as `bfcd441` (Headless CLI).
