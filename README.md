@@ -130,6 +130,33 @@ Then open `http://localhost:3000`.
 - **Examples and mocks.** After a send, **Save as example** copies the status, ordered headers (duplicates kept), content type, and body into a profile-scoped example, together with the match rules you select from the request's query parameters and headers. **Mock Send** resolves the current request against those examples on the server and shows the saved response with a clear mock banner: it never dispatches network traffic, never writes history, and never replaces **Send**. Requests that match nothing report a mock miss listing the method, path, and candidate count. **Copy mock URL** copies the profile's capability route (`/api/v1/mocks/<profileId>/<token>`); calls to it match the same rules and return the saved bytes without a session, and a wrong token or another profile's route returns 404. Examples can also be created and edited by hand from the **Examples** sidebar tab.
 - **Flight Recorder.** Every history entry has a **Passport** action opening the API Flight Recorder with its **Passport**, **Compare**, **Minimize**, and **Capsule** sections: the immutable execution receipt with request/response fingerprints, a causal **Compare** of any two runs with the first meaningful divergence and contract drift, bounded failure **Minimize** with start/status/cancel, and **Export Capsule** / **Import Capsule** for redacted reproduction capsules that always open as unsent, unsaved dirty drafts.
 - **Collection runner.** The **Run collection** and **Run folder** actions open a runner that executes saved requests as one ordered run: pick any subset of requests (the preview shows the exact execution order), repeat the selection for up to 25 iterations, choose an environment, add initial run variables, and either stop at the first failure or continue. Every request is an ordinary execution through the normal compile → policy → DNS → transport → capture → normalize → history pipeline with its own history entry and Execution Passport, so **Passport** and **Compare** open straight from any result row — including failed ones. Variable changes made by scripts propagate deterministically to later requests in run scope and never modify saved environments or collections; initial run variables cannot substitute secret references. Each result row reports status, outcome, assertion counts, duration, and a failure reason, the summary is available after the run, and **Rerun** starts a fresh run with the same selection.
+- **Headless CLI.** The same runner is available without the UI via `bun run tracer` (see [Headless CLI](#headless-cli)), which reads a git-native project directory or a portable project file and executes it through the identical pipeline.
+
+## Headless CLI
+
+The CLI reads a git-native project directory or a portable `TracerProjectV1` JSON file and runs it through the identical compile → policy → DNS → transport → capture → normalize → history pipeline. A headless run and a workspace run of the same inputs produce the same ordered steps, assertion counts, outcome, stop reason, and per-step Flight Recorder execution ids.
+
+```bash
+bun run tracer run ./my-project --collection "Orders API" --environment Local --json
+bun run tracer plan ./my-project --environment Local   # resolve and print the plan, send nothing
+```
+
+- **Selection.** `--collection`, `--environment`, `--folder`, and repeatable `--request` accept a name or a 1-based index. Requests run in the order given; otherwise folders run before root requests, each in saved order.
+- **Determinism.** `--iterations 1..25` repeats the selection, `--stop-on-failure` (the default) stops at the first failure while `--continue` keeps going, and repeatable `--variable KEY=VALUE` seeds an initial run variable. Script-written variables propagate through run scope exactly as in the workspace, and an initial variable can never substitute a secret reference.
+- **Secrets.** Secret references resolve from `SERVER_SECRET_ALIASES_JSON` plus the referenced `DEMO_*` environment variables at run time. Values are never printed, never written to a report, and are already redacted from captured bodies, so `--json` output is safe to archive.
+- **Local targets.** The normal SSRF boundary still applies. Each `--allow-local <host>` opts in to one exact loopback/private host through the same approval path as the UI local-runtime setting; without it, a loopback target is refused.
+- **Output.** `--json` prints one stable JSON document (`kind: tracer.cli-run`) with the plan, per-step status/outcome/HTTP status/assertion counts/duration/failure reason/execution id, and the run summary. Without `--json` it prints a readable summary, and `--plan` prints the resolved plan without sending. Errors print a stable `tracer.cli-error` document in JSON mode.
+- **Storage.** There is no separate CLI store: a run uses an in-memory history, cookie jar, and run store, so a headless run never persists into MongoDB.
+
+Exit codes are stable and documented for automation:
+
+| Code  | Meaning                                                  |
+| ----- | -------------------------------------------------------- |
+| `0`   | the run completed and every executed request passed      |
+| `1`   | the run completed but at least one request failed        |
+| `2`   | invalid arguments, project, selection, or configuration  |
+| `3`   | the runner or execution pipeline failed unexpectedly     |
+| `130` | the run was cancelled (SIGINT)                           |
 
 ## Command Reference
 
@@ -141,6 +168,7 @@ Then open `http://localhost:3000`.
 | `bun start`             | Seed, then run the API and the frontend together               |
 | `bun run seed`          | Reseed the database without starting servers                   |
 | `bun run demo:flight-recorder` | Run the deterministic Flight Recorder demo (app must be running) |
+| `bun run tracer`        | Headless collection runner (see [Headless CLI](#headless-cli))  |
 | `bun test`              | Run the backend unit tests (Bun's built-in runner)             |
 | `bun run dev:backend`   | Backend only, with reload                                      |
 | `bun run dev:frontend`  | Frontend only                                                  |
