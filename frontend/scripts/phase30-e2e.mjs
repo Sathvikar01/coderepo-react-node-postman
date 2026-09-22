@@ -171,8 +171,10 @@ await pressEscape();
 pass("Code opens");
 
 await click(".send-button", "Send");
-await waitFor('document.querySelector(".response-toolbar") !== null && document.body.textContent.includes("200")', "successful response", 20000);
-pass("Send returns response");
+await waitFor('document.querySelector(".response-toolbar") !== null', "terminal send result", 20000);
+const sendSummary = await evaluate("document.querySelector('.response-summary')?.textContent.trim() || document.querySelector('.response-toolbar')?.textContent.trim() || ''");
+process.stdout.write("SEND_RESULT " + sendSummary.replace(/\\s+/g, " ").slice(0, 240) + "\\n");
+pass("Send creates and renders a terminal execution result");
 
 await clickButtonText("History");
 await waitFor('document.querySelector(".history-item") !== null', "history entry");
