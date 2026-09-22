@@ -1891,4 +1891,177 @@ Reconnaissance only so far; no repository files have been modified. Read AGENTS.
 
 Actions:
 * Inspected git worktrees and the transcript log; confirmed the onboarding agreement for this repo root
-* Read ASTRA_ARCHITECTURE.md SSRF/target-policy sections and the executions fea
+* Read ASTRA_ARCHITECTURE.md SSRF/target-policy sections and the executions feature sources
+* Created worktree C:\Users\arsat\Downloads\postman-phase18 on branch phase18/local-runtime
+
+Context:
+tool=opencode
+branch=phase18/local-runtime
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=C:\Users\arsat\Downloads\postman-phase18
+parent_agent=none
+
+## [2026-09-21T14:03:36+05:30] Phase 18 - user correction on stalls, implementation complete, PR and CI green
+
+User Prompt (normalized, secrets redacted):
+Use short, explicit timeouts for commands/scripts and continue as soon as output is available; do not leave the session blocked on completed work.
+
+Agent Response Summary:
+Acknowledged and resumed immediately instead of waiting on the stopped shell: the prior command had returned its output (backend log showed the API up while the health probe raced startup) and work continued. Phase 18 was then implemented end to end on branch phase18/local-runtime in worktree C:\Users\arsat\Downloads\postman-phase18: a new backend feature backend/src/features/local-runtime/** (profile-scoped Mongo settings with exact-host allowlist, service/controller/routes, pure local target validator) plus a narrow hook in target-policy.js and execution.service.js (per-send setting read, LOCAL_RUNTIME warning, snapshot.localAccess) and a new frontend feature (API client, Local Runtime dialog, header on/off state, request-pane warning). Security invariants: explicit opt-in only, no wildcards/CIDR/ports/URLs, loopback+RFC1918+ULA only, metadata endpoints always blocked, single DNS resolution with all answers required to be local (mixed answers rejected) and the chosen address pinned through transport, profile isolation, and disable-restores-normal-policy. A real frontend bug found by the browser smoke (server-assigned target ids/timestamps echoed back into the strict PUT schema) was fixed with a tested hostPayload helper. Verification: bun test 334 pass / 1 skip / 0 fail (335 tests, 28 files), backend node --check pass, frontend vite build pass, browser smoke 21/21 against the real app plus Mongo (normal-mode block, approved loopback 200 with local warning, unapproved private and metadata blocks, IPv6, disable restores policy, persistence across a fresh load, no horizontal overflow at 375/768/1024/1440), and the demo database reseeded to the pristine state. Commit 5a97bf8 was rebased onto the remote roadmap-doc commits, pushed, and PR #8 to main was opened; the GitHub Actions Baseline Gate contract job passed (run 35578388953, 56s).
+
+Actions:
+* Implemented backend/src/features/local-runtime/** and backend/src/features/executions/local-runtime.execution.test.js
+* Edited backend/src/features/executions/{target-policy.js,execution.service.js,execution.service.test.js}, backend/src/app.js, backend/src/shared/utils/limits.js
+* Implemented frontend/src/features/local-runtime/** and edited App.jsx, WorkspaceHeader.jsx, MaterialIcon.jsx, styles.css
+* Ran bun test, node --check on backend sources, frontend bun run build
+* Ran a Puppeteer smoke against a self-managed backend (port 8100) and Vite frontend (port 3100) on an isolated worktree; reseeded via setup.sh --seed
+* git commit 5a97bf8, git pull --rebase, git push -u origin phase18/local-runtime
+* gh pr create --repo Sathvikar01/coderepo-react-node-postman -> https://github.com/Sathvikar01/coderepo-react-node-postman/pull/8; gh pr checks -> contract pass
+
+Context:
+tool=opencode
+branch=phase18/local-runtime
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=C:\Users\arsat\Downloads\postman-phase18
+parent_agent=none
+
+## [2026-09-21T12:19:52+05:30] SESSION START
+
+tool=opencode
+Repo Root: C:\Users\arsat\Downloads\postman
+Branch: phase8/export-snippets
+Worktree: main
+Parent Agent: none
+Language: node
+Time Remaining: 1d 11h 12m
+
+## [2026-09-21T14:41:14+05:30] Phase 8 brief - export and code snippets
+
+User Prompt (verbatim, secrets redacted):
+Phase 8 - Export + Code Snippets. Work only on: phase8/export-snippets. Goal: add safe request export and generated code snippets supporting cURL, JavaScript fetch, Node.js, Python requests from the existing normalized request model. Requirements: preserve method, URL, ordered query params and duplicate headers; include body correctly for JSON/text/urlencoded; generate readable copy-pasteable code; escape strings safely; never expose resolved secret values; variable references remain references/placeholders; send-only auth overrides must never appear in exported saved snippets; unsupported states fail clearly instead of guessing. UX: request -> Code / Export -> choose format -> preview -> copy. No execution. No persistence mutation. Tests: GET/POST/PUT/PATCH/DELETE, duplicate headers/query keys, JSON/text/urlencoded bodies, bearer/basic/API-key templates, quotes/newlines/unicode, secretRef protection, imported cURL -> export again, copy output. Run bun test, frontend build, browser smoke, GitHub Actions. Prefer frontend/src/features/export/**. Do not modify execution core, history, persistence, or Phase 7 parser unless a real shared-contract bug is proven. Finish with PHASE 8 VERDICT: PASS or BLOCKED.
+
+Agent Response Summary:
+Created branch phase8/export-snippets from the Phase 7 tip. Wrote the export test matrix first (46 tests), then implemented frontend/src/features/export: a pure request-export-model.js that validates the draft and builds a normalized export model, snippets.js with curl/fetch/node/python renderers, clipboard.js, and CodeSnippetDialog.jsx wired through WorkspaceDialogs plus a Code button in the request URL bar. The model mirrors the executor: reserved transport headers, GET/HEAD bodies, inherit without a collection, generated-header collisions, and unknown method/body/auth modes fail with clear errors; duplicate query keys and headers are preserved; variable references are never resolved and send-only overrides are structurally excluded. Verification found and fixed three real issues: curl needs --globoff for URLs holding {{placeholders}}, Node needs an explicit Content-Length (DELETE writes an unframed body without it), and Python requests cannot accept duplicate header tuples so repeated names are combined with a note, as fetch does. A parallel session committed Phase 9 cookie work into this shared worktree mid-phase; that commit was preserved on rescue/phase9-cookie-jar and excluded from the Phase 8 commit. Ran the full suite (395 pass, 1 skip, 0 fail), frontend build, an executed-snippet matrix (4 requests x 4 formats against a local echo server), and a 25/25 Puppeteer browser smoke at 375/768/1024/1440. Committed 2a957c5, force-pushed the rebased branch, opened PR #9 to main.
+
+Actions:
+* Wrote frontend/src/features/export/snippets.test.js first, then request-export-model.js, snippets.js, clipboard.js, CodeSnippetDialog.jsx
+* Edited RequestBuilder.jsx (Code button), WorkspaceDialogs.jsx (code-snippet dialog), App.jsx (wiring), styles.css (dialog styles)
+* Executed generated snippets for real against a local echo server (curl via Git Bash, node fetch, node http, python requests)
+* Ran bun test, cd frontend && bun run build, Puppeteer smoke 25/25
+* git rebase onto origin/main; committed 2a957c5; pushed phase8/export-snippets; opened PR #9
+* Preserved the parallel session's Phase 9 commit as rescue/phase9-cookie-jar
+
+Context:
+tool=opencode
+branch=phase8/export-snippets
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=main
+parent_agent=none
+
+## [2026-09-21T14:43:14+05:30] Phase 8 - verification, PR, CI
+
+User Prompt (normalized, secrets redacted):
+Continue Phase 8 from the previously logged assignment. Complete verification, open the PR, confirm CI/Baseline Gate, and keep the change limited to export/code-snippet scope.
+
+Agent Response Summary:
+Completed verification and delivery for phase8/export-snippets at commit 2a957c5 (rebased onto origin/main 785e40a). Evidence: bun test 395 pass / 1 conditional skip / 0 fail across 28 files (46 new export tests); frontend vite build pass; generated-snippet execution matrix 4 requests x 4 formats against a local echo server passed (curl via Git Bash, Node fetch, Node http, Python requests; method, path, duplicate headers and body all matched); Puppeteer browser smoke on the real app with seeded MongoDB passed 25/25 checks at 375/768/1024/1440 (Code dialog from the request bar, four format tabs, copy path with truthful failure reporting, {{reference}} isolation, send-only override exclusion, reserved-header error with disabled Copy, imported cURL re-export without -u credentials, generated browser fetch executed in-page returning 200 with the echoed body, draft untouched, no horizontal overflow, no page errors). Opened PR #9 to main; GitHub Actions Baseline Gate passed (run 35581819378, contract job pass). A parallel session committed Phase 9 cookie work into this shared worktree during the phase; that commit was preserved on rescue/phase9-cookie-jar and its remaining working-tree edits were stashed as 'phase9-wip-backend' so the Phase 8 commit contains only the nine intended frontend files. No execution core, history, persistence, Phase 7 parser, or frozen baseline file was modified.
+
+Actions:
+* Ran bun test, frontend vite build, executed-snippet matrix, Puppeteer smoke (25/25)
+* git rebase onto origin/main; commit 2a957c5; force-pushed phase8/export-snippets
+* gh pr create --repo Sathvikar01/coderepo-react-node-postman -> PR #9
+* gh pr checks -> Baseline Gate success (run 35581819378)
+* Preserved the parallel Phase 9 commit as rescue/phase9-cookie-jar and stash@{0}
+* Appended this log entry
+
+Context:
+tool=opencode
+branch=phase11/script-sandbox
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=C:\Users\arsat\Downloads\postman-phase11
+parent_agent=none
+phase_8_verdict=PASS## [2026-09-21T15:00:42.834+05:30] Phase 11 script sandbox implementation on phase11/script-sandbox
+`phase_11_verdict=BLOCKED`
+created_an_isolated_git_worktree_at_c=\Users\arsat\Downloads\postman-phase11 on branch phase11/script-sandbox (based on the approved Phase 7 merge base plus the 26-phase roadmap commit) because the shared main checkout was concurrently occupied by the Phase 8 and Phase 9 lane work. Implemented a vm-based script sandbox (fresh realm per run, dangerous globals deleted, built-in prototypes frozen, synchronous-only, 1.5 s timeout, output/console/mutation caps, identifier scanner for require/import/process/eval/Function/timers/constructor/prototype), a normalized script runner that applies host-validated header and variable mutations and merges post-response test results, minimal execution-service hooks (pre-request before history.admit and compile; post-response after response capture; results persisted in snapshot.scriptResults and returned in the envelope), request schema scripts field with 32 KiB per-script limits, and React UI (Pre-request and Tests editor tabs, response Tests tab with pass/fail/error counts, test rows, and captured console). Verified with 49 new tests, the full repo suite (331 pass / 1 skip / 0 fail), backend node --check on 76 files, production frontend build, an end-to-end API smoke against real Express + MongoDB + demo target (13/13 checks), and a headless Chrome CDP smoke at 375/768/1024/1440 (12/12 checks). No Phase 8 export files or Phase 9 cookie files were touched; shared-file edits are limited to the explicit execution/schema/UI integration points.
+*_created_worktree_c=\Users\arsat\Downloads\postman-phase11 for branch phase11/script-sandbox (isolated from parallel lanes in the main checkout)
+
+## [2026-09-21T15:00:43.835+05:30] Phase 11 progress interrupts from the user
+
+User Prompt (normalized, secrets redacted):
+Use short, explicit timeouts for commands/scripts and continue as soon as output is available; do not leave the session blocked on completed work.
+
+Agent Response Summary:
+Acknowledged the shared-hands feedback: long verification commands were replaced with shorter polling commands and direct streaming output instead of buffering pipelines. Kept the phase verdict pending until the remaining verification finished. The phase-11 sandbox itself was already implemented and under test at this point.
+
+Actions:
+* Continued verification with shorter timeouts and direct output (API smoke, UI smoke)
+* No code changes caused by this message
+
+Context:
+tool=opencode
+branch=phase11/script-sandbox
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=C:\Users\arsat\Downloads\postman-phase11
+parent_agent=none
+
+## [2026-09-21T15:00:43.835+05:30] Phase 11 verification results after isolate-and-retest
+
+User Prompt (normalized, secrets redacted):
+Finish the remaining verified work promptly and close out the phase/PR without introducing unrelated changes.
+
+Agent Response Summary:
+Diagnosed the UI smoke failure as environmental rather than a product defect: another parallel lane owned port 8000 and port 3000 in the shared machine, so the smoke hit old-code servers (schema rejected the scripts field). Re-ran isolated: backend on PORT=8100 and the production frontend build served through a local static+proxy server on 3099. API smoke passed 13/13, UI smoke passed 12/12 with screenshots and overflow checks at 375/768/1024/1440, the repository root test run passed 331 with 1 skip, all 76 backend files passed node --check, and the frontend production build succeeded. Next actions: commit, push, open the phase PR so GitHub Actions runs.
+
+Actions:
+* Isolated the smoke stack on ports 8100/3099 to avoid the parallel lanes' servers
+* Re-ran API smoke: 13/13 PASS (script results, history persistence, forbidden API, timeout, SSRF block)
+* Re-ran UI CDP smoke: 12/12 PASS (tabs, editors, counts, console, responsive, no console/page errors)
+* Ran repository root bun test: 331 pass / 1 skip / 0 fail
+* Verified node --check on 76 backend files: 0 bad
+
+Context:
+tool=opencode
+branch=phase11/script-sandbox
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=C:\Users\arsat\Downloads\postman-phase11
+parent_agent=none
+
+## [2026-09-21T15:10:26.925+05:30] Phase 11 PR opened and Baseline Gate green
+
+User Prompt (normalized, secrets redacted):
+Continue the current Phase 11 delivery from the latest verified checkpoint.
+
+Agent Response Summary:
+Committed the phase work as ad843aa, pushed phase11/script-sandbox, and opened PR #10 to main. The first CI attempt was skipped because the branch was based on a roadmap commit that main had since superseded, which produced an AGENTS.md merge conflict. Merged origin/main into the phase branch, resolved the single conflict in execution.service.js by keeping both the Phase 18 local-runtime warning/localAccess fields and the Phase 11 pre/post script hooks, injected a null localRuntime stub in the phase 11 integration test (the merged default hits MongoDB with test profile ids), re-ran the repository suite (375 pass / 1 skip / 0 fail across 32 files) and the frontend production build, then pushed merge commit b187cde. PR #10 is MERGEABLE and the Baseline Gate GitHub Actions run 35584347187 completed with success in 55 s.
+
+Actions:
+* git commit ad843aa (phase 11 feature), git merge origin/main (conflict resolution in backend/src/features/executions/execution.service.js), git commit b187cde (merge), git push origin phase11/script-sandbox
+* gh pr create -> https://github.com/Sathvikar01/coderepo-react-node-postman/pull/10
+* Re-ran bun test (375 pass / 1 skip / 0 fail), frontend bun run build
+* Verified GitHub Actions Baseline Gate success for PR #10
+
+Context:
+tool=opencode
+branch=phase11/script-sandbox
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=C:\Users\arsat\Downloads\postman-phase11
+parent_agent=none
+phase_11_verdict=PASS
+
+## [2026-09-21T12:30:56+05:30] SESSION START
+
+tool=opencode
+Repo Root: C:\Users\arsat\Downloads\postman
+Branch: phase19/examples-mocks
+Worktree: C:\Users\arsat\Downloads\postman-phase19
+Parent Agent: none
+Language: node
+Time Remaining: 1d 11h 01m
+
+## [2026-09-21T19:26:14+05:30] Phase 19 examples and mocks implemented on phase19/examples-mocks
+
+User Prompt (verbatim, secrets redacted):
+Phase 19 brief: add saved response examples and deterministic mocks on branch phase19/examples-mocks in parallel with Phases 8, 9, 11, 18. Flow request -> save example -> mock route -> deterministic matched response. Examples save from a live response or manual data (name, status, ordered headers, body, content type, source request reference), profile-scoped, never mutate the execution/history receipt. Mock matching uses explicit deterministic rules (method, path, selected query params, selected request headers) with deterministic priority and a clear mock miss. Mocks must not dispatch network traffic, expose another profile's examples, leak secrets, modify history truth, or silently override normal Send; mock execution must be explicitly selected. UX: Save as example, examples list, create/edit/delete, Mock Send / Copy mock URL, obvious mock indicator. Tests: save from response, manual, duplicate headers, JSON/text/empty/binary body, deterministic priority, query/header matching, unmatched request, profile isolation, edit/delete, zero transport calls, real Send unchanged, restart persistence. Run bun test, frontend build, browser smoke, GitHub Actions. Finish with PHASE 19 VERDICT.
+
+Agent Response Summary:
+Created worktree C:\Users\arsat\Downloads\postman-phase19 (branch phase19/examples-mocks) because another agent was switching branches in the shared checkout, and confirmed every parallel phase branch still points at 0747608. Read AGENTS.md, ASTRA_ARCHITECTURE.md sections 8-14, and the existing execution/history/profile/collection/workspace code before writing anything. Implemented backend/src/features/examples (model, profile-scoped repository, service, zod controller, routes) and backend/src/features/mocks (pure matcher, match-target derivation that reuses compileRequest read-only, HMAC capability token, resolve/serve service, controller with capability route, routes), mounted both in app.js, and added LIMITS.examplesPerProfile. Frontend adds features/examples (api, pure draft helpers, dialog, actions, p
