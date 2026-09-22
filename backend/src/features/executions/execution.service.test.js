@@ -142,12 +142,20 @@ describe("execution pipeline order", () => {
 		expect(result.outcome).toBe("response");
 		expect(result.response.status).toBe(200);
 		expect(result.persistence).toEqual({ state: "saved" });
+		expect(result.receipt).toMatchObject({
+			schemaVersion: 1,
+			kind: "tracer.execution-receipt",
+			executionId: input.executionId,
+			outcome: "response",
+			policy: { decision: "allowed", version: "1.0", local: false },
+		});
 
 		const stored = [...history.records.values()][0];
 		expect(stored.status).toBe("terminal");
 		expect(stored.outcome).toBe(result.outcome);
 		expect(stored.effectCertainty).toBe(result.effectCertainty);
 		expect(stored.response.status).toBe(result.response.status);
+		expect(stored.receipt).toEqual(result.receipt);
 		expect(history.admissions).toBe(1);
 	});
 
@@ -167,6 +175,18 @@ describe("execution pipeline order", () => {
 		expect(admitted.effectCertainty).toBe("not_dispatched");
 		expect(calls.transport).toHaveLength(1);
 		expect(result.effectCertainty).toBe("may_have_reached_target");
+	});
+
+	test("persists internal probes for audit while excluding them from visible history", async () => {
+		const history = fakeHistory();
+		const { service } = makeService({ history });
+
+		const result = await service.send(nextProfile(), sendInput(), { rateLimit: false, visible: false });
+		const stored = [...history.records.values()][0];
+
+		expect(stored.visible).toBe(false);
+		expect(result.visible).toBe(false);
+		expect(stored.receipt.kind).toBe("tracer.execution-receipt");
 	});
 
 	test("policy failure fails closed before dispatch", async () => {

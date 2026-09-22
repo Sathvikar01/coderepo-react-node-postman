@@ -2007,6 +2007,119 @@ dialog::backdrop {
 	flex: none;
 }
 
+/* API Flight Recorder */
+.flight-recorder-modal {
+	width: min(920px, 95vw);
+	max-width: min(920px, 95vw);
+}
+.flight-recorder-dialog {
+	width: min(920px, 95vw);
+	min-height: min(680px, 88vh);
+}
+.recorder-header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 16px;
+}
+.recorder-header h2,
+.recorder-header p {
+	margin: 0;
+}
+.recorder-header .eyebrow {
+	margin-bottom: 4px;
+	color: var(--blue);
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+}
+.recorder-content {
+	min-height: 380px;
+	max-height: min(58vh, 560px);
+	overflow: auto;
+	padding: 2px;
+}
+.recorder-stack {
+	display: grid;
+	gap: 12px;
+}
+.recorder-summary-grid {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 10px;
+}
+.recorder-summary-grid > div,
+.recorder-card {
+	min-width: 0;
+	padding: 12px 14px;
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	background: var(--field);
+}
+.recorder-summary-grid span {
+	display: block;
+	margin-bottom: 4px;
+	color: var(--muted);
+	font-size: 11px;
+	text-transform: uppercase;
+}
+.recorder-summary-grid strong {
+	display: block;
+	overflow: hidden;
+	font-size: 13px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.recorder-card h3 {
+	margin: 0 0 8px;
+	font-size: 13px;
+	text-transform: capitalize;
+}
+.recorder-card p {
+	margin: 6px 0 0;
+	font-size: 12.5px;
+	line-height: 1.45;
+}
+.recorder-first-divergence {
+	border-color: color-mix(in srgb, var(--warning) 46%, var(--border));
+}
+.recorder-evidence-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 5px 0;
+	font-size: 12.5px;
+}
+.recorder-evidence-row code {
+	overflow: hidden;
+	color: var(--ink-strong);
+	text-overflow: ellipsis;
+}
+.recorder-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+.recorder-capsule-text {
+	min-height: 180px;
+	resize: vertical;
+	font-family: "SFMono-Regular", Consolas, monospace;
+	font-size: 12px;
+	line-height: 1.45;
+}
+.checkbox-row {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	color: var(--muted);
+	font-size: 12.5px;
+}
+.checkbox-row input {
+	margin-top: 2px;
+}
+
 /* Environments drawer */
 .environment-row {
 	display: flex;
@@ -2202,6 +2315,16 @@ dialog::backdrop {
 	}
 }
 @media (max-width: 600px) {
+	.flight-recorder-modal,
+	.flight-recorder-dialog {
+		width: 96vw;
+	}
+	.recorder-summary-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+	.recorder-content {
+		max-height: 62vh;
+	}
 	.app-header {
 		gap: 8px;
 		padding: 0 10px;

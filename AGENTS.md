@@ -292,6 +292,7 @@ This section is the repo-level source of truth for phase numbers. Agents must no
 | 24 | Collaboration + Versioning | Multi-user/version workflows after portable/Git foundations converge. |
 | 25 | Ecosystem | Extensibility/integration surface around stable portable, runner, docs, and collaboration contracts. |
 | 26 | AI + Enterprise Layer | AI-assisted and enterprise controls added last, on top of deterministic existing authority. |
+| 27 | Execution Intelligence / API Flight Recorder | Evidence-grade execution receipts, causal comparison, redacted reproduction capsules, and bounded failure minimization. |
 
 ### 10.2 Dependency graph
 
@@ -302,6 +303,7 @@ Mandatory chains:
 - `11 → 12 → 13 → 14 → 15`
 - `16 → 17`
 - `22 → 23`
+- `12 + 16 + 18 + 19 → 27`
 - Phase 20 should reuse runner/CLI semantics from 13–15 rather than invent a second execution model.
 - Phases 24–26 start only after the platform foundations they depend on have converged; 24, 25, and 26 may later run in parallel if ownership is non-overlapping.
 
@@ -335,6 +337,7 @@ Current parallel branches:
 | 18 | `phase18/local-runtime` | `backend/src/features/local-runtime/**`, `frontend/src/features/local-runtime/**`; narrow target-policy hook |
 | 19 | `phase19/examples-mocks` | `backend/src/features/{examples,mocks}/**`, `frontend/src/features/{examples,mocks}/**` |
 | 22 | `phase22/generated-docs` | dedicated generated-docs/docs feature modules; consume canonical request/project data without changing execution |
+| 27 | `phase27/execution-intelligence` | `backend/src/features/execution-intelligence/**`, `frontend/src/features/execution-intelligence/**`; narrow execution, history, portable-model, and mock integration hooks only |
 
 Shared/high-conflict files are integrator-owned unless the phase cannot be completed without a narrow change:
 
@@ -584,6 +587,16 @@ When the user assigns a phase, the agent MUST execute the matching specification
 - **Do not:** let AI auto-send dangerous requests, expose secrets, bypass policy/auth, or become the source of truth for execution/history.
 - **Exit:** AI suggestions are reviewable/reversible/evidence-linked; enterprise permission/audit/policy tests green.
 
+#### Phase 27 — Execution Intelligence / API Flight Recorder
+- **Branch:** `phase27/execution-intelligence`.
+- **Dependencies:** Phases 12, 16, 18, and 19 merged.
+- **Goal:** implement the approved “Tracer as the API Flight Recorder” plan without replacing or broadening that specification.
+- **Do, in order:** (1) Execution Passport / `ExecutionReceiptV1`; (2) Causal Run Comparison / `RunComparisonV1`, including the approved lightweight contract checks; (3) Reproduction Capsule / `ReproCapsuleV1`; (4) Failure Minimizer / `MinimizationJobV1`.
+- **Primary paths:** dedicated backend/frontend execution-intelligence modules; the smallest proven hooks in execution finalization, history persistence, portable project import/export, examples/mocks, and workspace UI.
+- **Invariants:** receipts and capsules are secret-redacted and versioned; comparisons are deterministic evidence rather than AI claims; capsules import as unsent dirty drafts; minimization uses the normal compiler/policy/DNS/transport/capture/normalize path with cancellation, deadlines, probe budgets, flaky-predicate detection, and safe-method/local-or-mock restrictions.
+- **Do not:** create an alternate execution path, expose resolved secrets, auto-Send or auto-Save imported capsules, resume Phase 10 or Phase 23, or add unrelated Postman-parity features.
+- **Exit:** Phase 27 feature/security/browser tests, the normal phase gate, and the repository Baseline Gate are green; finish with `PHASE 27 VERDICT: PASS` or `PHASE 27 VERDICT: BLOCKED`.
+
 ### 10.7 Common phase completion gate
 
 Unless a phase explicitly requires more, every implementation phase must:
@@ -601,12 +614,12 @@ Unless a phase explicitly requires more, every implementation phase must:
 
 ### 10.5 Current roadmap state
 
-As of the Phase 7 merge:
+As of the Phase 27 authorization:
 
-- Phases **1–7: COMPLETE**.
+- Phases **1–9, 11–12, 16, 18–19, and 22: COMPLETE / MERGED**.
 - Phases **1–6: PROTECTED / FROZEN baseline**.
-- Phase **7: merged shared import foundation**.
-- Phases **8, 9, 11, 18, 19, 22: eligible parallel lanes** from the Phase 7 merged baseline.
-- All other phases remain blocked by their dependency chain or by explicit user assignment.
+- Phase **27: ACTIVE** on `phase27/execution-intelligence`, based on latest `main` after all four required dependencies merged.
+- Phases **10 and 23: INACTIVE** and must not be resumed as part of Phase 27.
+- Other phases remain governed by their dependency chains and explicit user assignment.
 
 The user may advance this state over time. When a phase passes and merges, update only this subsection plus any dependency/ownership facts that actually changed; do not rewrite historical phase definitions.

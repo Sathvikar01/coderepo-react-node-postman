@@ -22,6 +22,8 @@ import { DocsView } from "./features/docs/DocsView.jsx";
 import { EnvironmentsDrawer } from "./features/environments/EnvironmentsDrawer.jsx";
 import { environmentApi } from "./features/environments/environment.api.js";
 import { executionApi } from "./features/executions/execution.api.js";
+import { FlightRecorderDialog } from "./features/execution-intelligence/FlightRecorderDialog.jsx";
+import { capsuleDraftRequest } from "./features/execution-intelligence/flight-recorder-model.js";
 import { exampleApi } from "./features/examples/example.api.js";
 import { ExampleActions } from "./features/examples/ExampleActions.jsx";
 import { ExampleDialog } from "./features/examples/ExampleDialog.jsx";
@@ -99,6 +101,8 @@ export default function App() {
 	const [dialogError, setDialogError] = useState("");
 	const [toasts, setToasts] = useState([]);
 	const [historyRefresh, setHistoryRefresh] = useState(0);
+	const [flightRecorder, setFlightRecorder] = useState(null);
+	const [comparisonBaseId, setComparisonBaseId] = useState(null);
 	const [examplesVersion, setExamplesVersion] = useState(0);
 	const [exampleDialog, setExampleDialog] = useState(null);
 	const [mockMeta, setMockMeta] = useState(null);
@@ -882,8 +886,44 @@ export default function App() {
 		openDialog({ kind: "clear-history" });
 	};
 
+	const analyzeHistoryEntry = (executionId) => {
+		setFlightRecorder({ executionId, comparisonIds: null });
+		setSidebarOpen(false);
+	};
+
+	const compareHistoryEntry = (executionId) => {
+		if (!comparisonBaseId) {
+			setComparisonBaseId(executionId);
+			toast("Comparison baseline selected. Choose Compare on a second execution.");
+			return;
+		}
+		if (comparisonBaseId === executionId) {
+			setComparisonBaseId(null);
+			toast("Comparison selection cleared.");
+			return;
+		}
+		setFlightRecorder({
+			executionId,
+			comparisonIds: { baseExecutionId: comparisonBaseId, candidateExecutionId: executionId },
+		});
+		setComparisonBaseId(null);
+		setSidebarOpen(false);
+	};
+
+	const openCapsuleDraft = (imported) => {
+		const request = capsuleDraftRequest(imported);
+		if (!request) {
+			toast("This capsule preview cannot be opened safely.", "error");
+			return;
+		}
+		const tab = { ...createDraftTab({ request }), dirty: true };
+		if (!openDraftTab(tab)) return;
+		setFlightRecorder(null);
+		toast("Opened an unsent, unsaved reproduction draft.");
+	};
+
 	const shortcutHandlers = useRef({ send: null, saveDraft: null, dialogOpen: false });
-	shortcutHandlers.current = { send, saveDraft, dialogOpen: Boolean(dialog) };
+	shortcutHandlers.current = { send, saveDraft, dialogOpen: Boolean(dialog || flightRecorder) };
 
 	useEffect(() => {
 		const onKeyDown = (event) => {
@@ -1068,9 +1108,19 @@ export default function App() {
 		/>
 	) : null;
 
+	const flightRecorderNode = flightRecorder ? (
+		<FlightRecorderDialog
+			comparisonIds={flightRecorder.comparisonIds}
+			executionId={flightRecorder.executionId}
+			onClose={() => setFlightRecorder(null)}
+			onOpenDraft={openCapsuleDraft}
+		/>
+	) : null;
+
 	return (
 		<div className="app-shell">
 			{exampleDialogNode}
+			{flightRecorderNode}
 			<WorkspaceHeader
 				account={account}
 				activeEnvironmentId={state.activeEnvironmentId}
@@ -1210,8 +1260,11 @@ export default function App() {
 						/>
 					) : sidebarTab === "history" ? (
 						<HistoryPanel
+							compareBaseId={comparisonBaseId}
 							refreshToken={historyRefresh}
+							onAnalyze={analyzeHistoryEntry}
 							onClear={clearHistory}
+							onCompare={compareHistoryEntry}
 							onDelete={deleteHistoryEntry}
 							onOpen={openHistoryEntry}
 							onResend={resendHistoryEntry}

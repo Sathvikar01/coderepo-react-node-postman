@@ -14,7 +14,7 @@ const OUTCOME_STYLE = {
 	decode_error: "error",
 };
 
-export function HistoryPanel({ onDelete, onOpen, onResend, onSaveAs, onClear, refreshToken }) {
+export function HistoryPanel({ compareBaseId, onAnalyze, onCompare, onDelete, onOpen, onResend, onSaveAs, onClear, refreshToken }) {
 	const [items, setItems] = useState([]);
 	const [cursor, setCursor] = useState(null);
 	const [query, setQuery] = useState("");
@@ -126,7 +126,7 @@ export function HistoryPanel({ onDelete, onOpen, onResend, onSaveAs, onClear, re
 				{items.length === 0 && !loading && <p className="kv-empty">No history yet. Every send is recorded here.</p>}
 				<div className="history-list">
 					{items.map((item) => (
-						<div className="history-item" key={item.executionId}>
+						<div className={`history-item ${compareBaseId === item.executionId ? "active" : ""}`} key={item.executionId}>
 							<div className="history-item-top">
 								<span className={`method-tag ${(item.method || "").toLowerCase()}`}>{item.method ?? "?"}</span>
 								<span className="history-item-title">{item.name ?? "Untitled"}</span>
@@ -141,6 +141,12 @@ export function HistoryPanel({ onDelete, onOpen, onResend, onSaveAs, onClear, re
 								<span>{relativeTime(item.startedAt)}</span>
 							</div>
 							<div className="history-item-meta">
+								<button className="text-button" type="button" onClick={() => onAnalyze(item.executionId)}>
+									Passport
+								</button>
+								<button className="text-button" type="button" onClick={() => onCompare(item.executionId)}>
+									{compareBaseId === item.executionId ? "Selected" : "Compare"}
+								</button>
 								<button className="text-button" type="button" onClick={() => onOpen(item.executionId)}>
 									Inspect
 								</button>

@@ -10,6 +10,7 @@ import { historyService } from "../history/history.service.js";
 import { fingerprintKeyId, fingerprintOf } from "../history/fingerprint.js";
 import { localRuntimeService } from "../local-runtime/local-runtime.service.js";
 import { composeScriptResults, mergePostResponseResults, scriptService } from "../scripts/script-runner.js";
+import { buildExecutionReceipt } from "../execution-intelligence/execution-receipt.js";
 import { operationRegistry } from "./active-registry.js";
 import { performRequest } from "./http-transport.js";
 import { captureBody } from "./response-capture.js";
@@ -75,6 +76,7 @@ export function terminalResult(record) {
 		snapshot: record.snapshot ?? null,
 		compileTrace: record.compileTrace ?? [],
 		warnings: record.warnings ?? [],
+		receipt: record.receipt ?? null,
 		scriptResults: record.snapshot?.scriptResults ?? null,
 		historyId: record.executionId,
 		visible: record.visible !== false,
@@ -190,8 +192,8 @@ export function createExecutionService({
 		};
 	}
 
-	async function send(profileId, input) {
-		registry.rateLimit(profileId, "send");
+	async function send(profileId, input, internal = {}) {
+		if (internal.rateLimit !== false) registry.rateLimit(profileId, "send");
 		const { executionId, tabId, draftVersion, request, context = {}, authOverride } = input;
 		const timeoutMs = Math.min(
 			Math.max(request?.settings?.timeoutMs ?? getConfig().execution.defaultTimeoutMs, getConfig().execution.minTimeoutMs),
@@ -256,6 +258,25 @@ export function createExecutionService({
 					}
 				: null,
 		};
+		const receiptInput = ({ outcome, effectCertainty, compiled = null, target = null, response = null, error = null, finishedAt, warnings = [] }) =>
+			buildExecutionReceipt({
+				executionId,
+				fingerprint,
+				fingerprintKeyId: fingerprintKeyId(),
+				startedAt,
+				finishedAt,
+				outcome,
+				effectCertainty,
+				request: sanitizeRequestForHistory(workingRequest),
+				source: resolved.source,
+				environment: environment.source,
+				compiled,
+				target,
+				response,
+				error,
+				scriptResults,
+				warnings,
+			});
 
 		try {
 			await history.admit({
@@ -267,6 +288,7 @@ export function createExecutionService({
 				status: "running",
 				effectCertainty: "not_dispatched",
 				persistence: { state: "saved" },
+				visible: internal.visible !== false,
 				request: sanitizeRequestForHistory(workingRequest),
 				context: { tabId, draftVersion, source: resolved.source, environment: environment.source },
 				snapshot,
@@ -307,7 +329,20 @@ export function createExecutionService({
 			const compileTrace = compiledResult?.trace ?? [];
 			const warnings = [...(compiledResult?.warnings ?? []), ...scriptWarnings];
 			const error = { code, message, details: details ?? null };
+			const finishedAt = new Date();
+			const receiptCompiled = compiledResult
+				? { ...compiledResult, executedUrl: redactUrl(compiledResult.url, compiledResult.redaction) }
+				: null;
+			const receipt = receiptInput({
+				outcome,
+				effectCertainty: "not_dispatched",
+				compiled: receiptCompiled,
+				error,
+				finishedAt,
+				warnings,
+			});
 			const persistence = await persist({
+				finishedAt,
 				outcome,
 				effectCertainty: "not_dispatched",
 				response: null,
@@ -315,6 +350,7 @@ export function createExecutionService({
 				persistence: { state: "saved" },
 				compileTrace,
 				warnings,
+				receipt,
 				"snapshot.scriptResults": scriptResults,
 			});
 			registry.release(executionId);
@@ -330,10 +366,11 @@ export function createExecutionService({
 				persistence: persistence.persistence,
 				historyId: executionId,
 				startedAt,
-				finishedAt: new Date(),
+				finishedAt,
 				compileTrace,
 				warnings,
 				scriptResults,
+				receipt,
 			};
 		};
 
@@ -496,10 +533,23 @@ export function createExecutionService({
 			...scriptWarnings,
 			...(response?.warnings ?? []),
 		];
-		const persistence = await persist({
+		const persistedResponse = truncateBodyForHistory(response);
+		const receiptCompiled = { ...compiled, executedUrl };
+		const receipt = receiptInput({
 			outcome,
 			effectCertainty,
-			response: truncateBodyForHistory(response),
+			compiled: receiptCompiled,
+			target,
+			response: persistedResponse,
+			error: errorPayload,
+			finishedAt,
+			warnings,
+		});
+		const persistence = await persist({
+			finishedAt,
+			outcome,
+			effectCertainty,
+			response: persistedResponse,
 			error: errorPayload,
 			persistence: { state: "saved" },
 			"snapshot.bytesSent": result.bytesSent ?? 0,
@@ -510,6 +560,7 @@ export function createExecutionService({
 			"snapshot.scriptResults": scriptResults,
 			compileTrace: compiled.trace,
 			warnings,
+			receipt,
 		});
 		registry.release(executionId);
 		if (persistence.record) return { ...terminalResult(persistence.record), tabId, draftVersion };
@@ -531,6 +582,7 @@ export function createExecutionService({
 			warnings,
 			localAccess,
 			scriptResults,
+			receipt,
 		};
 	}
 

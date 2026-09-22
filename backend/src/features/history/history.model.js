@@ -18,6 +18,7 @@ const historySchema = new mongoose.Schema(
 		error: { type: mongoose.Schema.Types.Mixed, default: null },
 		compileTrace: { type: [mongoose.Schema.Types.Mixed], default: [] },
 		warnings: { type: [mongoose.Schema.Types.Mixed], default: [] },
+		receipt: { type: mongoose.Schema.Types.Mixed, default: null },
 		startedAt: { type: Date, required: true },
 		finishedAt: { type: Date, default: null },
 		expiresAt: { type: Date, default: null },
