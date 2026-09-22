@@ -69,6 +69,8 @@ export function CollectionsSidebar({
 	onRenameCollection,
 	onRenameFolder,
 	onReorderCollection,
+	onRunCollection,
+	onRunFolder,
 }) {
 	const [expanded, setExpanded] = useState({});
 	const ordered = useMemo(() => {
@@ -153,6 +155,7 @@ export function CollectionsSidebar({
 												{ icon: "add", label: "New folder", onSelect: () => onNewFolder(collection) },
 												{ icon: "tune", label: "Edit defaults", onSelect: () => onEditCollection(collection) },
 												{ icon: "description", label: "Documentation", onSelect: () => onOpenDocs(collection) },
+												{ icon: "play_arrow", label: "Run collection", onSelect: () => onRunCollection(collection) },
 												{ icon: "edit", label: "Rename", onSelect: () => onRenameCollection(collection) },
 												{
 													icon: "content_copy",
@@ -207,6 +210,11 @@ export function CollectionsSidebar({
 																	label: "Rename folder",
 																	onSelect: () => onRenameFolder(collection, folder),
 																},
+																	{
+																		icon: "play_arrow",
+																		label: "Run folder",
+																		onSelect: () => onRunFolder(collection, folder),
+																	},
 																{ separator: true },
 																{
 																	danger: true,
