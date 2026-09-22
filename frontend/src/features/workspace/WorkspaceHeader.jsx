@@ -27,10 +27,7 @@ export function WorkspaceHeader({
 		})),
 	];
 	return (
-		<header className="app-header">
-			<button aria-label="Toggle collections panel" className="icon-button" type="button" onClick={onToggleSidebar}>
-				<MaterialIcon size={22}>tune</MaterialIcon>
-			</button>
+		<header aria-label="Tracer commands" className="app-header">
 			<div className="app-brand">
 				<span className="brand-mark">
 					<TracerSymbol size={24} />
@@ -38,11 +35,42 @@ export function WorkspaceHeader({
 				<div>
 					<strong>Tracer</strong>
 					<br />
-					<small>HTTP workspace</small>
+					<small>Flight recorder</small>
 				</div>
 			</div>
+			<nav aria-label="Workspace commands" className="app-header-actions rail-primary">
+				<button aria-label="Toggle workspace index" className="icon-button rail-command" title="Workspace index" type="button" onClick={onToggleSidebar}>
+					<MaterialIcon size={21}>tune</MaterialIcon>
+					<span className="rail-command-label">Workspace</span>
+				</button>
+				<button aria-label="Import cURL" className="button rail-command" title="Import cURL" type="button" onClick={onOpenImport}>
+					<MaterialIcon size={19}>description</MaterialIcon>
+					<span className="rail-command-label">Import</span>
+				</button>
+				<button
+					aria-label="Environments"
+					className="button rail-command"
+					title="Manage environments"
+					type="button"
+					onClick={onOpenEnvironments}
+				>
+					<MaterialIcon size={19}>edit</MaterialIcon>
+					<span className="rail-command-label">Variables</span>
+				</button>
+				<button
+					aria-label={`Local Runtime is ${localRuntime?.enabled ? "on" : "off"}`}
+					aria-pressed={localRuntime?.enabled === true}
+					className={`button rail-command ${localRuntime?.enabled ? "local-runtime-on" : ""}`}
+					title="Local Runtime"
+					type="button"
+					onClick={onOpenLocalRuntime}
+				>
+					<MaterialIcon size={19}>{localRuntime?.enabled ? "warning" : "dns"}</MaterialIcon>
+					<span className="rail-command-label">Runtime</span>
+				</button>
+			</nav>
 			<div className="app-header-spacer" />
-			<div className="app-header-actions">
+			<div className="app-header-actions rail-secondary">
 				<SelectMenu
 					ariaLabel="Active environment"
 					className="environment-picker"
@@ -50,38 +78,15 @@ export function WorkspaceHeader({
 					value={activeEnvironmentId ?? ""}
 					onChange={onEnvironmentChange}
 				/>
-				<button aria-label="Import cURL" className="button" title="Import cURL" type="button" onClick={onOpenImport}>
-					<MaterialIcon size={18}>content_paste_go</MaterialIcon>
-					<span className="button-label">Import cURL</span>
-				</button>
-				<button
-					aria-label="Environments"
-					className="button"
-					title="Manage environments"
-					type="button"
-					onClick={onOpenEnvironments}
-				>
-					<MaterialIcon size={18}>edit</MaterialIcon>
-					<span className="button-label">Environments</span>
-				</button>
-				<button
-					aria-label={`Local Runtime is ${localRuntime?.enabled ? "on" : "off"}`}
-					aria-pressed={localRuntime?.enabled === true}
-					className={`button ${localRuntime?.enabled ? "local-runtime-on" : ""}`}
-					title="Local Runtime: send to approved local development hosts"
-					type="button"
-					onClick={onOpenLocalRuntime}
-				>
-					<MaterialIcon size={18}>{localRuntime?.enabled ? "warning" : "dns"}</MaterialIcon>
-					<span className="button-label">Local Runtime: {localRuntime?.enabled ? "On" : "Off"}</span>
-				</button>
 				<button
 					aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
-					className="icon-button"
+					className="icon-button rail-command"
+					title={`Use ${theme === "dark" ? "light" : "dark"} theme`}
 					type="button"
 					onClick={onToggleTheme}
 				>
-					<MaterialIcon size={20}>{theme === "dark" ? "light_mode" : "dark_mode"}</MaterialIcon>
+					<MaterialIcon size={19}>{theme === "dark" ? "light_mode" : "dark_mode"}</MaterialIcon>
+					<span className="rail-command-label">Theme</span>
 				</button>
 				<button className="profile-chip" type="button" onClick={onLogout} title="Switch profile or sign out">
 					<ProfileAvatar profile={profile} size="small" />
