@@ -423,3 +423,230 @@ Validate-then-`https.request(hostname)` is a rebinding TOCTOU. Rewriting the URL
 Do that with a per-request `lookup` on the Agent / `createConnection`, not with a global DNS cache and not by mutating `url.hostname` and hoping SNI follows. Node’s `lookup` callback shape also changed across versions; Bun is the compatibility risk you already named. Make that the first transport spike in stage 4, before the editor UI exists.
 
 Also lock these deny cases into a table now, not during implementation: IPv4-mapped IPv6 (`::ffff:127.0.0.1`), decimal/octal IPs, `0.0.0.0`, metadata (`169.254.169.254`, `fd00:ec2::254`), userinfo, fragments, `nip.io`-style names, mixed public+loopback results, and path normalization on the demo prefix (`/demo/v1/../api/...`). You listed the classes. The implementation will miss the encodings unless they are fixtures.
+
+## Collection revisions will collide more than it feels like
+
+A single revision on the whole aggregate is the correct MongoDB-standalone model. It will 409 in ordinary use: two tabs, save request A, then save request B.
+
+Do not add multi-doc transactions. Do improve the conflict UX:
+
+- On 409, return which request/folder IDs changed, not only `REVISION_CONFLICT`.
+- Keep the dirty draft.
+- Offer Reload, Save as, and “overwrite with my tree” as an explicit second PUT with the fresh revision — never a silent merge.
+
+A later `PATCH` of one embedded request is optional. For v1, a good 409 is more important than a second write API.
+
+## A few product seams worth adding (still in scope)
+
+These do not expand the six capabilities. They make the existing ones diagnosable, which matches the “realistic defects” goal.
+
+**Redacted resolution trace.** Attach to `ExecutionResult.warnings` or a sibling `compile` object: which scope supplied each `{{name}}`, auth mode after inheritance, managed header names the transport added, and the redacted final URL. No values for secrets. For a HackerRank debugging app this is worth more than visual polish.
+
+**JSON interpolation hint.** After resolve, you correctly require valid JSON. Users will write `"id": {{id}}` and get a 400. Surface that in the body editor with a fixed example, not only in an error toast after Send.
+
+**Draft recovery that is not source of truth.** You were right to ban `localStorage` for collections/history. `sessionStorage` for tab drafts plus a “Recovered unsaved request” banner is still ephemeral UI state. Assessment users reload. Losing a half-built POST body is the most common self-inflicted failure in this kind of client.
+
+**Location on 3xx.** Not following redirects is the correct security default. In the response pane, treat `Location` as “copy into URL bar,” never as an implicit second send.
+
+**Timeout and size as visible policy.** Show the remaining budget and the 1 MiB cap in Settings / the running state. Architecture B’s limits should feel like product rules, not mysterious aborts.
+
+**Execution result size.** A 1 MiB raw body becomes \~1.33 MiB base64 inside the same JSON envelope that is held open through the proxy. That is fine, but write the max outbound payload down next to the inbound parser budgets so nobody “helpfully” logs or pretty-prints it on the server.
+
+## What I would not change
+
+- No extra libraries. Hand-rolled JSON tree, native `node:http`, Zod at the controller edge — that matches the locked stack.
+- No folder-level auth, no globals, no request-scoped variables. The precedence rule is small enough to test and to break on purpose later.
+- No cookie jar, no redirect follow, no multipart, no runner.
+- No queue. If you ever need C, the history document already looks like a job record. You do not need to invent that now.
+- Keep Save and Send separate. That is the whole product.
+
+## Implementation order
+
+Stages 1→4 are correct: prove the reference runtime, then persistence/demo, then compiler/policy/transport, then UI. The only change I would make is to treat **stage 4 as a kill-or-continue gate**. If Bun cannot pin DNS, abort streams, and preserve duplicate headers under the pinned version, stop and record it. Do not compensate by adding Undici or by moving execution back to the browser.
+
+Add two explicit tests that the current matrix underweights:
+
+- frontend retry of `POST /executions` with the same `executionId` does not hit the demo POST twice
+- browser abort of Send does not require `req.close` in order for the deadline to destroy the target request
+
+## Bottom line
+
+This is already a locked design I would implement, not a brainstorm. The architecture is sound. The remaining work is making Architecture B’s operational edges first-class: timeout budget across Vite/Bun/Express, cancel-without-disconnect, DNS pin + SNI as a written connect recipe, collection 409 UX, idempotent `executionId` on the client, and a redacted compile trace.
+
+If you only take three changes into the next revision of the doc: **timeout budget**, **frontend idempotency for ****`executionId`**, and **the exact pinned-connect + SNI recipe**. Those are the three places this design can still fail while looking correct on paper.
+
+
+
+g. muse spark 1.3:Verdict
+
+Architecture B is the right call. A fails arbitrary-API correctness (CORS / forbidden headers / opaque responses), C adds scheduler/lease/recovery machinery for background jobs v1 doesn't need. Your comparison table weighs hard acceptance failures over prototype speed — that's the correct judgment and good human-judgment evidence for reviewers.
+
+Six capabilities is also well-scoped: REQUIREMENTS.md wants 5–10 end-to-end features, fewer is under-scope, more spreads thin. Six deep beats ten shallow.
+
+This is a strong design doc. Below are the load-bearing gaps I'd fix before implementation — none require changing the B decision.
+
+1\. Whole-collection CAS will cause false 409s
+
+PUT /collections/:id with {expectedRevision, collection} is correct for standalone MongoDB atomicity, but with 10 tabs open editing different requests in the same collection you'll get constant REVISION\_CONFLICT on disjoint edits.
+
+Improve: keep the atomic replace, but add:
+
+\- PATCH /collections/:id/requests/:reqId-style scoped write with arrayFilters + revision check, or
+
+\- documented auto-merge: on 409 fetch latest, if changed request.id sets are disjoint, merge and retry once; only prompt Save-as/Reload on true overlap.
+
+2\. Sync 30s hold needs proxy/timeout proof
+
+Holding the browser→Vite→Express connection for timeoutMs max 30s + DB finalization is fine in theory, but Vite's /api proxy, Node/Express default server timeouts, and HackerRank runners all have opinions about 30s idle connections.
+
+Improve in Stage 4 gate:
+
+\- pin server.timeout > max execution + margin, set Vite server.proxy.timeout, frontend AbortController linked to explicit POST /executions/:id/cancel (which you have).
+
+\- default 15s is good; keep max 30s but test 30s delay fixture end-to-end through the proxy, not just direct to backend.
+
+3\. DNS pin + TLS SNI is easy to get wrong
+
+"Connect to validated IP while preserving Host and SNI/cert verification" is the right sentence, but Node https won't do it by default — dialing the IP without servername: originalHostname breaks cert validation or silently validates the IP.
+
+Improve: define the transport adapter as lookup(injectable) -> pin IP -> socket.connect(ip) + TLS servername=hostname + Host header preserved, no cross-request socket reuse (you already say this). Keep the injectable resolver for tests so prod policy stays strict while fixtures use approved addresses.
+
+4\. No-redirect needs a UX escape hatch
+
+No auto-follow is correct for credential-leakage and replay clarity. But real APIs return 301/307 for http→https/trailing-slash, and a dead-end 3xx view will feel broken.
+
+Improve: add explicit "Follow redirect as new execution" button — new executionId, re-validates destination policy, new history entry. Security preserved, usability fixed.
+
+5\. Demo router may trip the validator
+
+GUIDELINES.md §1.1: every backend product route must map back to a reachable frontend consumer (health exempt). Your /demo/v1/\* routes are targets, not product capabilities — a naive validator will flag them as "unused backend routes."
+
+Improve: document demo explicitly as test fixtures / external-target stand-ins, not product routes, with a traceability table: REQUIREMENT → UI action → API route → Mongo collection → test. That table also makes S01–S19 / R01–R12 mapping trivial.
+
+6\. Small correctness/UX fixes
+
+\- Prune off the critical path: deleting beyond newest 200/profile on completion adds a delete to every Send. Do TTL (7-day, you have it) + lazy background prune, don't block the response.
+
+\- Fingerprint HMAC key: you correctly require keyed HMAC not unkeyed hash for inputs with temp secrets — but where does the key live? Define: generated in setup.sh like JWT secret, stable across restarts, never logged. Otherwise idempotent-replay breaks after restart.
+
+\- Draft loss: "unsaved content does not survive reload" is honest but harsh. Add sessionStorage mirror for drafts sans secrets with a "restored unsaved draft" banner. MongoDB stays source of truth for saved data.
+
+\- Rate-limit executions: server-side executor + authenticated users = SSRF-scan risk. Add in-memory token bucket on POST /executions with existing deps only (no new lib), log executionId/outcome/timing only.
+
+\- GET/HEAD with body: hard reject is defensible, but Elasticsearch-style GET-with-body exists. Consider warning + allow, or document as intentional deviation from Postman.
+
+\- TTFB: make firstByteMs required, not optional — cheap and valuable for debugging.
+
+\- Setup order: generated DEMO\_\* secrets must exist before seed validation asserts counts; document order or seeded alias sends fail on clean checkout.
+
+Frontier — lock these before implementation
+
+❓ Q1 - Collection concurrency: keep whole-doc CAS + manual reload/save-as, or add scoped PATCH / auto-merge disjoint edits?
+
+➡️ Add auto-merge on disjoint request.id sets, keep 409 only for true overlap — fewer false conflicts, same atomicity.
+
+❓ Q2 - Redirect UX: raw 3xx display only, or explicit "Follow as new execution" action?
+
+➡️ Add follow-as-new-execution (new ID, re-validated, new history row).
+
+❓ Q3 - Draft recovery: strict no-survive-reload, or sessionStorage mirror excluding secrets?
+
+➡️ sessionStorage mirror sans secrets + banner; keeps contract, avoids accidental loss.
+
+❓ Q4 - History retention: TTL + per-send prune, or TTL + lazy prune off critical path?
+
+➡️ TTL primary, lazy prune background; never block Send on deletes.
+
+
+
+h. Deepseek V4.1 Flash:
+
+I read the full contract set (REQUIREMENTS.md, INSTRUCTIONS.md, GUIDELINES.md, AGENTS.md), spot-checked the reference manifests (package.json ×3, hackerrank.yml), and verified the design against AGENTS §9.1/§9.2. Verdict up front: architecture B is the right call, the six-capability scope is compliant, and the doc's version pins and runtime-contract claims check out against the actual reference (React 19.2.4 / Vite 8.2.2 / Express 5.2.1 / Mongoose 8.24.1 / Zod 4.3.6, readonly paths, ports). What's left is a handful of internal contradictions and grader-facing gaps, not a redesign.
+Where it's strong
+
+- B satisfies "smallest architecture" (AGENTS §9.1). A fails arbitrary headers/CORS-free execution; C solves a durable-job problem you don't have.
+- The SSRF/DNS-pinning work is not over-engineering — AGENTS §9.2 line 246 literally says "treat the HTTP executor as a server-side request forgery boundary." Keep it strict, including the exact demo exception.
+- Demo targets served over real loopback HTTP (not fixtures) satisfies §9.2's "provide real local HTTP endpoints… do not replace execution with canned frontend responses."
+- History immutability + collection revision CAS + single terminal transition is the right correctness core. No auto-retry is correct.
+- File structure, route→controller→service→repository, feature folders all match the reference layout AGENTS §9.2 mandates.
+  Fix before implementing (ranked)
+
+1. Size limits contradict each other. 100 requests/collection × 64 KiB body = 6.4 MiB, but the collection aggregate cap is 2 MiB with a 3 MiB parser budget. Same class: 100 header rows × 8 KiB = 800 KiB vs the 16 KiB header aggregate. Today a save can pass per-field validation and still 413. Either lower the per-request body cap (16–32 KiB, still generous for templates) or raise the aggregate (8 MiB still sits under Mongo's 16 MiB doc limit). Pick one, make the 413 name the binding limit.
+2. Folder duplication is arguably required. REQUIREMENTS.md:14 says "rename, reorder, duplicate, and delete" for "collections and folders." You have folder create/rename/reorder/delete but no duplicate-folder (requests get duplicate, collections get duplicate). It's \~15 lines (clone folder + requests with fresh UUIDs). Add it or record why not.
+3. /demo/v1/\* will look like unconsumed product routes to the validator. GUIDELINES §1.2 requires every public backend product route to map back to a reachable frontend consumer. The frontend never calls demo routes — only the executor does. Frame them in the README as request targets, and make sure each one is referenced by a seeded saved request so the mapping is discoverable (UI → saved request → target endpoint).
+4. "Formatted body (JSON, XML, HTML)" is only half-met. REQUIREMENTS.md:17 says formatted. JSON tree is fine; escaped XML/HTML source is weaker. Native DOMParser pretty-prints XML in \~20 lines, zero dependencies, rendered as escaped text. Cheap and closer to the wording.
+5. Redirect/compression behavior is defensible but reviewer-visible. No-follow is the SSRF-safe choice — keep it, but surface 3xx + Location prominently. Accept-Encoding: identity will occasionally still get gzip; a zlib decode fallback is stdlib (\~15 lines) and removes the most common "looks broken" failure against real APIs.
+6. Confirm the disconnect decision. As written, losing the browser connection destroys the in-flight target request. That's a legitimate choice but needs to be explicit in UI copy ("closing this tab cancels the send"), not just lifecycle prose.
+7. Stage 1 is the real project risk, not architecture. No MongoDB found locally, and the reference install died on Bun cache EPERM. Decide now how Mongo exists (service/Docker), fix the Bun cache issue, and make "reference app runs live and I've clicked through it" a hard gate before porting anything.
+   Optional trims (only if you want less surface)
+   Duplicate-collection endpoint (not required; duplicate-request is), XML/HTML line numbering and search-hit highlighting (keep search, skip cosmetics), preferences beyond activeEnvironmentId/theme/lastSavedRequest (and that feature folder could fold into profiles). Everything else is load-bearing for the six capabilities.
+   Doc-level additions worth doing
+
+- Append the validation mapping matrix (capability → UI surface → API route → Mongo collection) now — it's the artifact that catches both-direction gaps before code exists.
+- Since this repo will be reused for defect-injection assessments, add a short invariant appendix (\~10 one-liners: "exactly one terminal transition per execution," "resolve once, never recursively," etc.). Your module contracts imply these; make them explicit so injected bugs are specifiable and diagnosable.
+- Mark each numbered decision in §12 as Decision vs Recommendation — AGENTS §9.2 asks you to distinguish endorsed decisions from recommendations, and yours currently reads uniformly as chosen.
+
+
+
+i. Kimi K3:
+
+### Overall
+
+The document is strong so far, especially around scope control, observable completion criteria, competitor-derived design decisions, secret handling direction, and deterministic seed/reset behavior. However, it is incomplete because Architecture C cuts off and the final decision rationale, locked Architecture B design, risks, and phase gates are missing.
+
+### Main Architecture B issues to resolve
+
+- **Abort/cancellation registry:** define limits, overflow behavior, concurrency, and duplicate sends.
+- **Request lifecycle:** relying on one long-held HTTP request is fragile. Better to create an in-flight history record immediately and use its ID for reconciliation.
+- **Cancellation:** must abort execution, finalize history as `cancelled`, handle races safely, and treat history as the authoritative terminal state.
+- **SSRF protection:** specify the complete algorithm: DNS resolution → validate all IPs → pin approved IP → preserve Host header → validate redirects → cap redirects.
+- **Bun compatibility:** verify that the networking primitives required for IP pinning/custom lookup actually work correctly under Bun.
+- **Secrets/history:** explicitly define whether secret-bearing headers/bodies are omitted, masked, encrypted, or otherwise transformed before immutable history is stored.
+- **Non-functional limits:** lock concrete values for body size, captured response bytes, timeout, history retention, concurrency, etc.
+
+### Document-level gaps
+
+- Finish **Architecture C**, including trade-offs.
+- Add the **A/B/C comparison and explicit reasons for selecting B**.
+- Resolve the **Prettier vs EditorConfig** conflict instead of merely noting it.
+- Add the complete **locked Architecture B specification**.
+- Add **risks and phase gates**.
+
+### Highest-priority fixes
+
+The two most important contracts to lock first are:
+
+**1. Cancellation lifecycle** — exact states, races, abort semantics, and authoritative history behavior.
+
+**2. Secret/redaction contract** — exactly what reaches execution, what gets persisted, and what users can see afterward.
+
+The feedback is essentially saying: **Architecture B still looks like the right direction, but it is not ready to be “locked” until execution lifecycle, SSRF, secrets, limits, and the missing A/B/C decision rationale are made precise.**
+
+
+
+Consider these feedbacks and freeze the final architecture
+
+Agent Response Summary:
+Reviewing nine sets of supplied feedback against the current architecture and repository contract. Freezing the design is authorized; production implementation remains outside this phase.
+
+Actions:
+* Read AGENTS.md and current design; confirmed existing agreement.
+* Checked primary-source technical documentation.
+
+Context:
+tool=Codex
+branch=main
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=C:\Users\arsat\Downloads\postman
+parent_agent=none
+
+## [2026-09-17T06:43:21.5289666+05:30] Continue architecture freeze
+
+User Prompt (normalized, secrets redacted):
+Continue the current authorized phase from the latest verified checkpoint.
+
+Agent Response Summary:
+Continuing the authorized feedback reconciliation and documentation freeze. Checking consistency of API/model/state contracts, preserving the design-only boundary, and recording revision 1.0 dated September 17, 2026.
+
+Actions:
+* Updated arch
