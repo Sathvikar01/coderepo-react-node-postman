@@ -295,6 +295,7 @@ This section is the repo-level source of truth for phase numbers. Agents must no
 | 27 | Execution Intelligence / API Flight Recorder | Evidence-grade execution receipts, causal comparison, redacted reproduction capsules, and bounded failure minimization. |
 | 28 | Flight Recorder Acceptance | Prove and polish the complete Passport → Compare → Minimize → Capsule → Reproduce flow with one deterministic local demo. No new unrelated features. |
 | 29 | Product UI/UX Polish | Raise the shipped frontend to an intentional, distinctive developer-tool standard. Presentation only: no new features, no behavioural or data changes, no new dependencies. |
+| 30 | Complete UI/UX Rebuild | Replace Tracer's frontend presentation and interaction model from scratch while preserving product behavior, contracts, and security semantics. |
 
 ### 10.2 Dependency graph
 
@@ -343,6 +344,7 @@ Current parallel branches:
 | 27 | `phase27/execution-intelligence` | `backend/src/features/execution-intelligence/**`, `frontend/src/features/execution-intelligence/**`; narrow execution, history, portable-model, and mock integration hooks only |
 | 28 | `phase28/flight-recorder-acceptance` | Flight Recorder demo/acceptance artifacts under `**/execution-intelligence/**`; narrow import-boundary, workspace, and recorder UI changes only where a proven gap requires them |
 | 29 | `phase29/ui-ux-polish` | `frontend/src/**` presentation: stylesheets, tokens, and shared component markup/ARIA only where a proven accessibility defect requires it; no backend files, no feature or workflow logic |
+| 30 | `phase30/ui-rebuild` | Frontend-wide replacement presentation and interaction model under `frontend/src/**`; no backend, API, persistence, execution, runner/CLI, or Flight Recorder contract changes |
 
 Shared/high-conflict files are integrator-owned unless the phase cannot be completed without a narrow change:
 
@@ -619,6 +621,17 @@ When the user assigns a phase, the agent MUST execute the matching specification
 - **Do not:** touch backend code, request/execution semantics, persistence, tests' contracts, dependencies, or `bun.lock`; do not restructure the app shell, rename workflows, or add capabilities.
 - **Exit:** `bun install --frozen-lockfile`, `bun test`, frontend tests, backend syntax, frontend build, isolated seed/reset, runtime smoke, baseline regressions, keyboard/contrast/target/overflow sweeps at 375/768/1024/1440 in light and dark, the full Flight Recorder flow, and `skills/validate/SKILL.md` green; finish with `PHASE 29 VERDICT: PASS — UI/UX POLISHED` or `PHASE 29 VERDICT: BLOCKED`.
 
+#### Phase 30 — Complete UI/UX Rebuild
+- **Branch:** `phase30/ui-rebuild`.
+- **Dependency:** latest approved `main` (Phase 29 merged).
+- **Goal:** rebuild Tracer's frontend presentation and interaction model from scratch into a cohesive professional developer tool. The current UI is an anti-reference for visual composition; preserve only product truth, functionality, accessibility semantics, and technical contracts.
+- **Do:** inspect the full running app before implementation; inventory every workflow; use the installed UI/design/accessibility/browser skills; inspect Unlumen UI with computer-use and adapt interaction principles without adding dependencies; use Impeccable for audit/critique; use codebase-design for deep frontend module seams; redesign shell, navigation, collections/folders, request tabs/builder, query/headers/body/auth, environments, Send/Save, response inspector, history, cookies, scripts/assertions, examples/mocks, docs, local runtime, Collection Runner, Passport, Compare, Minimize, Capsule, dialogs/menus/toasts, loading/empty/error states; verify every visible control and record reproduce → cause → smallest fix → regression coverage for proven defects only.
+- **Do not:** add product features, alter backend behavior without a proven existing bug, change execution semantics, Send vs Save rules, security/SSRF rules, Flight Recorder contracts, Runner/CLI semantics, persistence contracts, portable project formats, dependencies, or `bun.lock`; do not reuse the Phase 29 visual composition as a reskin.
+- **Primary paths:** `frontend/src/**` and Phase 30 reporting/design artifacts only. Backend files and shared contracts remain protected.
+- **Required E2E:** login → create → edit → save → send → inspect → history; collection → runner → failure → Passport → Compare → Minimize → Capsule; capsule → import → dirty draft → reproduce; reload persistence, cancellation, validation errors, profile isolation, keyboard-only usage, dialog focus, dark/light themes, and 375/768/1024/1440 responsive checks with zero unintended overflow and console errors.
+- **Load test:** run Locust against local seeded infrastructure only for safe representative API/read/execution flows; report throughput, p50, p95, p99, failure rate, and error types for light, moderate, and short-burst loads. Keep Locust outside application dependencies.
+- **Exit:** clean install, full `bun test`, backend syntax, frontend tests/build, seed/reset, real runtime, complete E2E, responsive/theme matrix, Flight Recorder demo, Locust smoke, `skills/validate/SKILL.md`, and GitHub Actions/Baseline Gate are green; open a PR to `main` and finish with `PHASE 30 VERDICT: PASS — UI/UX REBUILT AND VERIFIED` or `PHASE 30 VERDICT: BLOCKED`.
+
 ### 10.7 Common phase completion gate
 
 Unless a phase explicitly requires more, every implementation phase must:
@@ -636,7 +649,7 @@ Unless a phase explicitly requires more, every implementation phase must:
 
 ### 10.5 Current roadmap state
 
-As of the Phase 29 assignment:
+As of the Phase 30 assignment:
 
 - Phases **1–9, 11–12, 16, 18–19, 22, and 27–28: COMPLETE / MERGED**.
 - Phases **1–6: PROTECTED / FROZEN baseline**.
@@ -645,7 +658,8 @@ As of the Phase 29 assignment:
 - Phase **28: MERGED** as `0a630e2` (Flight Recorder Acceptance).
 - Phase **29: MERGED** as `ba412ff` (Product UI/UX Polish).
 - Phase **29 owns presentation**: it is frontend-wide and overlaps every frontend feature path, so it merges before other frontend phases rebase; it adds no capability and changes no contract.
-- Phases **10 and 23: INACTIVE** and must not be resumed as part of Phase 29.
+- Phase **30: ACTIVE** on `phase30/ui-rebuild`, based on latest `main` at `0ee5e54`; it owns the complete frontend rebuild while preserving all behavior and contracts. The reporting handoff is documented in `docs/phase30/ui-rebuild-report.md` and `design/audit.md`.
+- Phases **10 and 23: INACTIVE** and must not be resumed as part of Phase 30.
 - Phase **13: MERGED** as `e75d306` (Collection Runner).
 - Phase **14: MERGED** as `bfcd441` (Headless CLI).
 - Phase **15: MERGED** as `434d86a` (CI/CD Parity).
