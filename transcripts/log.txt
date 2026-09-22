@@ -2216,4 +2216,278 @@ Actions:
 * Browser smoke via CDP: jar viewer, delete, clear, responsive checks at 375/768/1024/1440
 * GitHub Actions Baseline Gate run 35621305314: success
 * git push --force origin phase9/cookie-session-jar -> a6dcdbe; PR #12 opened/updated
-* Removed duplicate untracked cookie directories l
+* Removed duplicate untracked cookie directories left in the shared main worktree after branch switches
+
+Context:
+tool=opencode
+branch=phase9/cookie-session-jar
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=C:\Users\arsat\Downloads\postman-phase9
+parent_agent=none
+
+## [2026-09-21T21:25:13+05:30] SESSION START
+
+tool=Codex
+Repo Root: C:\Users\arsat\Downloads\postman
+Branch: phase8/export-snippets
+Worktree: C:\Users\arsat\Downloads\postman
+Parent Agent: none
+Language: node
+Time Remaining: 1d 2h 06m
+
+## [2026-09-21T23:29:57+05:30] Phase 9 and Phase 19 rebased, verified, force-pushed; #10 #11 #12 merged
+
+User Prompt (normalized, secrets redacted):
+Finish the pending integration work: merge the ready prerequisite PRs, rebase the dependent Phase 9 and Phase 19 branches onto the resulting main, verify them, and push the updated branches.
+
+Agent Response Summary:
+Merged PR #10 (Phase 11) and PR #11 (Phase 22) into main with squash merges, then rebased Phase 9 (phase9/cookie-session-jar) onto main by cherry-picking its two commits; resolved conflicts in execution.service.js (kept localRuntime + cookies params and merged the warnings array), limits.js (kept script + cookie limits), styles.css (kept script/code/cookie blocks, repaired a truncated .script-console block), and README.md (kept both doc bullets). Phase 9's cookie-execution tests needed a disabledLocalRuntime injection to avoid Mongo CastError from Phase 18's local-runtime lookup on synthetic profile ids. Verified Phase 9 with backend 295 pass / frontend 238 pass, vite build, a 22-check cookie API E2E against the running app, and a 15-check Puppeteer browser smoke; CI green; PR #12 merged. Then rebased Phase 19 onto main; resolved app.js (kept localRuntime + example + mock route mounts), App.jsx (kept Cookies and Examples sidebar tabs with a three-way panel switch), styles.css (kept script/cookie/example blocks, repaired two interleaved rule bodies, braces balanced), and README.md (kept all three feature bullets). Verified Phase 19 with backend 330 pass / frontend 249 pass, vite build, full syntax scan, and a 12-check browser smoke covering Phase 8 Code button, Phase 11 script tabs, Phase 9 Cookies panel and Phase 19 examples/mocks; CI green; PR #13 MERGEABLE/CLEAN.
+
+Actions:
+* gh pr merge 10 --squash; gh pr merge 11 --squash
+* Rebased phase9/cookie-session-jar onto main; resolved 3 conflicts + README; added disabledLocalRuntime to cookie-execution.test.js; force-pushed 232a699
+* Ran cookie API E2E (22/22) and Puppeteer browser smoke (15/15) against the running phase9 app
+* Merged PR #12 --squash
+* Rebased phase19/examples-mocks onto main; resolved 4 conflicts; force-pushed 6dacc99
+* Ran Phase 19 browser smoke (12/12) with Phase 8/9/11 regression checks; CI green; PR #13 updated
+* Stopped smoke dev servers (ports 3000/8000)
+
+Context:
+tool=opencode
+branch=phase8/export-snippets
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=C:\Users\arsat\Downloads\postman
+parent_agent=none
+
+## [2026-09-21T23:44:15+05:30] SESSION START
+
+tool=opencode
+Repo Root: C:\Users\arsat\Downloads\postman
+Branch: phase16/portable-project
+Worktree: C:\Users\arsat\Downloads\postman-phase16
+Parent Agent: none
+Language: node
+Time Remaining: 0d 23h 47m
+
+## [2026-09-21T23:44:15+05:30] Phase 16 assign: portable project model
+
+User Prompt (verbatim, secrets redacted):
+Phase 16 — Portable Project Model
+
+Create/use:
+phase16/portable-project
+
+Goal
+Define a deterministic, versioned, secret-safe portable representation of a Tracer project.
+This becomes the future foundation for: Reproduction Capsules, Git/versioning, CLI/runner portability, shareable debugging artifacts.
+
+Define: Start with TracerProjectV1. Represent: collections/folders, requests, ordered query parameters, ordered/duplicate headers, body, variable definitions, environment references, auth references, scripts, assertions, examples, stable IDs, metadata required to reconstruct behavior.
+Do NOT serialize: resolved secret values, cookies/session values, transient execution state, Mongo _id, UI-only state.
+
+Determinism: canonical ordering, canonical serialization, stable hash/fingerprint, same logical project -> same serialized output, strict schema validation, explicit version field, forward-compatible unknown-field policy. Import must validate before applying. Portable files must NOT become Mongo's runtime storage format.
+
+Round-trip: Prove Mongo/domain model -> TracerProjectV1 -> serialize -> parse -> validate -> domain model without semantic drift. Preserve duplicate headers, duplicate query params, variable/auth references, scripts/assertions, examples, request/folder IDs.
+
+Secret safety: Add tests proving exports contain no resolved secrets from auth, variables, headers, query values, cookies, body fields, send-only overrides. Fail closed if safe representation is impossible.
+
+Architecture: Prefer dedicated modules such as backend/src/features/projects/**. Keep serialization logic pure wherever possible. Do NOT build Git integration yet. Do NOT build Reproduction Capsules yet. Do NOT change execution semantics.
+
+Tests: canonical ordering, stable fingerprint, round-trip, duplicate headers/query keys, scripts/assertions/examples, unknown fields, unsupported version, malformed project, secret leakage, unicode, large bounded values, deterministic repeated export. Run bun test, syntax/build as applicable, GitHub Actions. Finish: PHASE 16 VERDICT: PASS or PHASE 16 VERDICT: BLOCKED.
+
+Parallel ownership: Phase 12 owns assertions/test-result integration. Phase 16 owns portable project/schema/serialization. Do not let Phase 16 invent assertion semantics; consume Phase 12-compatible structures through a narrow versioned representation. If Phase 16 reaches assertion serialization before Phase 12 is merged, define a narrow versioned placeholder/interface and integrate after Phase 12 lands rather than copying its implementation. After both phases merge, stop and report results.
+
+The next planned suite is: Execution Passport, Causal Run Comparison + lightweight contract diff, Reproduction Capsule, Failure Minimizer.
+
+Agent Response Summary:
+Confirmed onboarding agreement for this clone, created worktree C:\Users\arsat\Downloads\postman-phase16 on branch phase16/portable-project from origin/main (1d700d6), which already includes phases 7, 8, 9, 11, 18, 19, 22. Phase 12 (assertions) is not merged, so Phase 16 will define a narrow versioned assertion envelope rather than assertion semantics. Surveyed the domain model: collection aggregates (variables/auth/folders/requests) validated by shared zod schemas, environment variables (plain/secretRef alias), examples (match/response), scripts (preRequest/test), and the send-only authOverride boundary in execution.controller.js. Planned pure modules under backend/src/features/projects/ with canonical serialization, fingerprint, domain<->portable adapters, and secret-safety fail-closed checks.
+
+Actions:
+* git log / git branch / git worktree inspection
+* git worktree add C:/Users/arsat/Downloads/postman-phase16 -b phase16/portable-project origin/main
+* Read backend/src/shared/utils/schemas.js, limits.js, collection.model.js, collection.repository.js, example.model.js, environment.model.js, execution.controller.js, import-draft.js, baseline-gate.yml
+
+Context:
+tool=opencode
+branch=phase16/portable-project
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=C:\Users\arsat\Downloads\postman-phase16
+parent_agent=none
+
+## [2026-09-22T00:28:41+05:30] Phase 16 implementation: TracerProjectV1
+
+User Prompt (normalized, secrets redacted):
+Continue the current authorized phase from the latest verified checkpoint.
+
+Agent Response Summary:
+Implemented the Phase 16 portable project model under backend/src/features/projects/: a TracerProjectV1 zod schema with passthrough unknown-field policy, canonical lexicographic serialization and sha256 fingerprint, a domain-to-portable exporter with fail-closed secret checks, and a portable-to-domain importer that validates every collection/environment against the existing domain schemas before anything is returned. Assertions are carried only in a narrow versioned envelope ("tracer.assertions/1") and come back as deferred payloads, since Phase 12 owns assertion semantics and is not merged. Added 39 tests across three files covering canonical ordering, fingerprint stability, unknown fields, unsupported version, malformed input, unicode, byte and size bounds, duplicate query/header preservation without dedupe, round-trip fidelity, examples/environments, and a secret-leakage matrix (auth, variables, headers, query, body, cookies, send-only overrides). Verified with the full backend suite (617 pass, 1 skip, 0 fail), node --check on all backend files, and the frontend production build.
+
+Actions:
+* Created backend/src/features/projects/{project-schema,project-serialize,project-export,project-import}.js
+* Created backend/src/features/projects/{project-model,project-roundtrip,project-secrets}.test.js
+* Edited backend/src/shared/utils/schemas.js to export CREDENTIAL_REFERENCE (narrow shared change for a security rule reuse)
+* Ran bun install --frozen-lockfile in the worktree, bun test, node --check sweep, frontend bun run build
+
+Context:
+tool=opencode
+branch=phase16/portable-project
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=C:\Users\arsat\Downloads\postman-phase16
+parent_agent=none
+
+## [2026-09-22T02:50:15+05:30] Log correction
+
+User Prompt (normalized, secrets redacted):
+Continue the current authorized phase from the latest verified checkpoint.
+
+Agent Response Summary:
+Correction to the previous entry: its header timestamp was written as 2026-09-22T00:28:41+05:30 but the implementation work actually completed at 2026-09-22T02:50:15+05:30 local time. The entry content is accurate; only the header timestamp was wrong. No other entry was modified.
+
+Actions:
+* Appended a correction entry to the shared log (append-only)
+
+Context:
+tool=opencode
+branch=phase16/portable-project
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=C:\Users\arsat\Downloads\postman-phase16
+parent_agent=none
+
+## [2026-09-22T03:00:12+05:30] Phase 16: commit, PR, CI green
+
+User Prompt (normalized, secrets redacted):
+Continue the current authorized phase from the latest verified checkpoint.
+
+Agent Response Summary:
+Committed the portable project model (19b00b0), pushed phase16/portable-project to origin, and opened PR #14 against main. The Baseline Gate workflow (run 35656732961) passed in 1m3s: install, bun test, backend syntax, frontend build, seed, and runtime smoke. The PR was left unmerged so the user or integrator can perform the merge step explicitly.
+
+Actions:
+* git commit 19b00b0 "Phase 16: add portable project model with canonical serialization"
+* git push -u origin phase16/portable-project
+* gh pr create -> https://github.com/Sathvikar01/coderepo-react-node-postman/pull/14
+* gh pr checks 14 -> contract: pass (1m3s)
+
+Context:
+tool=opencode
+branch=phase16/portable-project
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=C:\Users\arsat\Downloads\postman-phase16
+parent_agent=none
+
+## [2026-09-22T05:08:20+05:30] SESSION START
+
+tool=opencode
+Repo Root: C:\Users\arsat\Downloads\postman
+Branch: phase12/assertions-testing
+Worktree: main
+Parent Agent: none
+Language: node
+Time Remaining: 0d 18h 23m
+
+## [2026-09-22T04:10:20+05:30] Phase 12 assertions/testing assigned
+
+User Prompt (verbatim, secrets redacted):
+Phase 12 — Assertions / Testing
+
+Branch:
+phase12/assertions-testing
+
+Goal
+
+Make deterministic assertions first-class using the existing Phase 11 script/test-result infrastructure.
+
+Support: status assertions, response-header assertions, body/text assertions, bounded JSON-path-like assertions, named tests, pass / fail / error, expected vs actual diagnostics.
+Requirements: assertion definitions persist with requests; execution results are immutable snapshots (editing assertions later must not alter historical results); reuse existing execution path and Phase 11 result model. Do NOT create another scripting runtime, another execution path, or AI-based judgment. Expose a deterministic failure predicate/result model for future Flight Recorder minimization.
+Tests: status equality/ranges, missing/duplicate headers, text contains/equality, JSON string/number/boolean/null, missing paths, malformed/non-JSON bodies, assertion runtime errors, multiple assertions, edit-after-run vs history, profile isolation, browser result display.
+Run: bun test, backend syntax if touched, frontend build, browser smoke 375/768/1024/1440, GitHub Actions.
+Finish: PHASE 12 VERDICT: PASS or PHASE 12 VERDICT: BLOCKED
+
+Agent Response Summary:
+Confirmed onboarding was already recorded for this repo root, branched phase12/assertions-testing from the Phase 11 script-sandbox dependency, and implemented declarative assertions (status/header/body/bounded JSON path) as persisted request data evaluated by a pure deterministic module inside the existing post-response stage. Reused the Phase 11 test-result model (name/status/message) and extended counts to distinguish pass/fail/error, added a deterministic failure predicate for the Flight Recorder, and built the Assertions editor plus diagnostics display. Added backend unit/integration and frontend unit tests, ran the full suite (448 pass, 1 skip), backend syntax, frontend build, and a Chrome CDP browser smoke at four widths.
+
+Actions:
+* Created branch phase12/assertions-testing from phase11/script-sandbox
+* Edited backend/src/shared/utils/limits.js, backend/src/shared/utils/schemas.js
+* Added backend/src/features/scripts/assertions.js, assertions.test.js, execution-assertions.test.js
+* Edited backend/src/features/scripts/script-runner.js
+* Added frontend/src/features/scripts/assertions.js, AssertionEditor.jsx, assertions.test.js
+* Edited frontend RequestBuilder.jsx, ScriptResults.jsx, script-results.js, script-results.test.js, workspace-reducer.js, styles.css
+* Ran bun test, node --check, vite build, Chrome CDP smoke
+
+Context:
+tool=opencode
+branch=phase12/assertions-testing
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=main
+parent_agent=none
+
+## [2026-09-22T04:28:20+05:30] Continue implementation
+
+User Prompt (normalized, secrets redacted):
+Continue the current authorized phase from the latest verified checkpoint.
+
+Agent Response Summary:
+Resumed Phase 12 work after an interrupted test command, ran the script test suites and full bun test (448 pass, 1 skip), verified backend syntax on modified files and the frontend production build.
+
+Actions:
+* Ran bun test backend/src/features/scripts and full bun test
+* Ran node --check on modified backend files and vite build
+
+Context:
+tool=opencode
+branch=phase12/assertions-testing
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=main
+parent_agent=none
+
+## [2026-09-22T04:56:20+05:30] Phase 12 completion and PR state
+
+User Prompt (normalized, secrets redacted):
+Finish the remaining verified work promptly and close out the phase/PR without introducing unrelated changes.
+
+Agent Response Summary:
+Checked the repository state and confirmed there is no in-progress merge or rebase and no unmerged conflict markers in the working tree; only the intended Phase 12 edits are present. Explained that the phase branches are stacked (phases 5, 7, 8, 11 are not merged into main), which is the likely source of PR conflicts rather than an unresolved local conflict, and continued verification.
+
+Actions:
+* Ran git status, git diff --diff-filter=U, checked .git MERGE_HEAD/rebase state
+* Removed stray out.txt scratch file
+
+Context:
+tool=opencode
+branch=phase12/assertions-testing
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=main
+parent_agent=none
+
+## [2026-09-22T05:08:20+05:30] Browser smoke verification
+
+User Prompt (normalized, secrets redacted):
+Use the already-returned command/browser output and continue with the remaining browser smoke verification instead of waiting on the completed command.
+
+Agent Response Summary:
+Completed the remaining Phase 12 verification: started the app and a headless Chrome CDP session, logged in with the seeded demo account, rendered the workspace and the new Assertions editor at 375/768/1024/1440, added an assertion row, and captured screenshots. Stopped the processes started for the audit and confirmed git status contains only intended Phase 12 changes.
+
+Actions:
+* Ran Chrome CDP smoke scripts writing screenshots to %TEMP%
+* Inspected screenshots for the workspace and Assertions editor
+* Stopped Chrome and the dev servers; verified git status
+
+Context:
+tool=opencode
+branch=phase12/assertions-testing
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=main
+parent_agent=none
+
+## [2026-09-22T05:27:28+05:30] Phase 12 finish: live execution + browser result display
+
+User Prompt (normalized, secrets redacted):
+Finish the remaining Phase 12 steps and complete the verification/delivery flow.
+
+Agent Response Summary:
+Closed the last Phase 12 gap by exercising a real end-to-end run: enabled Local Runtime for 127.0.0.1, executed a scratch request with four assertions through POST /api/v1/executions against the seeded local demo target, and confirmed 1 passed / 3 failed with expected/actual diagnostics plus immutable history reload. Browser inspection exposed that openHistoryEntry dropped scriptResults, so historical Tests results never rendered; fixed with one minimal App.jsx line (scriptResults: record.scriptResults ?? record.snapshot.scriptResults ?? null). Re-verified via CDP: response inspector Tests(4) tab shows the assertion results and diagnostics in the browser. Re-ran bun test (448 pass, 0 fail, 1 skip), backend syntax checks, and frontend build (success).
+
+Actions:
+* Enabled local runtime via PUT /api/v1/local-runtime; ran live execution with 4 assertions via POST /api/v1/executions
+* Edited frontend/src/App.jsx (added scriptResults passthrough in openHistoryEntry inspected object)
+* Ran CDP browser verification; captured %TEMP%\tracer-phase12-tests.png
+* Ran bun test, node --check on modified backend files, bun run build
