@@ -18,6 +18,8 @@ const VAR_PLAIN = "55555555-5555-4555-8555-555555555551";
 const VAR_SECRET = "55555555-5555-4555-8555-555555555552";
 const ENV_VAR = "66666666-6666-4666-8666-666666666661";
 const NEW_HEADER = "77777777-7777-4777-8777-777777777771";
+const ASSERT_1 = "99999999-9999-4999-8999-999999999991";
+const ASSERT_2 = "99999999-9999-4999-8999-999999999992";
 const MONGO_COLLECTION_ID = "68c0ffee00000000000000a1";
 
 const PRE_REQUEST = "tracer.variables.set('tenant', 'acme');";
@@ -142,7 +144,7 @@ const expectedAggregate = () => {
 		variables: collection.variables,
 		auth: collection.auth,
 		folders: collection.folders,
-		requests: collection.requests,
+		requests: collection.requests.map((request) => ({ ...request, assertions: [] })),
 	};
 };
 
@@ -267,35 +269,62 @@ describe("portable -> domain round trip", () => {
 });
 
 describe("assertions envelope", () => {
-	const items = [
-		{ id: "assert-1", kind: "status", expected: 200 },
-		{ id: "assert-2", kind: "header", name: "content-type", matches: "json" },
+	const definitions = [
+		{
+			id: ASSERT_1,
+			name: "status is 200",
+			enabled: true,
+			target: "status",
+			operator: "equals",
+			path: "",
+			expected: "200",
+			valueType: "string",
+			min: null,
+			max: null,
+		},
+		{
+			id: ASSERT_2,
+			name: "json count",
+			enabled: true,
+			target: "json",
+			operator: "equals",
+			path: "count",
+			expected: "3",
+			valueType: "number",
+			min: null,
+			max: null,
+		},
 	];
 
-	test("carries assertions through the portable format and defers them", () => {
-		const exported = projectFromDomain({ ...domainInput(), assertionsByRequestId: { [REQUEST_1]: { contract: ASSERTIONS_CONTRACT, items } } });
+	const inputWithAssertions = () => {
+		const input = domainInput();
+		input.collections[0].requests[0] = { ...input.collections[0].requests[0], assertions: definitions };
+		return input;
+	};
+
+	test("wraps Phase 12 definitions into the versioned envelope and maps them back on import", () => {
+		const exported = projectFromDomain(inputWithAssertions());
+		expect(exported.collections[0].requests[0].id).toBe(REQUEST_1);
+		expect(exported.collections[0].requests[0].assertions).toEqual({ contract: ASSERTIONS_CONTRACT, items: definitions });
 		const applied = projectToDomain(parseProject(serializeProject(exported)));
-		expect(applied.deferred.assertions).toEqual([{ requestId: REQUEST_1, contract: ASSERTIONS_CONTRACT, items }]);
-		expect(applied.collections[0].requests[0].assertions).toBeUndefined();
-		expect(applied.collections[0].requests[1].assertions).toBeUndefined();
+		expect(applied.collections[0].requests[0].id).toBe(REQUEST_1);
+		expect(applied.collections[0].requests[0].assertions).toEqual(definitions);
 	});
 
 	test("re-exports identically after a round trip", () => {
-		const exported = projectFromDomain({ ...domainInput(), assertionsByRequestId: { [REQUEST_1]: { contract: ASSERTIONS_CONTRACT, items } } });
+		const exported = projectFromDomain(inputWithAssertions());
 		const applied = projectToDomain(serializeProject(exported));
 		const reexported = projectFromDomain({
 			collections: applied.collections,
 			environments: applied.environments,
 			examples: applied.examples,
-			assertionsByRequestId: { [REQUEST_1]: { contract: ASSERTIONS_CONTRACT, items } },
 		});
 		expect(serializeProject(reexported)).toBe(serializeProject(exported));
 	});
 
-	test("fails closed on an assertions contract this version does not own", () => {
-		const error = caught(() =>
-			projectFromDomain({ ...domainInput(), assertionsByRequestId: { [REQUEST_1]: { contract: "tracer.assertions/99", items: [] } } }),
-		);
-		expect(error.code).toBe("PROJECT_ASSERTIONS_UNSUPPORTED");
+	test("requests without assertion definitions export without an envelope", () => {
+		const exported = projectFromDomain(domainInput());
+		expect(exported.collections[0].requests[0].assertions).toBeUndefined();
+		expect(exported.collections[0].requests[1].assertions).toBeUndefined();
 	});
 });

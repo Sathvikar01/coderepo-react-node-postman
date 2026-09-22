@@ -12,6 +12,7 @@ const EMPTY_REQUEST = () => ({
 	body: { mode: "none" },
 	auth: { mode: "none" },
 	scripts: { preRequest: "", test: "" },
+	assertions: [],
 	settings: { timeoutMs: 15000 },
 });
 
@@ -38,6 +39,7 @@ export function createDraftTab({
 	const definition = request ? structuredClone(request) : EMPTY_REQUEST();
 	const scripts = definition.scripts ?? {};
 	definition.scripts = { preRequest: String(scripts.preRequest ?? ""), test: String(scripts.test ?? "") };
+	definition.assertions = Array.isArray(definition.assertions) ? definition.assertions : [];
 	if (folderId) definition.folderId = folderId;
 	return {
 		id: crypto.randomUUID(),

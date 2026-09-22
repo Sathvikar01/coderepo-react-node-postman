@@ -102,6 +102,70 @@ export const scriptsSchema = z
 	.strict()
 	.default({ preRequest: "", test: "" });
 
+export const ASSERTION_TARGETS = ["status", "header", "body", "json"];
+export const ASSERTION_OPERATORS = ["equals", "range", "exists", "contains"];
+export const ASSERTION_VALUE_TYPES = ["string", "number", "boolean", "null"];
+const ASSERTION_OPERATORS_BY_TARGET = {
+	status: ["equals", "range"],
+	header: ["exists", "equals", "contains"],
+	body: ["equals", "contains"],
+	json: ["exists", "equals"],
+};
+const ASSERTION_PATH = /^[A-Za-z0-9_$.\-[\]]*$/;
+const NUMERIC_TEXT = /^-?\d+(\.\d+)?$/;
+
+export const assertionSchema = z
+	.object({
+		id: idSchema,
+		name: z.string().trim().min(1).max(LIMITS.assertionName),
+		enabled: z.boolean().default(true),
+		target: z.enum(ASSERTION_TARGETS),
+		operator: z.enum(ASSERTION_OPERATORS),
+		path: z
+			.string()
+			.max(LIMITS.assertionPathBytes)
+			.regex(ASSERTION_PATH, "Paths use letters, digits, dots, dashes, underscores, and [n] indices.")
+			.default(""),
+		expected: z
+			.string()
+			.refine((value) => utf8Bytes(value) <= LIMITS.assertionValueBytes, "Expected values are limited to 4 KiB.")
+			.default(""),
+		valueType: z.enum(ASSERTION_VALUE_TYPES).default("string"),
+		min: z.number().int().min(100).max(599).nullable().default(null),
+		max: z.number().int().min(100).max(599).nullable().default(null),
+	})
+	.strict()
+	.superRefine((assertion, context) => {
+		const issue = (path, message) => context.addIssue({ code: "custom", path, message });
+		if (!ASSERTION_OPERATORS_BY_TARGET[assertion.target].includes(assertion.operator))
+			issue(["operator"], `"${assertion.operator}" is not a valid operator for a ${assertion.target} assertion.`);
+		if (assertion.target === "status") {
+			if (assertion.path) issue(["path"], "Status assertions do not use a path.");
+			if (assertion.operator === "equals" && !NUMERIC_TEXT.test(assertion.expected))
+				issue(["expected"], "Status assertions expect a numeric status code.");
+			if (assertion.operator === "range") {
+				if (assertion.min === null || assertion.max === null) issue(["min"], "Status ranges need a minimum and maximum.");
+				else if (assertion.min > assertion.max) issue(["max"], "The range maximum must be at least the minimum.");
+			}
+		} else if (assertion.target === "header") {
+			if (!assertion.path.trim()) issue(["path"], "Header assertions need a header name.");
+			if (/[\r\n]/.test(assertion.path)) issue(["path"], "Header names cannot contain line breaks.");
+		} else if (assertion.target === "body") {
+			if (assertion.path) issue(["path"], "Body assertions do not use a path.");
+		} else {
+			if (!assertion.path.trim()) issue(["path"], "JSON assertions need a path.");
+			if (assertion.operator === "equals" && assertion.valueType === "number" && !NUMERIC_TEXT.test(assertion.expected))
+				issue(["expected"], "Numeric JSON assertions expect a number.");
+			if (assertion.operator === "equals" && assertion.valueType === "boolean" && !["true", "false"].includes(assertion.expected))
+				issue(["expected"], "Boolean JSON assertions expect true or false.");
+		}
+	});
+
+export const assertionsSchema = z
+	.array(assertionSchema)
+	.max(LIMITS.assertionsPerRequest, "A request may define at most 50 assertions.")
+	.default([]);
+
 export const requestDefinitionSchema = z
 	.object({
 		schemaVersion: z.literal(1),
@@ -118,6 +182,7 @@ export const requestDefinitionSchema = z
 		body: bodySchema,
 		auth: authSchema,
 		scripts: scriptsSchema,
+		assertions: assertionsSchema,
 		settings: z.object({ timeoutMs: z.number().int().min(100).max(30000) }).strict(),
 	})
 	.strict()

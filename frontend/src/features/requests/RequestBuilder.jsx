@@ -2,7 +2,9 @@ import { useState } from "react";
 import { MaterialIcon } from "../../shared/components/MaterialIcon.jsx";
 import { SelectMenu } from "../../shared/components/SelectMenu.jsx";
 import { useRovingTabs } from "../../shared/hooks/useRovingTabs.js";
+import { AssertionEditor } from "../scripts/AssertionEditor.jsx";
 import { ScriptEditor } from "../scripts/ScriptEditor.jsx";
+import { assertionsOf, enabledAssertionCount } from "../scripts/assertions.js";
 import { KeyValueEditor } from "./KeyValueEditor.jsx";
 
 const METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
@@ -202,6 +204,7 @@ export function RequestBuilder({
 		{ id: "auth", label: "Auth", badge: request.auth.mode === "inherit" ? 0 : 1 },
 		{ id: "preRequest", label: "Pre-request", badge: request.scripts?.preRequest?.trim() ? 1 : 0 },
 		{ id: "tests", label: "Tests", badge: request.scripts?.test?.trim() ? 1 : 0 },
+		{ id: "assertions", label: "Assertions", badge: enabledAssertionCount(request) },
 		{ id: "settings", label: "Settings", badge: 0 },
 	];
 	return (
@@ -307,6 +310,9 @@ export function RequestBuilder({
 						value={request.scripts?.test ?? ""}
 						onChange={(test) => onChange({ scripts: { preRequest: request.scripts?.preRequest ?? "", test } })}
 					/>
+				)}
+				{section === "assertions" && (
+					<AssertionEditor assertions={assertionsOf(request)} onChange={(assertions) => onChange({ assertions })} />
 				)}
 				{section === "settings" && (
 					<div className="settings-grid">

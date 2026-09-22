@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { phaseSummary, scriptConsoleEntries, scriptCounts, scriptResultsOf, scriptTests } from "./script-results.js";
+import {
+	phaseSummary,
+	scriptConsoleEntries,
+	scriptCounts,
+	scriptResultsOf,
+	scriptTests,
+	testDiagnostics,
+	testStatusTone,
+} from "./script-results.js";
 
 const results = () => ({
 	version: 1,
@@ -38,5 +46,19 @@ describe("script results helpers", () => {
 		expect(phaseSummary({ status: "skipped", mutations: {} }).tone).toBe("warning");
 		expect(phaseSummary(results().preRequest).label).toBe("Ran \u00b7 changed 1 variable, 1 header");
 		expect(phaseSummary({ status: "passed", mutations: { headers: [], variables: [] } }).label).toBe("Ran");
+	});
+
+	test("maps test statuses and exposes assertion diagnostics", () => {
+		expect(testStatusTone("passed")).toBe("passed");
+		expect(testStatusTone("failed")).toBe("failed");
+		expect(testStatusTone("error")).toBe("error");
+		expect(testStatusTone(undefined)).toBe("error");
+		expect(testDiagnostics({ name: "x" })).toBeNull();
+		expect(testDiagnostics({ expected: "200", actual: "500", kind: "status", path: null })).toEqual({
+			expected: "200",
+			actual: "500",
+			location: "status",
+		});
+		expect(testDiagnostics({ kind: "json", path: "count" })).toEqual({ expected: null, actual: null, location: "json \u00b7 count" });
 	});
 });

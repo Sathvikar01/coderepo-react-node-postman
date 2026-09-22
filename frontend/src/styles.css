@@ -2592,3 +2592,83 @@ dialog::backdrop {
 .text-button.danger {
 	color: var(--danger, #d64545);
 }
+/* Assertions (Phase 12) */
+.assertion-editor {
+	display: grid;
+	gap: 10px;
+}
+
+.assertion-row {
+	display: grid;
+	gap: 8px;
+	background: var(--surface-raised);
+	border: 1px solid var(--divider);
+	border-radius: var(--radius-sm);
+	padding: 10px;
+}
+
+.assertion-row-top {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.assertion-name {
+	flex: 0 1 220px;
+	min-width: 140px;
+}
+
+.assertion-summary {
+	flex: 1 1 160px;
+	color: var(--muted);
+	font-size: 12px;
+	overflow-wrap: anywhere;
+}
+
+.assertion-row-fields {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	align-items: center;
+}
+
+.assertion-select {
+	min-width: 140px;
+}
+
+.assertion-path,
+.assertion-expected {
+	flex: 1 1 200px;
+	min-width: 160px;
+}
+
+.assertion-number {
+	width: 88px;
+}
+
+.assertion-dash {
+	color: var(--muted);
+	font-size: 12px;
+}
+
+.script-test-name.error {
+	color: var(--warning);
+}
+
+.script-test-diagnostics {
+	display: flex;
+	flex-basis: 100%;
+	flex-wrap: wrap;
+	gap: 10px;
+	align-items: baseline;
+}
+
+.script-test-diagnostics code {
+	background: var(--surface-muted);
+	border: 1px solid var(--divider);
+	border-radius: 4px;
+	padding: 1px 5px;
+	font-family: "Cascadia Code", Consolas, "Courier New", monospace;
+	font-size: 11px;
+	overflow-wrap: anywhere;
+}

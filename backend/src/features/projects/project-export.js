@@ -10,16 +10,16 @@
 // on a credential-bearing header aborts the export instead of producing a file
 // that would leak or misrepresent credentials.
 //
-// Assertions (Phase 12) are attached through the narrow versioned envelope in
-// project-schema.js: assertionsByRequestId is a plain map from request id to
-// { contract, items }. Anything that is not that envelope fails closed.
+// Assertions. Phase 12 owns assertion semantics: each request's validated
+// definition list travels in the narrow versioned envelope defined in
+// project-schema.js. Historical execution results are not request definitions
+// and are never exported.
 
 import { AppError } from "../../shared/errors/app-error.js";
 import { CREDENTIAL_REFERENCE, collectionAggregateSchema } from "../../shared/utils/schemas.js";
 import { SENSITIVE_MATCH_HEADERS } from "../mocks/mock-matcher.js";
 import {
 	ASSERTIONS_CONTRACT,
-	portableAssertionsSchema,
 	TRACER_PROJECT_KIND,
 	TRACER_PROJECT_VERSION,
 	tracerProjectSchema,
@@ -96,17 +96,12 @@ function aggregateFrom(collection) {
 	return picked;
 }
 
-function withAssertions(request, assertionsByRequestId) {
-	const candidate = assertionsByRequestId?.[request.id];
-	if (candidate === undefined) return request;
-	const result = portableAssertionsSchema.safeParse(candidate);
-	if (!result.success)
-		throw projectInvalid(
-			result.error,
-			"PROJECT_ASSERTIONS_UNSUPPORTED",
-			`Assertions for request "${request.name}" are not in the supported "${ASSERTIONS_CONTRACT}" envelope; assertion semantics belong to Phase 12.`,
-		);
-	return { ...request, assertions: result.data };
+function withAssertions(request) {
+	if (!Array.isArray(request.assertions) || request.assertions.length === 0) {
+		const { assertions, ...rest } = request;
+		return rest;
+	}
+	return { ...request, assertions: { contract: ASSERTIONS_CONTRACT, items: request.assertions } };
 }
 
 function exampleFromDomain(example) {
@@ -122,7 +117,7 @@ function exampleFromDomain(example) {
 	};
 }
 
-export function projectFromDomain({ name, collections, environments = [], examples = [], assertionsByRequestId } = {}) {
+export function projectFromDomain({ name, collections, environments = [], examples = [] } = {}) {
 	if (!Array.isArray(collections) || collections.length === 0)
 		throw new AppError(400, "PROJECT_INVALID", "A portable project requires at least one collection.");
 	collections.forEach(assertCollectionSecretSafe);
@@ -147,7 +142,7 @@ export function projectFromDomain({ name, collections, environments = [], exampl
 				variables: result.data.variables,
 				auth: result.data.auth,
 				folders: result.data.folders,
-				requests: result.data.requests.map((request) => withAssertions(request, assertionsByRequestId)),
+				requests: result.data.requests.map((request) => withAssertions(request)),
 			};
 		}),
 		environments: environments.map((environment) => ({ name: environment?.name, variables: environment?.variables ?? [] })),

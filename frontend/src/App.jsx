@@ -824,6 +824,7 @@ export default function App() {
 				outcome: record.outcome,
 				response: record.response,
 				error: record.error,
+				scriptResults: record.scriptResults ?? record.snapshot?.scriptResults ?? null,
 				effectCertainty: record.effectCertainty,
 				executedUrl: record.snapshot?.executedUrl ?? record.executedUrl ?? null,
 				persistence: record.persistence,

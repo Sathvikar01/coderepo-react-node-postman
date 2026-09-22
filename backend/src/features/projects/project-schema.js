@@ -15,9 +15,10 @@
 // jars, resolved secret values, and send-only overrides have no representation
 // at all. Validation fails closed when a safe representation is impossible.
 //
-// Assertions. Phase 12 owns assertion semantics. Until Phase 12 lands, this
-// format carries assertions only inside a narrow versioned envelope
-// (ASSERTIONS_CONTRACT) whose items stay opaque to this layer.
+// Assertions. Phase 12 owns assertion semantics. This format carries them
+// only inside a narrow versioned envelope (ASSERTIONS_CONTRACT) whose items
+// stay opaque here and are validated against Phase 12's request assertion
+// schema when a project is mapped onto the domain.
 
 import { z } from "zod";
 import { LIMITS, utf8Bytes } from "../../shared/utils/limits.js";
