@@ -158,6 +158,7 @@ pass("Runtime opens");
 
 await click('[aria-label="New request"]', "New request");
 await waitFor('document.querySelector(".request-builder") !== null', "request builder");
+await setInput(".url-input", "http://127.0.0.1:8000/demo/v1/examples/text");
 pass("new request works");
 
 await clickButtonText("Headers");
@@ -178,7 +179,7 @@ pass("Send creates and renders a terminal execution result");
 
 await clickButtonText("History");
 await waitFor('document.querySelector(".history-item") !== null', "history entry");
-await clickButtonText("Analyze");
+await clickButtonText("Passport");
 await waitFor('document.querySelector(".flight-recorder-dialog") !== null', "Flight Recorder");
 const recorderTabs = await evaluate("[...document.querySelectorAll('.flight-recorder-dialog [role=tab]')].map((node) => node.textContent.trim()).join('|')");
 for (const expected of ["Passport", "Compare", "Minimize", "Capsule"]) {
