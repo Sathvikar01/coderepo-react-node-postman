@@ -10,6 +10,7 @@ import { demoRouter } from "./features/demo/demo.routes.js";
 import { environmentRouter } from "./features/environments/environment.routes.js";
 import { exampleRouter } from "./features/examples/example.routes.js";
 import { executionRouter } from "./features/executions/execution.routes.js";
+import { executionIntelligenceRouter } from "./features/execution-intelligence/execution-intelligence.routes.js";
 import { historyRouter } from "./features/history/history.routes.js";
 import { localRuntimeRouter } from "./features/local-runtime/local-runtime.routes.js";
 import { mockRouteRouter, mockRouter } from "./features/mocks/mock.routes.js";
@@ -92,6 +93,13 @@ export function createApp() {
 		requireWorkspaceAuth,
 		resolveProfileContext,
 		executionRouter,
+	);
+	app.use(
+		"/api/v1/execution-intelligence",
+		express.json({ limit: LIMITS.jsonBodyExecution }),
+		requireWorkspaceAuth,
+		resolveProfileContext,
+		executionIntelligenceRouter,
 	);
 	app.use("/api/v1/history", express.json({ limit: LIMITS.jsonBodyDefault }), requireWorkspaceAuth, resolveProfileContext, historyRouter);
 	app.use(
