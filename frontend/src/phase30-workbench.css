@@ -1096,9 +1096,8 @@ textarea:focus-visible,
 		display: none;
 	}
 
-	.request-line,
-	.request-url-row {
-		grid-template-columns: minmax(78px, auto) minmax(0, 1fr) auto;
+	.url-bar {
+		grid-template-columns: minmax(78px, 96px) minmax(0, 1fr) auto;
 	}
 
 	.url-bar .code-button {
