@@ -2064,4 +2064,156 @@ User Prompt (verbatim, secrets redacted):
 Phase 19 brief: add saved response examples and deterministic mocks on branch phase19/examples-mocks in parallel with Phases 8, 9, 11, 18. Flow request -> save example -> mock route -> deterministic matched response. Examples save from a live response or manual data (name, status, ordered headers, body, content type, source request reference), profile-scoped, never mutate the execution/history receipt. Mock matching uses explicit deterministic rules (method, path, selected query params, selected request headers) with deterministic priority and a clear mock miss. Mocks must not dispatch network traffic, expose another profile's examples, leak secrets, modify history truth, or silently override normal Send; mock execution must be explicitly selected. UX: Save as example, examples list, create/edit/delete, Mock Send / Copy mock URL, obvious mock indicator. Tests: save from response, manual, duplicate headers, JSON/text/empty/binary body, deterministic priority, query/header matching, unmatched request, profile isolation, edit/delete, zero transport calls, real Send unchanged, restart persistence. Run bun test, frontend build, browser smoke, GitHub Actions. Finish with PHASE 19 VERDICT.
 
 Agent Response Summary:
-Created worktree C:\Users\arsat\Downloads\postman-phase19 (branch phase19/examples-mocks) because another agent was switching branches in the shared checkout, and confirmed every parallel phase branch still points at 0747608. Read AGENTS.md, ASTRA_ARCHITECTURE.md sections 8-14, and the existing execution/history/profile/collection/workspace code before writing anything. Implemented backend/src/features/examples (model, profile-scoped repository, service, zod controller, routes) and backend/src/features/mocks (pure matcher, match-target derivation that reuses compileRequest read-only, HMAC capability token, resolve/serve service, controller with capability route, routes), mounted both in app.js, and added LIMITS.examplesPerProfile. Frontend adds features/examples (api, pure draft helpers, dialog, actions, p
+Created worktree C:\Users\arsat\Downloads\postman-phase19 (branch phase19/examples-mocks) because another agent was switching branches in the shared checkout, and confirmed every parallel phase branch still points at 0747608. Read AGENTS.md, ASTRA_ARCHITECTURE.md sections 8-14, and the existing execution/history/profile/collection/workspace code before writing anything. Implemented backend/src/features/examples (model, profile-scoped repository, service, zod controller, routes) and backend/src/features/mocks (pure matcher, match-target derivation that reuses compileRequest read-only, HMAC capability token, resolve/serve service, controller with capability route, routes), mounted both in app.js, and added LIMITS.examplesPerProfile. Frontend adds features/examples (api, pure draft helpers, dialog, actions, panel) and features/mocks (api, pure run helpers, mock result banner), wired into App.jsx as a third sidebar tab plus an explicit Mock Send control and a mock banner above the response pane; styles appended. Key decisions: mock execution is a separate endpoint that never imports the transport; match rules are derived server-side from authored rows with compiled values when available; credential headers are rejected as match rules; mock routes use an unguessable per-profile HMAC token so they work without a session but cannot read another profile's examples; mock results carry outcome "mock"/"mock_miss", effectCertainty "not_dispatched", and persistence "not_persisted". Found and worked around a bun 1.3.9 quirk where expect(...).rejects plus a numeric test timeout hangs. Verified with 30 test files (336 pass, 1 pre-existing skip) including new matcher/service/persistence/HTTP-integration tests, node --check on 86 backend files, a clean frontend build, and a 17/17 puppeteer browser smoke at 375/768/1024/1440 against a private backend port because other agents hold 8000/3000.
+
+Actions:
+* git worktree add C:\Users\arsat\Downloads\postman-phase19 -b phase19/examples-mocks origin/phase19/examples-mocks
+* Added backend/src/features/examples/{example.model,example.repository,example.service,example.controller,example.routes}.js and tests example.service.test.js, example.persistence.test.js, example.routes.test.js
+* Added backend/src/features/mocks/{mock-matcher,match-target,mock-token,mock.service,mock.controller,mock.routes}.js and tests mock-matcher.test.js, mock.service.test.js
+* Edited backend/src/app.js and backend/src/shared/utils/limits.js
+* Added frontend/src/features/examples/{example.api,example-draft,ExampleDialog,ExampleActions,ExamplesPanel}.jsx/.js and example-draft.test.js
+* Added frontend/src/features/mocks/{mock.api,mock-run,MockResultBanner}.jsx/.js and mock-run.test.js
+* Edited frontend/src/App.jsx and frontend/src/styles.css, documented the capability in README.md
+* Ran bun test, node --check, bun run build, bash setup.sh --seed, and a puppeteer smoke script (kept outside the repo in the temp directory)
+
+Context:
+tool=opencode
+branch=phase19/examples-mocks
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=C:\Users\arsat\Downloads\postman-phase19
+parent_agent=none
+
+## [2026-09-21T20:18:27+05:30] Phase 22 - generated API docs implementation, verification, and PR
+
+User Prompt (verbatim, secrets redacted):
+Phase 22 - Generated API Docs. Work only on: phase22/generated-docs. Run in parallel with Phases 8, 9, 11, 18, and 19. Generate readable API documentation directly from saved collections/requests (method + URL, description, path/query params, headers, body schema/example, auth type, environment/variable references, saved examples, response examples/statuses) without resolving or exposing secret values. UX: Collection -> Documentation with collection overview, request navigation, copyable request examples, generated cURL/snippet links only if Phase 8 integration is available cleanly, export as static HTML/Markdown if simple. Docs update from current saved collection state, no separate manual documentation database. Safety: escape all user-provided text, no HTML/script injection, secretRef values never rendered, send-only auth never included, malformed bodies fall back to Raw, huge examples bounded. Tests must cover query/header/body rendering, duplicate params, auth modes, variables, secret redaction, JSON/text/urlencoded bodies, malformed content, examples, empty collection, XSS payloads, profile isolation, collection update reflected in docs. Run bun test, frontend build, browser smoke at 375/768/1024/1440, GitHub Actions. Prefer frontend/src/features/docs/**, backend only if a small read-only docs projection endpoint is truly necessary; do not modify execution, cookies, scripts, mocks, or local-runtime ownership areas. Finish exactly with PHASE 22 VERDICT: PASS or PHASE 22 VERDICT: BLOCKED.
+
+Agent Response Summary:
+Implemented Phase 22 in an isolated worktree (C:\Users\arsat\Downloads\postman-phase22) on branch phase22/generated-docs, because the main worktree held another session's untracked Phase 8 export files. Added a pure documentation projection (frontend/src/features/docs/docs-model.js), a deterministic Markdown exporter (docs-markdown.js), a responsive dialog view (DocsView.jsx + docs.css), and 53 tests (model, markdown, SSR view). Safety: variable values are never projected (plain or secret), credential templates are reduced to their variable references with literal text masked, send-only auth overrides and drafts are never read, all text is bounded (body 8 KiB, example 4 KiB, 300 requests, 20 examples), React escaping is asserted by SSR tests with XSS payloads, and the Markdown export escapes prose/table cells with an adaptive code fence. Narrow shared edits only: App.jsx (import, one state, one render line, one prop), CollectionsSidebar.jsx (menu item + prop), MaterialIcon.jsx (one icon path), README.md (one bullet). Phase 8 snippets are not merged, so per the brief no generated cURL links were added; export is Markdown only (brief allows Markdown or HTML); no backend changes and no documentation database. Verification on the final commit: bun test 387 pass / 1 skip / 0 fail across 31 files (343/1 before the main merge), frontend vite build green, Puppeteer browser smoke PASS at 375/768/1024/1440 against a dedicated phase22 MongoDB database and dedicated ports (the shared 3000/8000 servers and request_desk_demo database belonging to parallel sessions were left untouched). Smoke evidence: docs open from the collection menu, folder nav, pretty JSON body, urlencoded duplicates, inherited auth, secret labels with no alias/value leakage, malformed JSON Raw fallback, response examples with statuses, copy Markdown and download .md, anchor navigation, Escape close, a live sidebar duplicate appearing in regenerated docs, no uncaught page errors. A 25px document overflow at 375px was measured with the docs view closed as well and traced to the pre-existing app header (.app-header-actions right edge 400px), so the docs assertion was scoped to the docs panes (zero horizontal overflow at all widths) and the baseline finding is recorded in the PR. main had advanced (Phase 18 merged), the PR conflicted on MaterialIcon.jsx; resolved by keeping both icon additions, re-ran tests/build/smoke on the merge, pushed 53a5b81, and GitHub Actions Baseline Gate contract job passed (run 35608199853). PR #11 is OPEN, CLEAN, and MERGEABLE for the user to merge.
+
+Actions:
+* Created worktree C:\Users\arsat\Downloads\postman-phase22 on branch phase22/generated-docs from origin/phase22/generated-docs; bun install; copied local .env files (never committed)
+* Added frontend/src/features/docs/{docs-model.js,docs-markdown.js,DocsView.jsx,docs.css} and tests {docs-model.test.js,docs-markdown.test.js,docs-view.test.js}
+* Narrow edits: frontend/src/App.jsx, frontend/src/features/collections/CollectionsSidebar.jsx, frontend/src/shared/components/MaterialIcon.jsx, README.md
+* Ran prettier@3.6.2 via bunx on the new docs files only (repo has no prettier dependency or script; baseline files are not prettier-clean)
+* bun test (387 pass / 1 skip / 0 fail), cd frontend && bun run build
+* Puppeteer smoke with a dedicated fixture database request_desk_phase22 on dynamically allocated ports; temporary fixture script deleted before commit; screenshots and dumps kept outside the repo
+* git commit aa9a4bc, merge 53a5b81 (conflict resolution keeping both MaterialIcon icons), git push
+* gh pr create --repo Sathvikar01/coderepo-react-node-postman -> https://github.com/Sathvikar01/coderepo-react-node-postman/pull/11 ; gh pr checks -> contract pass; gh pr view -> CLEAN/MERGEABLE
+* Appended this log entry
+
+Context:
+tool=opencode
+branch=phase22/generated-docs
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=C:\Users\arsat\Downloads\postman-phase22
+parent_agent=none
+phase_22_verdict=PASS
+
+## [2026-09-21T12:38:29+05:30] SESSION START
+
+tool=opencode
+Repo Root: C:\Users\arsat\Downloads\postman
+Branch: phase9/cookie-session-jar
+Worktree: main
+Parent Agent: none
+Language: node
+Time Remaining: 1d 10h 53m
+
+## [2026-09-21T21:18:33+05:30] Phase 9 brief: per-profile cookie/session jar on phase9/cookie-session-jar
+
+User Prompt (verbatim, secrets redacted):
+Phase 9 — Cookie / Session Jar. Work only on: phase9/cookie-session-jar. Start from the Phase 7 merged baseline. Goal: add per-profile HTTP cookie/session handling without changing the frozen execution architecture (response Set-Cookie -> cookie jar -> matching future request -> Cookie header). Support Set-Cookie, domain + path matching, secure cookies, expiry/Max-Age, host-only cookies, multiple cookies, replacement of same cookie key/domain/path, deletion via expiry, deterministic ordering, session cookies, explicit user Cookie header behavior. Jar must be profile-scoped and never allow cookies from Profile A to reach Profile B. Security: fail closed on malformed cookie attributes; do not send Secure over HTTP, to unrelated/subdomain-invalid hosts, expired, public-domain leakage, or outside path scope; do not expose cookie values in logs/history beyond existing redaction rules. Persistence through existing Mongo patterns; restart preserves persistent cookies; session-cookie lifetime must follow frozen product behavior and be documented and tested. UX: simple cookie viewer/editor only if required (inspect, delete one, clear jar). Tests: Set-Cookie -> next request, multiple Set-Cookie headers, domain/path rules, host-only vs domain, Secure, expiry/Max-Age, overwrite/delete, duplicate names with different paths, profile isolation, explicit Cookie header conflict, redirect cookies without auto-follow, restart persistence, clear jar. Run bun test, frontend build, browser smoke, GitHub Actions. Scope: prefer backend/src/features/cookies/** plus minimal execution integration and frontend cookie UI; do not refactor transport/compiler/history broadly. Phase 8 is running in parallel: do not touch its export/snippet files. Finish exactly PHASE 9 VERDICT: PASS or PHASE 9 VERDICT: BLOCKED.
+
+Agent Response Summary:
+Implemented the Phase 9 cookie jar end to end. Backend: new backend/src/features/cookies with a pure RFC 6265 parser/matcher (fail-closed malformed attributes, domain/path/host-only/Secure/expiry/Max-Age, deterministic path-length+creation ordering, public-suffix denial), a profile-scoped Mongoose model/repository (unique name+domain+path key, lazy purge), a service that injects matching cookies after target validation and stores Set-Cookie from every response including redirects, plus GET/DELETE routes under /api/v1/cookies. Execution integration is narrow: cookies are applied after compile and target validation, stored after transport, and every jar failure degrades to a warning instead of failing a send; stored values join response redaction. Session cookies are scoped to the backend process (new sessionId on restart) while persistent cookies survive; decision documented in README. Added /demo/v1/cookies/set and /demo/v1/cookies/echo fixtures. Frontend: cookie.api.js, CookiePanel (inspect/delete/clear with confirmation), cookie-summary helpers, a Cookies sidebar tab in App.jsx, and styles. Verified: bun test 393 pass/1 skip/0 fail across 32 files (includes 56 new cookie tests), frontend build green, API E2E 12/12 checks against the running app, browser smoke jar/viewer/delete/clear plus responsive checks at 375/768/1024/1440. Note: the shared main worktree was switched between branches by parallel agents mid-phase; recovered the commit from a rescue ref, moved work to the postman-phase9 worktree, rebased onto latest main, and resolved the execution.service.js conflict with Phase 18 (kept both local-runtime warnings and cookie warnings, injected a local-runtime stub plus ObjectId-shaped profile ids in the cookie execution tests).
+
+Actions:
+* Read AGENTS.md, ASTRA_ARCHITECTURE.md, and the Phase 7 baseline execution/compiler/transport/history/profile code; checked the transcript log (onboarding already recorded)
+* Created backend/src/features/cookies/{set-cookie,cookie.model,cookie.repository,cookie.service,cookie.controller,cookie.routes}.js and mounted the router in backend/src/app.js
+* Integrated the jar into backend/src/features/executions/execution.service.js (apply after target validation, capture after transport, warnings only on failure) and added cookie limits in backend/src/shared/utils/limits.js
+* Added demo cookie endpoints in backend/src/features/demo/{demo.controller,demo.routes}.js
+* Added tests: set-cookie.test.js (parser/matching matrix), cookie.service.test.js (jar semantics with in-memory repository), cookie-execution.test.js (pipeline integration), and cookie persistence cases in backend/src/features/persistence.test.js
+* Added frontend/src/features/cookies/{cookie.api.js,CookiePanel.jsx,cookie-summary.js,cookie-summary.test.js} and wired a Cookies sidebar tab in frontend/src/App.jsx plus styles.css
+* Documented cookie behavior, limits, and the session-cookie lifetime decision in README.md
+* Ran bun test (393 pass/1 skip/0 fail), frontend build, API E2E (12/12), browser smoke with 375/768/1024/1440 screenshots
+* Recovered from parallel-agent branch switching: worktree add C:/Users/arsat/Downloads/postman-phase9, rebased onto main, resolved execution.service.js conflict with Phase 18
+* Pushed phase9/cookie-session-jar (a6dcdbe) and opened PR https://github.com/Sathvikar01/coderepo-react-node-postman/pull/12
+
+Context:
+tool=opencode
+branch=phase9/cookie-session-jar
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=C:\Users\arsat\Downloads\postman-phase9
+parent_agent=none
+
+## [2026-09-21T21:18:59+05:30] Bounded-command continuation guardrail
+
+User Prompt (normalized, secrets redacted):
+Use short, explicit timeouts for commands/scripts and continue as soon as output is available; do not leave the session blocked on completed work.
+
+Agent Response Summary:
+Acknowledged. Switched to bounded command execution with short polling so control returns as soon as a process finishes instead of waiting out a long timeout.
+
+Actions:
+* Continued the Phase 9 browser smoke and backend restarts with short-lived commands and polling loops
+
+Context:
+tool=opencode
+branch=phase9/cookie-session-jar
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=C:\Users\arsat\Downloads\postman-phase9
+parent_agent=none
+
+## [2026-09-21T21:19:00+05:30] Short-timeout execution guardrail
+
+User Prompt (normalized, secrets redacted):
+Finish the remaining verified work promptly and close out the phase/PR without introducing unrelated changes.
+
+Agent Response Summary:
+Acknowledged and applied: background jobs are polled every few seconds with short sleeps, and long waits are avoided unless a command is still running.
+
+Actions:
+* Re-ran tests and smoke steps with 2-3 second polling intervals instead of long blocking timeouts
+
+Context:
+tool=opencode
+branch=phase9/cookie-session-jar
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=C:\Users\arsat\Downloads\postman-phase9
+parent_agent=none
+
+## [2026-09-21T21:19:01+05:30] Backend start command continuation
+
+User Prompt (normalized, secrets redacted):
+Continue the current task efficiently from the latest verified checkpoint.
+
+Agent Response Summary:
+Recognized the command as already executed successfully and continued immediately with the cookie E2E run instead of repeating it.
+
+Actions:
+* Ran the API cookie E2E against the running worktree backend: 12/12 checks pass
+
+Context:
+tool=opencode
+branch=phase9/cookie-session-jar
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=C:\Users\arsat\Downloads\postman-phase9
+parent_agent=none
+
+## [2026-09-21T21:20:04+05:30] Phase 9 verification complete: cookie jar shipped and green
+
+User Prompt (verbatim, secrets redacted):
+PHASE 9 VERDICT (final gate: bun test, frontend build, browser smoke, GitHub Actions, PR)
+
+Agent Response Summary:
+Final verification passed. bun test: 393 pass / 1 skip / 0 fail across 32 files, including 56 new cookie tests (parser/matching matrix, jar semantics, execution-pipeline integration, Mongo persistence, profile isolation, restart session lifetime). Frontend Vite production build succeeds in the phase9 worktree. Cookie API E2E against the running app passed 12/12 checks: Set-Cookie stored, Set-Cookie redacted in the history payload, jar listing, cookie reaching a matching path, path scope blocking an outside path, cross-profile isolation, delete one, clear jar. Browser smoke passed: login/profile, set-cookie send, jar viewer showing session/path cookies with Session and Host only badges, delete one cookie, clear jar, responsive screenshots at 375/768/1024/1440 (0 px horizontal overflow at 768/1024/1440, 1 px at 375 that the screenshot shows as sub-pixel rounding rather than a broken layout). GitHub Actions Baseline Gate run 35621305314 on PR #12: success. PR https://github.com/Sathvikar01/coderepo-react-node-postman/pull/12 is open and mergeable after rebasing onto main and resolving the execution.service.js conflict with Phase 18 (kept local-runtime and cookie warnings side by side; cookie execution tests now inject a local-runtime stub and use ObjectId-shaped profile ids). Session-cookie lifetime decision: session cookies are scoped to the running backend process and are dropped on restart, while Max-Age/Expires cookies persist; documented in README.md under Using the Workspace and Product Limits.
+
+Actions:
+* bun test (worktree): 393 pass, 1 skip, 0 fail across 32 files
+* frontend bun run build: success (vite 8.2.2)
+* API E2E (backend + Mongo + demo target): 12/12 checks pass
+* Browser smoke via CDP: jar viewer, delete, clear, responsive checks at 375/768/1024/1440
+* GitHub Actions Baseline Gate run 35621305314: success
+* git push --force origin phase9/cookie-session-jar -> a6dcdbe; PR #12 opened/updated
+* Removed duplicate untracked cookie directories l
