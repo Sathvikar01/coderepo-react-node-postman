@@ -27,10 +27,26 @@ describe("cli argument parsing", () => {
 			iterations: 1,
 			stopOnFailure: true,
 			variables: [],
+			variablesFromEnv: [],
 			allowLocal: [],
+			timeoutMs: null,
+			reportPath: null,
+			junitPath: null,
 			json: false,
 			planOnly: false,
+			validateOnly: false,
 		});
+	});
+
+	test("validate is a first-class command that takes only --json and --report", () => {
+		const parsed = parseCliArgs(["validate", "./api-project", "--json", "--report", "ci/validate.json"]);
+		expect(parsed.command).toBe("validate");
+		expect(parsed.options.validateOnly).toBe(true);
+		expect(parsed.options.reportPath).toBe("ci/validate.json");
+		expect(parsed.options.json).toBe(true);
+		const rejected = capture(() => parseCliArgs(["validate", "./p", "--request", "Health"]));
+		expect(rejected.error).toBeInstanceOf(CliError);
+		expect(rejected.error.code).toBe("CLI_USAGE");
 	});
 
 	test("plan is a first-class command that implies plan mode", () => {
@@ -68,6 +84,37 @@ describe("cli argument parsing", () => {
 			{ key: "token", value: "abc=def" },
 			{ key: "region", value: "eu" },
 		]);
+	});
+
+	test("CI flags parse timeout, report paths, and environment-bound variables", () => {
+		const parsed = parseCliArgs([
+			"run",
+			"./p",
+			"--timeout",
+			"45",
+			"--report",
+			"ci/run.json",
+			"--junit",
+			"ci/run.junit.xml",
+			"--variable-env",
+			"token=API_TOKEN",
+		]);
+		expect(parsed.options.timeoutMs).toBe(45000);
+		expect(parsed.options.reportPath).toBe("ci/run.json");
+		expect(parsed.options.junitPath).toBe("ci/run.junit.xml");
+		expect(parsed.options.variablesFromEnv).toEqual([{ key: "token", env: "API_TOKEN" }]);
+	});
+
+	test("validate records plan-only incompatibilities", () => {
+		const cases = [
+			[["run", "./p", "--plan", "--junit", "x.xml"], "CLI_USAGE"],
+			[["run", "./p", "--plan", "--timeout", "5"], "CLI_USAGE"],
+			[["run", "./p", "--timeout", "0"], "CLI_USAGE"],
+		];
+		for (const [argv, code] of cases) {
+			const result = capture(() => parseCliArgs(argv));
+			expect({ argv, code: result.error?.code }).toEqual({ argv, code });
+		}
 	});
 
 	test("--allow-local normalizes each exact host and de-duplicates", () => {
@@ -118,7 +165,10 @@ describe("cli argument parsing", () => {
 	test("the usage text documents commands, options, and exit codes", () => {
 		const usage = formatCliUsage();
 		expect(usage).toContain("tracer run <project>");
+		expect(usage).toContain("tracer validate <project>");
 		expect(usage).toContain("--allow-local");
+		expect(usage).toContain("--variable-env");
+		expect(usage).toContain("124");
 		expect(usage).toContain("130");
 	});
 });

@@ -4,6 +4,9 @@ package-lock.json
 .mongodb/
 dist/
 build/
+
+# CI report artifacts (JSON/JUnit) written by the Tracer CLI workflow
+artifacts/
 .env
 .env.local
 *.log

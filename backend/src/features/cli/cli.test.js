@@ -9,7 +9,7 @@
 //   2. the CLI contract — stable JSON, documented exit codes, secret safety,
 //      cancellation, and per-step Flight Recorder linkage.
 
-import { writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { initConfig } from "../../shared/config/index.js";
@@ -67,7 +67,7 @@ const sink = () => {	const chunks = [];
 // real binary requires an explicit `run` command.
 const runCli = (args, io = {}) => {
 	const [first] = args;
-	const explicit = first === "run" || first === "plan" || first === "help" || String(first).startsWith("-");
+	const explicit = first === "run" || first === "plan" || first === "validate" || first === "help" || String(first).startsWith("-");
 	return runCliImpl(explicit ? args : ["run", ...args], io);
 };
 
@@ -652,6 +652,112 @@ describe("cli over a real local server", () => {
 		// before it can reach the report.
 		expect(JSON.stringify(report)).not.toContain("cli-secret-token-value");
 		expect(report.results[0].httpStatus).toBe(200);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// CI parity: validation, environment-bound variables, timeout, and artifacts
+// ---------------------------------------------------------------------------
+
+describe("cli ci parity", () => {
+	test("validate confirms a project without dispatching any request", async () => {
+		const dir = writeProject(parityProject().value);
+		const stdout = sink();
+		const adapters = makeFakeAdapters();
+		const code = await runCli(["validate", dir, "--json"], { stdout, stderr: sink(), overrides: { transport: adapters.transport, policy: adapters.policy } });
+		expect(code).toBe(0);
+		const report = stdout.json();
+		expect(report.kind).toBe("tracer.cli-validate");
+		expect(report.valid).toBe(true);
+		expect(report.counts).toEqual({ collections: 1, requests: 3, environments: 1 });
+		expect(adapters.calls).toHaveLength(0);
+	});
+
+	test("validate rejects a project that does not parse, with exit 2", async () => {
+		const file = path.join(makeTempDir(), "broken.json");
+		writeFileSync(file, "{ nope", "utf8");
+		const stdout = sink();
+		expect(await runCli(["validate", file, "--json"], { stdout, stderr: sink() })).toBe(2);
+		expect(stdout.json().kind).toBe("tracer.cli-error");
+	});
+
+	test("--variable-env reads a value from the environment and never prints it", async () => {
+		const probe = request({ name: "Probe", urlTemplate: "{{base}}/{{token}}" });
+		const dir = writeProject(project({ collections: [collection({ requests: [probe] })] }));
+		const adapters = makeFakeAdapters();
+		const stdout = sink();
+		const code = await runCli([dir, "--variable-env", "token=API_TOKEN", "--json"], {
+			stdout,
+			stderr: sink(),
+			env: { API_TOKEN: "tok-9f3c" },
+			overrides: { transport: adapters.transport, policy: adapters.policy },
+		});
+		expect(code).toBe(0);
+		expect(adapters.calls[0].target.pathAndQuery).toBe("/tok-9f3c");
+		const report = stdout.json();
+		expect(report.options.variableKeys).toEqual(["token"]);
+		expect(JSON.stringify(report)).not.toContain("tok-9f3c");
+	});
+
+	test("a missing environment variable is invalid input, not a partial run", async () => {
+		const dir = writeProject(parityProject().value);
+		const adapters = makeFakeAdapters();
+		const stdout = sink();
+		const code = await runCli([dir, "--variable-env", "token=API_TOKEN", "--json"], {
+			stdout,
+			stderr: sink(),
+			env: {},
+			overrides: { transport: adapters.transport, policy: adapters.policy },
+		});
+		expect(code).toBe(2);
+		expect(stdout.json()).toMatchObject({ kind: "tracer.cli-error", error: { code: "CLI_VARIABLE_ENV_MISSING" } });
+		expect(adapters.calls).toHaveLength(0);
+	});
+
+	test("--timeout stops a hung run and exits 124", async () => {
+		const slow = request({ name: "Slow", urlTemplate: "{{base}}/slow" });
+		const value = project({ collections: [collection({ requests: [slow] })] });
+		const dir = writeProject(value);
+		const adapters = makeFakeAdapters({
+			fallback: (input) =>
+				new Promise((resolve) => {
+					const finish = () => resolve(failedResult("cancelled", "This execution was cancelled."));
+					if (input.signal?.aborted) return finish();
+					input.signal?.addEventListener("abort", finish, { once: true });
+				}),
+		});
+		const stdout = sink();
+		const code = await runCli([dir, "--timeout", "1", "--json"], { stdout, stderr: sink(), overrides: { transport: adapters.transport, policy: adapters.policy } });
+		expect(code).toBe(124);
+		const report = stdout.json();
+		expect(report.timedOut).toBe(true);
+		expect(report.options.timeoutMs).toBe(1000);
+		expect(report.exitCode).toBe(124);
+	});
+
+	test("--report and --junit write the same outcome to files, announced on stderr", async () => {
+		const dir = writeProject(parityProject().value);
+		const workDir = makeTempDir();
+		const jsonPath = path.join(workDir, "out", "run.json");
+		const junitPath = path.join(workDir, "out", "run.junit.xml");
+		const stdout = sink();
+		const stderr = sink();
+		const adapters = makeFakeAdapters({ routes: [MISSING_ROUTE] });
+		const code = await runCli([dir, "--environment", "Local", "--continue", "--json", "--report", jsonPath, "--junit", junitPath], {
+			stdout,
+			stderr,
+			cwd: workDir,
+			overrides: { transport: adapters.transport, policy: adapters.policy },
+		});
+		expect(code).toBe(1);
+		expect(existsSync(jsonPath)).toBe(true);
+		expect(existsSync(junitPath)).toBe(true);
+		expect(readFileSync(jsonPath, "utf8")).toBe(stdout.text());
+		const junit = readFileSync(junitPath, "utf8");
+		expect(junit).toContain("<testsuites");
+		expect(junit).toContain("<failure");
+		expect(stderr.text()).toContain(`JSON report: ${jsonPath}`);
+		expect(stderr.text()).toContain(`JUnit report: ${junitPath}`);
 	});
 });
 

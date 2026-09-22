@@ -1,0 +1,71 @@
+name: Tracer CLI
+
+# Phase 15 CI/CD parity. Proves the headless runner behaves deterministically in
+# CI: a passing collection succeeds, a failing assertion fails a real step, and
+# machine-readable reports are produced either way. This workflow is independent
+# of the Baseline Gate and requires no database.
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  cli:
+    name: Headless collection runner
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: CLI contract tests
+        working-directory: backend
+        run: bun test src/features/cli
+
+      # Self-contained: starts its own deterministic target, validates the
+      # project, runs the passing folder (must exit 0) and the failing request
+      # (must exit 1), and writes JSON + JUnit artifacts to artifacts/ci.
+      - name: Local CI parity demo (validate, pass, fail)
+        run: bash examples/ci/ci-demo.sh
+
+      # A dedicated step proves GitHub Actions itself observes the CLI failure.
+      # `continue-on-error` keeps the job green while `steps.<id>.outcome` below
+      # records the raw result. The target server is scoped to this one step so
+      # no background process has to survive across steps.
+      - name: Failing assertion fails a real CI step
+        id: failing
+        continue-on-error: true
+        run: |
+          bun examples/ci/target-server.js > /tmp/tracer-ci-target.log 2>&1 &
+          TARGET_PID=$!
+          trap 'kill $TARGET_PID 2>/dev/null || true' EXIT
+          for _ in $(seq 1 100); do
+            if curl -fsS http://127.0.0.1:4571/health > /dev/null 2>&1; then break; fi
+            sleep 0.1
+          done
+          bun run tracer run "$GITHUB_WORKSPACE/examples/ci/tracer-project.json" \
+            --environment Local \
+            --request "Missing order" \
+            --allow-local 127.0.0.1 \
+            --timeout 60 \
+            --json \
+            --report "$GITHUB_WORKSPACE/artifacts/ci/step-failure.json" \
+            --junit "$GITHUB_WORKSPACE/artifacts/ci/step-failure.junit.xml"
+
+      - name: Prove the failure came from the CLI, not the shell
+        run: test "${{ steps.failing.outcome }}" = "failure"
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tracer-cli-reports
+          path: artifacts/ci
+          if-no-files-found: error

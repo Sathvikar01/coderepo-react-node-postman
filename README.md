@@ -54,6 +54,7 @@ bun run demo:flight-recorder
 │   ├── src/features/            # Product views: requests, collections, environments, history
 │   ├── src/shared/              # API client, reusable controls, formatting
 │   └── public/                  # Local static assets
+├── examples/ci/                  # Deterministic CI demo: target server, project, and script
 ├── skills/validate/             # Acceptance validator
 └── transcript exports live in /transcripts at submission
 ```
@@ -137,15 +138,18 @@ Then open `http://localhost:3000`.
 The CLI reads a git-native project directory or a portable `TracerProjectV1` JSON file and runs it through the identical compile → policy → DNS → transport → capture → normalize → history pipeline. A headless run and a workspace run of the same inputs produce the same ordered steps, assertion counts, outcome, stop reason, and per-step Flight Recorder execution ids.
 
 ```bash
+bun run tracer validate ./my-project                 # parse and count, send nothing; exit 0 or 2
 bun run tracer run ./my-project --collection "Orders API" --environment Local --json
-bun run tracer plan ./my-project --environment Local   # resolve and print the plan, send nothing
+bun run tracer plan ./my-project --environment Local  # resolve and print the plan, send nothing
 ```
 
 - **Selection.** `--collection`, `--environment`, `--folder`, and repeatable `--request` accept a name or a 1-based index. Requests run in the order given; otherwise folders run before root requests, each in saved order.
 - **Determinism.** `--iterations 1..25` repeats the selection, `--stop-on-failure` (the default) stops at the first failure while `--continue` keeps going, and repeatable `--variable KEY=VALUE` seeds an initial run variable. Script-written variables propagate through run scope exactly as in the workspace, and an initial variable can never substitute a secret reference.
-- **Secrets.** Secret references resolve from `SERVER_SECRET_ALIASES_JSON` plus the referenced `DEMO_*` environment variables at run time. Values are never printed, never written to a report, and are already redacted from captured bodies, so `--json` output is safe to archive.
+- **Secrets without a shell history.** `--variable-env KEY=ENV_VAR` binds a run variable to an environment variable, so the value never appears in `argv` (where `ps` can read it). Secret references also resolve from `SERVER_SECRET_ALIASES_JSON` plus the referenced `DEMO_*` environment variables at run time. Values are never printed, never written to a report, and are already redacted from captured bodies, so `--json` output is safe to archive.
 - **Local targets.** The normal SSRF boundary still applies. Each `--allow-local <host>` opts in to one exact loopback/private host through the same approval path as the UI local-runtime setting; without it, a loopback target is refused.
-- **Output.** `--json` prints one stable JSON document (`kind: tracer.cli-run`) with the plan, per-step status/outcome/HTTP status/assertion counts/duration/failure reason/execution id, and the run summary. Without `--json` it prints a readable summary, and `--plan` prints the resolved plan without sending. Errors print a stable `tracer.cli-error` document in JSON mode.
+- **Timeouts.** `--timeout <seconds>` (1–3600) bounds the whole run. When the budget is exceeded the in-flight request is cancelled, the report records `timedOut: true`, and the process exits promptly with code `124`.
+- **Reports.** `--report <path>` writes the authoritative JSON report and `--junit <path>` writes a dependency-free JUnit XML summary derived from the same report object, so the two artifacts can never disagree. Parent directories are created, and a write failure is a system failure (exit `3`) even when the run itself passed.
+- **Output.** stdout always carries the machine document when `--json` is set (otherwise the human report). stderr carries diagnostics, artifact notices, and text-mode errors; in JSON mode a failure prints the JSON document to stdout plus one diagnostic line on stderr. `--json` prints one stable JSON document (`kind: tracer.cli-run`, `tracer.cli-validate`, or `tracer.cli-error`) with the plan, per-step status/outcome/HTTP status/assertion counts/duration/failure reason/execution id, and the run summary.
 - **Storage.** There is no separate CLI store: a run uses an in-memory history, cookie jar, and run store, so a headless run never persists into MongoDB.
 
 Exit codes are stable and documented for automation:
@@ -155,8 +159,19 @@ Exit codes are stable and documented for automation:
 | `0`   | the run completed and every executed request passed      |
 | `1`   | the run completed but at least one request failed        |
 | `2`   | invalid arguments, project, selection, or configuration  |
-| `3`   | the runner or execution pipeline failed unexpectedly     |
+| `3`   | the runner, the execution pipeline, or report writing failed unexpectedly |
+| `124` | the run exceeded the `--timeout` budget                  |
 | `130` | the run was cancelled (SIGINT)                           |
+
+### Continuous integration
+
+`examples/ci/` contains a self-contained, database-free proof that the CLI is CI-ready: a deterministic `Bun.serve` target (`target-server.js`), a canonical `TracerProjectV1` fixture (`tracer-project.json`, regenerated with `bun examples/ci/make-project.mjs`), and `ci-demo.sh`, which starts the target, validates the project, runs the passing collection, runs the failing assertion, and asserts exit codes `0` and `1` respectively.
+
+```bash
+bash examples/ci/ci-demo.sh   # exit 0 only when every expectation holds
+```
+
+The [Tracer CLI workflow](.github/workflows/tracer-cli.yml) runs the same scenario on every pull request: contract tests, `validate`, the passing collection (exit `0`), and the failing collection as a step whose raw `outcome` must be `failure` — proving the non-zero exit came from the CLI — then uploads the JSON and JUnit reports as artifacts. It needs no MongoDB, no hosted service, and no interactive input.
 
 ## Command Reference
 
@@ -169,6 +184,7 @@ Exit codes are stable and documented for automation:
 | `bun run seed`          | Reseed the database without starting servers                   |
 | `bun run demo:flight-recorder` | Run the deterministic Flight Recorder demo (app must be running) |
 | `bun run tracer`        | Headless collection runner (see [Headless CLI](#headless-cli))  |
+| `bash examples/ci/ci-demo.sh` | Local pass/fail parity demo for the CLI (no database)      |
 | `bun test`              | Run the backend unit tests (Bun's built-in runner)             |
 | `bun run dev:backend`   | Backend only, with reload                                      |
 | `bun run dev:frontend`  | Frontend only                                                  |

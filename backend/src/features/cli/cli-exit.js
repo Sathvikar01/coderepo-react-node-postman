@@ -8,16 +8,20 @@
 //   2   the invocation itself was invalid (bad arguments, malformed project,
 //       unknown collection/environment, unusable configuration)
 //   3   the runtime failed while trying to run (runner or execution error)
+//   124 the run exceeded the --timeout budget (GNU timeout convention)
 //   130 the run was cancelled by the user (SIGINT)
 //
 // A cancellation wins over a run failure because "the user stopped this" is a
 // different outcome from "the target said no", and CI wants to tell them apart.
+// A timeout is distinct from both: the run did not finish on its own, but no
+// user asked it to stop.
 
 export const EXIT_CODES = Object.freeze({
 	success: 0,
 	runFailed: 1,
 	invalidInput: 2,
 	systemFailure: 3,
+	timeout: 124,
 	cancelled: 130,
 });
 
@@ -26,6 +30,7 @@ export const EXIT_CODE_MEANINGS = Object.freeze({
 	1: "Run failed: the run completed but at least one request failed.",
 	2: "Invalid input or configuration: the CLI could not start the requested run.",
 	3: "System failure: the runner or execution pipeline failed unexpectedly.",
+	124: "Timed out: the run exceeded the requested --timeout budget.",
 	130: "Cancelled: the run was stopped before it finished.",
 });
 
@@ -44,6 +49,7 @@ export function exitCodeForRun(run) {
 // from a bare number.
 export function statusForExitCode(code) {
 	if (code === EXIT_CODES.cancelled) return "cancelled";
+	if (code === EXIT_CODES.timeout) return "timed_out";
 	if (code === EXIT_CODES.runFailed) return "failed";
 	if (code === EXIT_CODES.invalidInput) return "invalid";
 	if (code === EXIT_CODES.systemFailure) return "error";

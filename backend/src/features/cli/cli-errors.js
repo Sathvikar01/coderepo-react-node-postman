@@ -11,12 +11,12 @@ import { EXIT_CODES } from "./cli-exit.js";
 // Thrown by the argument parser and the project/selection resolvers. It always
 // means "the caller asked for something we cannot do", never "the server broke".
 export class CliError extends Error {
-	constructor(message, { code = "CLI_USAGE", details = null, cause = null } = {}) {
+	constructor(message, { code = "CLI_USAGE", details = null, cause = null, exitCode = EXIT_CODES.invalidInput } = {}) {
 		super(message);
 		this.name = "CliError";
 		this.code = code;
 		this.details = details;
-		this.exitCode = EXIT_CODES.invalidInput;
+		this.exitCode = exitCode;
 		if (cause) this.cause = cause;
 	}
 }

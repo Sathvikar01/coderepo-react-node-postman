@@ -13,7 +13,7 @@ const run = (overrides = {}) => ({
 
 describe("cli exit code contract", () => {
 	test("the numeric codes and their meanings are stable and documented", () => {
-		expect(EXIT_CODES).toEqual({ success: 0, runFailed: 1, invalidInput: 2, systemFailure: 3, cancelled: 130 });
+		expect(EXIT_CODES).toEqual({ success: 0, runFailed: 1, invalidInput: 2, systemFailure: 3, timeout: 124, cancelled: 130 });
 		for (const code of Object.values(EXIT_CODES)) expect(EXIT_CODE_MEANINGS[code]).toBeTruthy();
 	});
 
@@ -48,6 +48,7 @@ describe("cli exit code contract", () => {
 		expect(statusForExitCode(EXIT_CODES.runFailed)).toBe("failed");
 		expect(statusForExitCode(EXIT_CODES.invalidInput)).toBe("invalid");
 		expect(statusForExitCode(EXIT_CODES.systemFailure)).toBe("error");
+		expect(statusForExitCode(EXIT_CODES.timeout)).toBe("timed_out");
 		expect(statusForExitCode(EXIT_CODES.cancelled)).toBe("cancelled");
 	});
 });
