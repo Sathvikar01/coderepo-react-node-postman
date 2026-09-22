@@ -166,7 +166,7 @@ await clickButtonText("Params");
 pass("request editor tabs work");
 
 await click(".code-button", "Code");
-await waitFor('document.querySelector(".modal") !== null', "Code dialog");
+await waitFor('document.querySelector(".code-dialog-modal[open]") !== null', "Code dialog");
 await pressEscape();
 pass("Code opens");
 
