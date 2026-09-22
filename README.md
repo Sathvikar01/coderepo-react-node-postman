@@ -84,70 +84,68 @@ Tracer is one Bun workspace with two applications and one database. The browser 
 
 ```mermaid
 flowchart LR
-    subgraph Browser["Browser — React 19 + Vite (port 3000)"]
-        UI["Workspace UI<br/>request composer · collections · environments<br/>history · cookies · examples/mocks · docs<br/>Collection Runner · Flight Recorder"]
+    subgraph FE["Browser - React 19 + Vite, port 3000"]
+        UI["Workspace UI<br/>request composer, collections, environments<br/>history, cookies, examples and mocks, docs<br/>Collection Runner, Flight Recorder"]
     end
 
-    subgraph API["Express 5 API (port 8000)"]
-        Routes["Routes + controllers<br/>Zod validation, auth, error mapping"]
-        Services["Domain services<br/>auth · profiles · collections · environments<br/>executions · history · cookies · examples · mocks<br/>scripts · runner · local-runtime · projects · flight recorder"]
-        Pipeline["Execution pipeline<br/>compile → policy → DNS → transport<br/>→ capture → normalize → history"]
-        Demo["Demo target<br/>/demo/v1 — real HTTP,<br/>MongoDB-backed orders"]
-        CLI["Headless CLI (bun run tracer)<br/>reuses the same runner + pipeline"]
+    subgraph BE["Express 5 API, port 8000"]
+        Routes["Routes and controllers<br/>Zod validation, auth, error mapping"]
+        Services["Domain services<br/>auth, profiles, collections, environments<br/>executions, history, cookies, examples, mocks<br/>scripts, runner, local-runtime, projects<br/>execution-intelligence"]
+        Pipeline["Execution pipeline<br/>compile to policy to DNS to transport<br/>to capture to normalize to history"]
+        Demo["Demo target /demo/v1<br/>real HTTP, MongoDB-backed orders"]
+        CLI["Headless CLI - bun run tracer<br/>reuses the same runner and pipeline"]
     end
 
-    DB[("MongoDB<br/>request_desk_demo")]
+    DB[("MongoDB - request_desk_demo")]
     Targets["External HTTP targets"]
 
-    UI -- "fetch /api/v1" --> Routes
+    UI -->|fetch /api/v1| Routes
     Routes --> Services
     Services --> DB
     Services --> Pipeline
-    Pipeline -- "approved public targets" --> Targets
-    Pipeline -- "loopback only with Local Runtime" --> Demo
+    Pipeline -->|approved public targets| Targets
+    Pipeline -->|loopback with Local Runtime only| Demo
     CLI --> Services
 ```
 
 How the layers fit together:
 
-- **Frontend (`frontend/src`).** `features/` holds one folder per product domain (workspace, import, export, cookies, examples, mocks, scripts, docs, collection-runner, execution-intelligence, …); `shared/` holds the API client, reusable controls, and formatting. State is plain React state and a workspace reducer — drafts live in the browser and are only persisted when you Save.
-- **API (`backend/src`).** Each `features/<domain>/` folder separates routes → controllers → services → repositories → models. Controllers validate input with Zod and translate errors to HTTP; services hold the rules (ownership, revisions/CAS, limits); repositories are the only MongoDB access. `shared/` carries configuration, auth middleware, error handling, and limits.
-- **Execution pipeline (`backend/src/features/executions`).** One pipeline serves manual sends, collection runs, the CLI, and failure minimization — there is no second execution path:
+- **Frontend (`frontend/src`).** `features/` holds one folder per product domain (workspace, import, export, cookies, examples, mocks, scripts, docs, collection-runner, execution-intelligence, and more); `shared/` holds the API client, reusable controls, and formatting. State is plain React state and a workspace reducer: drafts live in the browser and are only persisted when you Save.
+- **API (`backend/src`).** Each `features/<domain>/` folder separates routes, controllers, services, repositories, and models. Controllers validate input with Zod and translate errors to HTTP; services hold the rules (ownership, revisions/CAS, limits); repositories are the only MongoDB access. `shared/` carries configuration, auth middleware, error handling, and limits.
+- **Execution pipeline (`backend/src/features/executions`).** One pipeline serves manual sends, collection runs, the CLI, and failure minimization. There is no second execution path.
 
 ```mermaid
 flowchart LR
-    C["compile<br/>variables, auth, headers, body"] --> P["policy<br/>SSRF / target rules"]
-    P --> D["DNS<br/>resolve + pin address"]
-    D --> T["transport<br/>native node:net / node:tls"]
-    T --> CA["capture<br/>bounded body + headers"]
+    C["compile<br/>variables, auth, headers, body"] --> P["policy<br/>SSRF and target rules"]
+    P --> D["DNS<br/>resolve and pin address"]
+    D --> T["transport<br/>node:net and node:tls"]
+    T --> CA["capture<br/>bounded body and headers"]
     CA --> N["normalize<br/>outcome, timings, sizes"]
-    N --> H["history<br/>immutable snapshot +<br/>Execution Passport receipt"]
+    N --> H["history<br/>immutable snapshot plus<br/>Execution Passport receipt"]
 ```
 
-- **Security boundaries.** Target requests carry only request/collection auth plus that profile's cookie jar; application sign-in tokens never reach a target. Private, loopback, and reserved addresses are rejected before dispatch (SSRF boundary), with a single explicit exception: the seeded demo target and hosts approved through Local Runtime. Secrets are stored as alias references and resolved server-side at send time; every stored or displayed artifact is redacted.
-- **Flight Recorder (`backend/src/features/execution-intelligence`).** Every history entry carries an immutable `ExecutionReceiptV1` passport. Compare, Minimize, and Reproduction Capsules build on those receipts — deterministic evidence, never a second transport.
+- **Security boundaries.** Target requests carry only request/collection auth plus that profile's cookie jar; application sign-in tokens never reach a target. Private, loopback, and reserved addresses are rejected before dispatch (SSRF boundary), with two explicit exceptions: the seeded demo target and hosts approved through Local Runtime. Secrets are stored as alias references and resolved server-side at send time; every stored or displayed artifact is redacted.
+- **Flight Recorder (`backend/src/features/execution-intelligence`).** Every history entry carries an immutable `ExecutionReceiptV1` passport. Compare, Minimize, and Reproduction Capsules build on those receipts as deterministic evidence, never a second transport.
 - **Headless CLI (`backend/src/features/cli`).** `bun run tracer` wires the same compiler, policy, transport, and collection runner over in-memory stores, so UI runs and CLI runs are equivalent by construction.
 
 ### Execution and analysis flow
 
 ```mermaid
 flowchart LR
-    subgraph Author["Author (draft)"]
-        Draft["Request tab<br/>params · headers · body · auth<br/>scripts · assertions"]
-    end
-    Draft -- "Send" --> Run["Execution pipeline"]
-    Run --> Insp["Response inspector<br/>status · timing · size · body · headers"]
-    Run --> Hist[("History + Passport")]
-    Draft -- "Save" --> Col[("Collections + environments")]
-    Col -- "Run collection / CLI" --> Run
+    Draft["Request tab - draft<br/>params, headers, body, auth<br/>scripts, assertions"]
+    Draft -->|Send| Run["Execution pipeline"]
+    Run --> Insp["Response inspector<br/>status, timing, size, body, headers"]
+    Run --> Hist[("History and Passport")]
+    Draft -->|Save| Col[("Collections and environments")]
+    Col -->|Run collection or CLI| Run
     Hist --> FR{"API Flight Recorder"}
     FR --> Compare["Compare<br/>first meaningful divergence"]
-    FR --> Minimize["Minimize<br/>bounded failing subset"]
-    Minimize --> Capsule["ReproCapsuleV1<br/>redacted, unsent draft"]
-    Capsule -. "import (never auto-send/save)" .-> Draft
+    FR --> Minimize["Minimize<br/>smallest failing request"]
+    Minimize --> Capsule["ReproCapsuleV1<br/>redacted reproduction bundle"]
+    Capsule -.->|import as unsent dirty draft| Draft
 ```
 
-Send and Save are deliberately separate: sending executes the draft and records evidence; saving commits it to a collection. Imported cURL, portable projects, and reproduction capsules always open as unsent, dirty drafts.
+Send and Save are deliberately separate: sending executes the draft and records evidence; saving commits it to a collection. Imported cURL, portable projects, and reproduction capsules always open as unsent, dirty drafts — nothing is ever auto-sent or auto-saved.
 
 ## Prerequisites
 
