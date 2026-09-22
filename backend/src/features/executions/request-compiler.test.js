@@ -389,3 +389,43 @@ describe("request compiler", () => {
 		]);
 	});
 });
+
+describe("run variable scopes", () => {
+	test("initial run inputs sit below collection and environment scopes", () => {
+		const compiled = compileRequest({
+			request: baseRequest({ urlTemplate: "http://example.com/{{region}}/{{seed}}", auth: { mode: "none" } }),
+			collection: { ...collection, variables: [{ id: "d", key: "region", kind: "plain", value: "collection", enabled: true }] },
+			environment: { name: "Local", variables: [{ id: "e", key: "region", kind: "plain", value: "environment", enabled: true }] },
+			variableBase: new Map([
+				["region", "run-input"],
+				["seed", "from-run"],
+			]),
+		});
+		expect(compiled.url).toBe("http://example.com/environment/from-run");
+		expect(compiled.trace.find((entry) => entry.variable === "seed").scope).toBe("initial");
+		expect(compiled.trace.find((entry) => entry.variable === "region").scope).toBe("environment");
+	});
+
+	test("overlay writes shadow every persisted scope and initial values", () => {
+		const compiled = compileRequest({
+			request: baseRequest({ urlTemplate: "http://example.com/{{region}}", auth: { mode: "none" } }),
+			collection: { ...collection, variables: [{ id: "d", key: "region", kind: "plain", value: "collection", enabled: true }] },
+			environment: { name: "Local", variables: [{ id: "e", key: "region", kind: "plain", value: "environment", enabled: true }] },
+			variableBase: new Map([["region", "run-input"]]),
+			variableOverlay: new Map([["region", "script-write"]]),
+		});
+		expect(compiled.url).toBe("http://example.com/script-write");
+		expect(compiled.trace.find((entry) => entry.variable === "region").scope).toBe("script");
+	});
+
+	test("initial values cannot substitute a secret reference", () => {
+		expect(() =>
+			compileRequest({
+				request: baseRequest({ urlTemplate: "http://example.com/{{orders_token}}", auth: { mode: "none" } }),
+				collection,
+				environment,
+				variableBase: new Map([["orders_token", "leaked-value"]]),
+			}),
+		).toThrow(expect.objectContaining({ code: "VARIABLE_UNKNOWN" }));
+	});
+});

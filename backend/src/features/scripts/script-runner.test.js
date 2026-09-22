@@ -236,3 +236,37 @@ describe("result counts", () => {
 		expect(merged.counts).toEqual({ passed: 1, failed: 0, errors: 0 });
 	});
 });
+
+describe("run scope visibility", () => {
+	test("merges initial inputs below persisted scopes and writes above them", () => {
+		const scopes = scriptVariableScopes(collection(), environment(), {
+			initial: new Map([
+				["stage", "initial"],
+				["seed", "from-run"],
+			]),
+			writes: new Map([
+				["host", "written.test"],
+				["stage", "written"],
+				["gone", null],
+			]),
+		});
+		expect(scopes.merged).toEqual({ stage: "written", seed: "from-run", host: "written.test" });
+		expect(scopes.environment.stage).toBe("dev");
+		expect(scopes.collection.host).toBe("example.test");
+	});
+
+	test("returns post-response variable writes so a run can propagate them", () => {
+		const result = scriptService.runPostResponse({
+			request: request({
+				scripts: { preRequest: "", test: 'pm.variables.set("token", "abc"); pm.variables.unset("host");' },
+			}),
+			response: { status: 200, statusText: "OK", headers: [], body: { encoding: "utf8", value: "{}", truncated: false } },
+			collection: collection(),
+			environment: environment(),
+		});
+		expect(result.variables instanceof Map).toBe(true);
+		expect(result.variables.get("token")).toBe("abc");
+		expect(result.variables.get("host")).toBeNull();
+		expect(result.tests).toHaveLength(0);
+	});
+});
