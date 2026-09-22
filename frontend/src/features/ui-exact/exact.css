@@ -1,0 +1,142 @@
+/* Exact UI/ shell — tokens mapped to Tracer's current colour combo (mint signal). */
+
+:root {
+	--bg: #090a0c;
+	--surface: #101216;
+	--panel: #15181d;
+	--panel-2: #1b1f25;
+	--border: #262b33;
+	--border-subtle: #1b1f25;
+	--text: #e9e6de;
+	--text-muted: #a6abb3;
+	--text-dim: #767d88;
+	--accent: #6ef0b1;
+	--accent-fg: #062419;
+	--accent-hover: #92f5c6;
+	--method-get: #6ef0b1;
+	--method-post: #e49a52;
+	--method-put: #75baf3;
+	--method-patch: #b99cf5;
+	--method-delete: #ff6b75;
+	--status-2xx: #6ef0b1;
+	--status-4xx: #e49a52;
+	--status-5xx: #ff6b75;
+	color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+	--bg: #e8e8e3;
+	--surface: #f5f4ef;
+	--panel: #ffffff;
+	--panel-2: #e5e5de;
+	--border: #d4d4cc;
+	--border-subtle: #e5e5de;
+	--text: #17191c;
+	--text-muted: #555b62;
+	--text-dim: #737980;
+	--accent: #08764d;
+	--accent-fg: #ffffff;
+	--accent-hover: #0b6b49;
+	--method-get: #08764d;
+	--method-post: #9a5d1f;
+	--method-put: #176999;
+	--method-patch: #6b3fa0;
+	--method-delete: #b62532;
+	--status-2xx: #08764d;
+	--status-4xx: #9a5d1f;
+	--status-5xx: #b62532;
+	color-scheme: light;
+}
+
+* {
+	box-sizing: border-box;
+	scrollbar-width: none;
+}
+*::-webkit-scrollbar {
+	display: none;
+}
+
+html,
+body,
+#root {
+	height: 100%;
+	margin: 0;
+	padding: 0;
+}
+
+body {
+	font-family: var(--font-sans, "Segoe UI", Roboto, sans-serif);
+	background: var(--bg);
+	color: var(--text);
+	font-size: 13px;
+	line-height: 1.5;
+	-webkit-font-smoothing: antialiased;
+}
+
+button {
+	color: inherit;
+	font: inherit;
+}
+
+.mono {
+	font-family: var(--font-mono, "SFMono-Regular", Consolas, monospace);
+}
+
+@keyframes slideInRight {
+	from {
+		transform: translateX(100%);
+	}
+	to {
+		transform: translateX(0);
+	}
+}
+
+@keyframes fadeIn {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+.slide-in-right {
+	animation: slideInRight 0.2s ease-out;
+}
+.fade-in {
+	animation: fadeIn 0.15s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.slide-in-right,
+	.fade-in {
+		animation: none;
+	}
+}
+
+@media (max-width: 768px) {
+	.desktop-sidebar {
+		display: none !important;
+	}
+	.mobile-menu-btn {
+		display: flex !important;
+	}
+	.mobile-logo {
+		display: flex !important;
+	}
+}
+
+@media (min-width: 769px) {
+	.mobile-menu-btn {
+		display: none !important;
+	}
+	.mobile-logo {
+		display: none !important;
+	}
+}
+
+@media (max-width: 480px) {
+	.desktop-rail {
+		display: none !important;
+	}
+}
