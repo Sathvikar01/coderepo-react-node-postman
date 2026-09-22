@@ -3437,4 +3437,534 @@ Actions:
 * Ran the impeccable detector: baseline 3 anti-patterns (2 side-tab borders, 1 animated layout property) to 0 on frontend/src
 * Ran bun install --frozen-lockfile (no changes), bun test (884 tests, 1 skip, 0 fail), cd frontend && bun test (275 pass), node --check on backend/src, cd frontend && bun run build, bash setup.sh --seed, and the declared bun start runtime smoke on ports 3000/8000
 * Ran the full Flight Recorder demo (47/47 checks)
-* git fetch origin; rebased phase29/ui-ux-polish ont
+* git fetch origin; rebased phase29/ui-ux-polish onto bfcd441 (Phase 14) with no conflicts; commit 2d9cc3f
+* git push -u origin phase29/ui-ux-polish; gh pr create --base main --head phase29/ui-ux-polish (PR #21)
+* gh run watch 35737950657 / gh pr view 21 (Baseline Gate contract: SUCCESS, mergeable CLEAN)
+* Removed the temporary .tmp_unlumen/ study directory from the repository working tree
+
+Context:
+tool=pi
+branch=phase29/ui-ux-polish
+repo_root=C:/Users/arsat/downloads/postman
+worktree=C:/Users/arsat/downloads/postman
+parent_agent=none
+
+## [2026-09-22T19:15:22.944+05:30] SESSION START
+
+tool=pi
+Repo Root: C:\Users\arsat\Downloads\postman
+Branch: phase15/cicd-parity
+Worktree: C:/Users/arsat/Downloads/postman-phase15
+Parent Agent: none
+Language: node
+Time Remaining: 0d 4h 16m
+
+## [2026-09-22T19:15:41.43+05:30] Phase 15 CI/CD Parity: CLI hardening, reports, workflow, and a finalize-timer fix
+
+User Prompt (verbatim, secrets redacted):
+# Phase 15 — CI/CD Parity
+
+Branch:
+
+`phase15/cicd-parity`
+
+Base:
+
+latest `main @ bfcd441`
+
+Phase 14 CLI is merged.
+
+Phase 29 may run in parallel. Avoid frontend/UI changes.
+
+## Goal
+
+Make the Phase 13 Runner + Phase 14 CLI reliable and deterministic inside CI.
+
+Do not create another execution path.
+
+## Implement
+
+* stable documented exit codes
+* fully non-interactive CLI execution
+* deterministic machine-readable JSON output
+* CI-friendly report/artifact output
+* environment/secret injection without persistence or log leakage
+* clear stdout vs stderr behaviour
+* predictable cancellation/timeout behaviour
+* useful failure diagnostics
+* example CI workflow using the real Tracer CLI
+
+Reuse the existing runner + CLI semantics exactly.
+
+## CI behaviour
+
+A CI job must be able to:
+
+1. install from clean checkout
+2. prepare/validate a portable Tracer project
+3. inject required secrets safely
+4. run a selected collection/environment
+5. receive deterministic exit status
+6. save machine-readable results
+7. link failures to execution IDs / Flight Recorder evidence
+8. correctly pass or fail the CI job
+
+Add a minimal GitHub Actions example/test proving both:
+
+* passing collection → CI success
+* failing assertion/request → CI failure
+
+Do not modify the protected Baseline Gate unless genuinely required.
+
+## Reports
+
+Prefer existing stack only.
+
+Support JSON output as the authoritative machine format.
+
+Add JUnit-style output only if it can be implemented cleanly without new dependencies.
+
+Reports must never contain resolved secrets.
+
+## Test
+
+Cover:
+
+* success/failure exit codes
+* malformed input
+* assertions
+* execution failures
+* stop/continue
+* timeout/cancel
+* environment selection
+* secret injection/redaction
+* JSON determinism
+* CI pass/fail behaviour
+* Flight Recorder execution linkage
+* clean-checkout execution
+
+Run:
+
+* `bun test`
+* backend syntax
+* CLI integration tests
+* clean install/start
+* representative CI workflow
+* existing GitHub Actions / Baseline Gate
+
+No new hosted infrastructure.
+No frontend changes.
+No broad refactors.
+No new dependencies unless absolutely necessary and explicitly justified.
+
+Update README with concise CI usage.
+
+Open PR to `main`.
+
+Finish exactly:
+
+`PHASE 15 VERDICT: PASS`
+
+or
+
+`PHASE 15 VERDICT: BLOCKED`
+
+Agent Response Summary:
+Implemented Phase 15 (CI/CD Parity) on branch phase15/cicd-parity in a dedicated worktree, without touching the main worktree's Phase 29 frontend work. Extended the existing Phase 14 CLI instead of adding a second execution path: stable exit codes now include 124 (timeout); a new tracer validate command; --variable-env, --timeout, --report, and --junit flags; a one-outcome emit sink separating stdout (machine document) from stderr (diagnostics and artifact notices); dependency-free JUnit XML derived from the same report object as JSON; and a documented stdout/stderr contract. Fixed a real bug in execution.service.js where the finalize watchdog timer was never cleared and held the event loop open after a run, delaying CLI process exit; added a deterministic regression test that fails without the fix. Added examples/ci/ (deterministic Bun.serve target, canonical TracerProjectV1 fixture, generator, ci-demo.sh) and a new .github/workflows/tracer-cli.yml proving a passing collection exits 0 and a failing assertion fails a real CI step. Updated README. Verified: bun test (638 pass, 1 skip, 0 fail), backend node --check, frontend build, ci-demo.sh exits 0, process-level CLI CI tests, and the local CI step simulation.
+
+Actions:
+* edited backend/src/features/cli/cli-args.js, cli-errors.js, cli-exit.js, cli-output.js, cli.js
+* created backend/src/features/cli/cli-report-writer.js, cli-variables.js and their tests, plus cli-ci.test.js
+* edited backend/src/features/cli/cli-args.test.js, cli-exit.test.js, cli-output.test.js, cli.test.js
+* edited backend/src/features/executions/execution.service.js and execution.service.test.js (clear finalize watchdog; regression test)
+* created examples/ci/{target-server.js,make-project.mjs,tracer-project.json,ci-demo.sh,README.md}
+* created .github/workflows/tracer-cli.yml; edited .gitignore and README.md
+* ran: bun install --frozen-lockfile; bun test (backend); node --check backend/src/**.js; cd frontend && bun run build; bash examples/ci/ci-demo.sh
+
+Context:
+tool=pi
+branch=phase15/cicd-parity
+repo_root=C:/Users/arsat/Downloads/postman-phase15
+worktree=C:/Users/arsat/Downloads/postman-phase15
+parent_agent=none
+
+## [2026-09-22T19:53:16+05:30] Phase 15 complete: PR #22 opened, both CI workflows green
+
+User Prompt (normalized, secrets redacted):
+Continue the current authorized phase from the latest verified checkpoint.
+
+Agent Response Summary:
+Committed Phase 15 as 5a9bdc2 on phase15/cicd-parity (based on main @ bfcd441), pushed it, and opened PR #22 against main. Verified the repository is PRIVATE before pushing. Both required workflows passed on the PR: the new "Tracer CLI" workflow (all steps: CLI contract tests, local parity demo, failing-assertion step, outcome proof, artifact upload) and the protected "Baseline Gate" (full bun test, frontend build, seed/reset). Ran the complete backend suite locally (638 pass, 1 skip, 0 fail) plus backend syntax checks and the frontend build. Cleared the finalize watchdog in execution.service.js with deterministic regression coverage. Worktree is clean; no frontend or persistence behavior was changed and no second execution path was introduced.
+
+Actions:
+* git commit (5a9bdc2), git push -u origin phase15/cicd-parity
+* gh pr create (PR #22); gh run watch / gh run view for both workflows
+* rm artifacts/ and the temporary PR body file
+
+Context:
+tool=pi
+branch=phase15/cicd-parity
+repo_root=C:/Users/arsat/Downloads/postman-phase15
+worktree=C:/Users/arsat/Downloads/postman-phase15
+parent_agent=none
+
+## [2026-09-22T19:54:47+05:30] Phase 29 closed out: validation audit, report, cleanup
+
+User Prompt (normalized, secrets redacted):
+Finish the remaining verified work promptly and close out the phase/PR without introducing unrelated changes.
+
+Agent Response Summary:
+Finished the phase instead of continuing the remaining live-execution probe. Ran the
+skills/validate/SKILL.md handover audit against the rebased branch (static checks S01-S19 and
+runtime checks R01-R12, with a bidirectional route-vs-frontend-consumer reconciliation) and wrote
+the readiness report outside the repository. Every applicable check passed; the only MANUAL row is
+S16 because no formatter dependency is installed and adding one is not permitted. Confirmed git
+state is clean at 2d9cc3f, the tree matches the starting state, and the audit processes are stopped.
+
+Actions:
+* Ran runtime validation via a script outside the repo: health, login, profile list/switch, protected-route 401/200, live reads for collections/environments/history/cookies/examples/local-runtime/preferences, collection CRUD with a stale-revision conflict, error paths, and a 16/16-passing Collection Runner run against the seeded environment
+* Verified R11 restart reset by creating a record, restarting the exact bun start flow, and confirming the record was removed and the seed baseline restored
+* Ran route_inventory.py: 48 mounted product routes, 0 without a frontend consumer; 22 demo-target routes operational
+* Wrote the validation report and runtime-evidence.json under the audit directory outside the repo
+* Confirmed .vscode/launch.json references resolve (bun run start, workspaceFolder cwd)
+* git archive HEAD = 1,945,600 bytes; README.md present, GUIDELINES.md and skills/ excluded
+* Stopped the bun start stack, released ports 3000/8000, trimmed scratch logs, confirmed clean git status at 2d9cc3f
+
+Context:
+tool=pi
+branch=phase29/ui-ux-polish
+repo_root=C:/Users/arsat/downloads/postman
+worktree=C:/Users/arsat/downloads/postman
+parent_agent=none
+
+## [2026-09-22T19:23:11.062+05:30] SESSION START
+
+tool=pi
+Repo Root: C:\Users\arsat\Downloads\postman
+Branch: main
+Worktree: C:\Users\arsat\Downloads\postman
+Parent Agent: none
+Language: node
+Time Remaining: 0d 4h 08m
+
+## [2026-09-22T19:23:48.73+05:30] Final submission readiness audit of main (read-only)
+
+User Prompt (verbatim, secrets redacted):
+# Final Submission Readiness Audit
+
+This is **READ-ONLY**.
+
+Do not modify code, branches, manifests, lockfiles, docs, or configuration.
+
+Audit latest `main` for HackerRank submission readiness while Phase 15 and Phase 29 continue independently.
+
+## Check
+
+Read:
+
+* `AGENTS.md`
+* `GUIDELINES.md`
+* `INSTRUCTIONS.md`
+* `REQUIREMENTS.md`
+* `hackerrank.yml`
+* `skills/validate/SKILL.md`
+* README
+* `.gitattributes`
+* `.gitignore`
+
+Then verify:
+
+* clean checkout install/start commands
+* ports 3000 / 8000
+* Mongo seed/reset
+* repo remains private
+* required repository structure
+* README completeness
+* `skills/validate` preserved
+* archive exclusions correct
+* archive < 5 MB
+* no secrets/generated junk/debug files
+* no accidental `.git/`, `.env`, reports, temp files
+* transcript requirements
+* required `transcripts/` submission state
+* full test/build/runtime expectations
+* responsive/browser acceptance requirements
+* collaborator/submission/Discord steps still outstanding
+* anything required manually before submission
+
+Run the HackerRank verifier if it can be done without modifying tracked files.
+
+Also inspect all currently open PRs and identify what must merge before final submission.
+
+## Output
+
+Give only:
+
+1. **BLOCKERS** — must fix before submission
+2. **REQUIRED MANUAL STEPS**
+3. **SAFE TO DEFER**
+4. **FINAL ORDER OF OPERATIONS** — exact sequence from current state → submitted
+
+For every blocker include the smallest fix.
+
+Do not implement fixes.
+
+Do not invent evidence.
+
+Finish:
+
+`SUBMISSION READINESS: READY`
+
+or
+
+`SUBMISSION READINESS: BLOCKED`
+
+Agent Response Summary:
+Audited origin/main (bfcd441) read-only via an isolated extraction in Temp; working tree left untouched. Verified: git archive 1,925,120 bytes with README present and GUIDELINES.md/skills/ absent; repo PRIVATE; Baseline Gate green on main (run 35735478436); bun install --frozen-lockfile, bun test (883 pass/1 skip/0 fail; one earlier hook-timeout flake on the shared Mongo, not reproducible), node --check 182 backend files, and Vite build all green in isolation. Two blockers found: (1) transcripts/ export is stale (81 KB copy from Sep 19 vs 216 KB live log) and must be re-exported at final freeze; (2) README Project Structure tree enumerates only 7 of 17 backend feature modules and omits config/ops paths, contradicting the repo and the README's own prose. Runtime checks R04-R11 and the responsive/browser matrix were not executed: ports 3000/8000 are occupied by the in-flight Phase 29 dev servers and seeding would reset the shared live demo database; recorded as MANUAL. Collaborator content.team@problemsetters.com is not yet invited. Only PR #7 (docs, Phase 26 skip) is open; it is archive-excluded and non-blocking but should be resolved. Verdict: SUBMISSION READINESS: BLOCKED.
+Note: the SESSION START entry above used +02:00 in error; local system time is +05:30.
+
+Actions:
+* Extracted origin/main tree to Temp via git cat-file (no repo changes); read all required contract docs
+* Ran verifier static/archive checks and isolated install/test/syntax/build in Temp; report kept outside the repo
+* Checked gh repo visibility, collaborators, invitations, PR list, and Baseline Gate runs (read-only API calls)
+
+Context:
+tool=pi
+branch=phase29/ui-ux-polish (audit target: origin/main bfcd441)
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=C:\Users\arsat\Downloads\postman
+parent_agent=none
+
+## [2026-09-22T20:08:15.950+05:30] SESSION START
+
+tool=Codex Desktop
+Repo Root: C:\Users\arsat\Downloads\postman
+Branch: phase30/ui-rebuild
+Worktree: C:\Users\arsat\Downloads\postman
+Parent Agent: none
+Language: node
+Time Remaining: 0d 3h 23m
+
+## [2026-09-22T20:29:58+05:30] Phase 30 direction clarified: full replacement, not another polish
+
+User Prompt (normalized, secrets redacted):
+Treat Phase 30 as a genuine UI/UX replacement rather than another polish pass. Preserve product behavior and contracts, but redesign the presentation and interaction model substantially.
+
+Agent Response Summary:
+Confirmed that the current interface is being inspected only to preserve functionality and as an anti-reference. Committed to replacing the app shell, navigation, layout grammar, component system, and interaction model while retaining only product truth, contracts, and accessibility semantics.
+
+Actions:
+* Continued the mandated read-only browser inventory; no frontend source changes made
+
+Context:
+tool=Codex
+branch=phase30/ui-rebuild
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=C:\Users\arsat\Downloads\postman
+parent_agent=none
+
+## [2026-09-22T20:47:18+05:30] Phase 30 reporting handoff for Sol
+
+User Prompt (verbatim, secrets redacted):
+# Phase 30 — Complete UI/UX Rebuild
+
+Add Phase 30 to `AGENTS.md`.
+
+Create a fresh branch:
+
+`phase30/ui-rebuild`
+
+Base: latest `main`.
+
+## Goal
+
+**Rebuild Tracer's UI/UX from scratch.**
+
+Do not incrementally polish the current interface.
+
+Keep the existing backend, APIs, state contracts and product functionality, but redesign/reimplement the frontend presentation and interaction model into a cohesive professional developer tool.
+
+No new product features.
+
+## Mandatory workflow
+
+Before implementation:
+
+1. Inspect the entire current app in the browser.
+2. Inventory every existing feature/workflow so nothing is lost.
+3. Use **all relevant installed UI/frontend/design skills**.
+4. **Unlumen UI is mandatory** — inspect it with `@computer-use` and deliberately adapt useful patterns/interactions.
+5. Use **Impeccable** for design audit/critique.
+6. Use **Matt Pocock's `codebase-design`** for frontend/component architecture.
+7. Use React/frontend/accessibility/browser-verification skills wherever applicable.
+
+Do not spawn subagents.
+
+## Rebuild
+
+You may replace/restructure frontend components and CSS as necessary.
+
+Design the entire product coherently:
+
+- app shell
+- navigation/sidebar
+- collections/folders
+- request tabs
+- request builder
+- query/headers/body/auth
+- environments
+- Send / Save workflow
+- response inspector
+- history
+- cookies
+- scripts/assertions
+- examples/mocks
+- docs
+- local runtime
+- Collection Runner
+- Passport
+- Compare
+- Minimize
+- Capsule
+- dialogs/menus/toasts
+- loading/empty/error states
+
+Prioritize:
+
+- strong information hierarchy
+- compact developer-tool density
+- clear selected/active states
+- excellent typography/spacing
+- fast navigation
+- obvious primary actions
+- keyboard-first usability
+- responsive layouts
+- restrained high-quality motion
+- professional visual identity
+
+Avoid generic AI-dashboard/SaaS aesthetics.
+
+You may evolve the Graphite / Mint / Bone identity if a stronger coherent direction emerges.
+
+## Hard constraints
+
+Preserve all existing functionality and semantics.
+
+Do not change backend behaviour to accommodate the redesign unless a real existing bug is proven.
+
+No new dependencies unless absolutely necessary and explicitly justified.
+
+Do not alter:
+
+- execution semantics
+- Send vs Save rules
+- security/SSRF rules
+- Flight Recorder contracts
+- Runner/CLI semantics
+- persistence contracts
+- portable project formats
+
+## Functional audit
+
+Every visible interactive control must work.
+
+Systematically test all buttons, menus, tabs, editors, dialogs, shortcuts and actions.
+
+For every broken control:
+
+`reproduce → root cause → smallest functional fix → regression test`
+
+Do not leave decorative/no-op controls.
+
+## E2E
+
+Test real workflows against frontend + backend + Mongo:
+
+`login → create → edit → save → send → inspect → history`
+
+`collection → runner → failure → Passport → Compare → Minimize → Capsule`
+
+`capsule → import → dirty draft → reproduce`
+
+Also test:
+
+- reload persistence
+- cancellation
+- validation errors
+- profile isolation
+- keyboard-only usage
+- dialog focus
+- light + dark themes
+
+Test:
+
+`375 / 768 / 1024 / 1440`
+
+Require zero unintended overflow and zero console errors.
+
+## Locust
+
+Run Locust against local seeded infrastructure only.
+
+Test safe representative API/read/execution flows.
+
+Measure:
+
+- throughput
+- p50
+- p95
+- p99
+- failure rate
+- error types
+
+Use light, moderate and short burst loads.
+
+Do not load-test external/destructive targets.
+
+Keep Locust outside application dependencies.
+
+## Parallel verification
+
+No subagents.
+
+Independent test processes may run concurrently where safe:
+
+- unit/integration tests
+- browser E2E
+- build/static validation
+- Locust
+
+Do not run seed/reset concurrently with suites using the same DB.
+
+## Final gate
+
+Run sequentially at the end:
+
+- clean install
+- full `bun test`
+- backend syntax
+- frontend tests
+- frontend production build
+- seed/reset
+- real runtime
+- complete E2E
+- responsive/theme matrix
+- Flight Recorder demo
+- Locust smoke
+- `skills/validate/SKILL.md`
+- GitHub Actions / Baseline Gate
+
+Document the old → new design decisions and any functional bugs discovered.
+
+Open PR to `main`.
+
+Finish exactly:
+
+`PHASE 30 VERDICT: PASS — UI/UX REBUILT AND VERIFIED`
+
+or
+
+`PHASE 30 VERDICT: BLOCKED`
+
+Agent Response Summary:
+Com
