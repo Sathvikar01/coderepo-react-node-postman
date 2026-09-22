@@ -258,6 +258,46 @@ A: Browser Client	Direct fetch() from React	Rejected	Crippled by browser CORS, f
 
 B: Synchronous Server	Express executes target HTTP calls synchronously	Selected	Full HTTP fidelity, rock-solid SSRF protection, clean state boundaries, and zero extra infrastructure needed.
 
+atibility, and custom `lookup` support has historically been a gap. Since your entire SSRF defense hinges on this, define the fallback now: resolve via `dns.promises.lookup(host, { all: true })`, policy-check *every* returned address, then connect by IP with `servername` set to the real hostname (and an explicit `Host` header for plain HTTP), verifying certificate identity against the hostname, not the IP. Also make sure the blocklist covers the sneaky cases: IPv4-mapped IPv6 (`::ffff:127.0.0.1`), 6to4/NAT64 embedded ranges, `0.0.0.0`, IP-literal URLs (skip DNS but still policy-check), and cloud metadata addresses. Validating only A records while AAAA records sail through is a classic hole.
+
+**2. Nothing transitions orphaned ****`running`**** records to ****`interrupted`****.** You define the `interrupted` outcome but never assign responsibility for the transition. This isn't theoretical: your own runtime contract says backend-only restart preserves data, and the reference uses `bun --watch` — every file save during development wipes the in-memory registry while `running` history rows persist. Add a boot-time sweep that marks orphaned running records as `interrupted`, and define cancel semantics when the registry misses but history exists (post-restart, the cancel endpoint should read history state, not 404).
+
+**3. Reconsider ****`Accept-Encoding: identity`****.** Servers are allowed to ignore it, and CDNs with force-compression configs frequently do. Your local demo targets are under your control, so this flaw will be invisible in your own testing — but your completion evidence says "reaches a real HTTP endpoint," and a reviewer hitting a real public API behind a CDN will get an unusable base64 blob. `node:zlib` is available in Bun and decompressing gzip/deflate/br is \~15 lines on your existing capture stream. Keep the truthful wire-byte accounting (`receivedBodyBytes` stays as-is, add decoded size) and the truncation logic; this is high-ROI for a "polished" client.
+
+## Worth verifying or tightening
+
+- **The 30s synchronous hold through the read-only Vite proxy.** `http-proxy` defaults to no timeout, so dev is probably fine, but Bun's handling of Node's `server.requestTimeout`/`headersTimeout` options is unverified. Your 30s cap sits under Node's defaults, so this likely works — but it's a one-line check that protects your most user-visible flow.
+- **Idempotency wording is ambiguous as written.** "A completed duplicate with the same input fingerprint returns the stored result" could be read as: a fresh Send with unchanged input gets a cached response. Make explicit that retry-safety is keyed by `executionId` (network retry protection), the fingerprint only detects ID reuse with different inputs, and every new Send performs a new target call — that's the Postman-like expectation.
+- **History persistence sizing.** 1 MiB capture → \~1.4 MiB base64 per entry × 200 retained ≈ 280 MB worst case per profile. Each document is fine under the 16 MB limit, but consider capping the *persisted* body (e.g., 256 KiB) below the capture limit, with the full body only in the live response.
+- **"Available external tooling without changing the dependency graph" is not a test plan.** If browser verification is scripted manual walkthroughs, say so. If it's Playwright, that's a new dependency and a decision to make explicitly. Assessments reward specificity here.
+- **The secret-alias configuration mechanism is unnamed.** "Configured through an environment variable mapping" — specify the format (env-provided JSON map?), and fail-fast at boot with a listing of missing/unrecognized aliases rather than discovering misconfiguration at first send.
+
+## One process suggestion
+
+Your verification-limits section correctly notes that installation and live runs haven't happened. I'd extend that: before scaffolding the six capabilities, build a throwaway **transport spike** — DNS pinning (both the `lookup` path and the resolve-then-connect fallback), bounded byte capture, cancellation mid-stream, and a compressed response, all under the pinned Bun runtime. It's the riskiest assumption in the whole design, it's a day of work, and it converts items 1–3 above from spec text into verified facts. Everything else in this document is conventional engineering that will go roughly as written.
+
+Structurally, though, I wouldn't change a thing — B is the right architecture, scoped correctly, with the right boundaries.
+
+
+
+d. Gemini 3.8 Flash:
+
+Executive Summary: "Request Desk" (Postman Clone)
+
+Objective: Build a robust, secure, full-stack HTTP client for developers and assessment evaluation.
+
+Stack: React 19 (Vite) + Express 5 (Bun runtime) + MongoDB 8+ (Mongoose) + Zod validation.
+
+Selected Pattern: Architecture B — Synchronous Server-Side Execution.
+
+1\. Why Architecture B Won
+
+Architecture	Execution Model	Verdict	Reason
+
+A: Browser Client	Direct fetch() from React	Rejected	Crippled by browser CORS, forbidden headers, and security risks with client-side secrets.
+
+B: Synchronous Server	Express executes target HTTP calls synchronously	Selected	Full HTTP fidelity, rock-solid SSRF protection, clean state boundaries, and zero extra infrastructure needed.
+
 C: Async Queue / Poller	Express queues jobs in DB; background worker polls	Rejected	Overkill for interactive developer requests; adds lease locks, polling lag, and crash recovery complexity.
 
 2\. The 6 Core Capabilities
