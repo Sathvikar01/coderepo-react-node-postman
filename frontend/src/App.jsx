@@ -23,7 +23,7 @@ import { EnvironmentsDrawer } from "./features/environments/EnvironmentsDrawer.j
 import { environmentApi } from "./features/environments/environment.api.js";
 import { executionApi } from "./features/executions/execution.api.js";
 import { FlightRecorderDialog } from "./features/execution-intelligence/FlightRecorderDialog.jsx";
-import { capsuleDraftRequest } from "./features/execution-intelligence/flight-recorder-model.js";
+import { capsuleDraftTab } from "./features/execution-intelligence/flight-recorder-model.js";
 import { exampleApi } from "./features/examples/example.api.js";
 import { ExampleActions } from "./features/examples/ExampleActions.jsx";
 import { ExampleDialog } from "./features/examples/ExampleDialog.jsx";
@@ -911,12 +911,11 @@ export default function App() {
 	};
 
 	const openCapsuleDraft = (imported) => {
-		const request = capsuleDraftRequest(imported);
-		if (!request) {
+		const tab = capsuleDraftTab(imported);
+		if (!tab) {
 			toast("This capsule preview cannot be opened safely.", "error");
 			return;
 		}
-		const tab = { ...createDraftTab({ request }), dirty: true };
 		if (!openDraftTab(tab)) return;
 		setFlightRecorder(null);
 		toast("Opened an unsent, unsaved reproduction draft.");

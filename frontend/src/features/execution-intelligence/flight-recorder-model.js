@@ -1,4 +1,6 @@
-const CATEGORY_ORDER = ["source", "request", "auth", "target", "policy", "transport", "response"];
+import { buildImportedTab } from "../import/import-draft.js";
+
+const CATEGORY_ORDER = ["source", "request", "auth", "target", "policy", "transport", "response", "tests"];
 
 export function groupComparisonChanges(comparison) {
 	const byCategory = new Map();
@@ -19,9 +21,19 @@ export function contractBadge(contract) {
 	return { tone: "neutral", label: "No contract drift" };
 }
 
-export function capsuleDraftRequest(imported, id = crypto.randomUUID()) {
+export function capsuleDraftTab(imported) {
 	if (!imported?.draft || imported.autoSend !== false || imported.autoSave !== false) return null;
-	return { ...structuredClone(imported.draft), id, folderId: null };
+	// Route capsule imports through the Phase 7 normalized import boundary so
+	// every import adapter shares one preview → dirty-draft path that never
+	// sends or saves.
+	const built = buildImportedTab({ ok: true, request: structuredClone(imported.draft), authOverride: null });
+	return built ? built.tab : null;
+}
+
+export function capsuleDraftRequest(imported, id = crypto.randomUUID()) {
+	const tab = capsuleDraftTab(imported);
+	if (!tab) return null;
+	return { ...tab.request, id, folderId: null };
 }
 
 export function minimizationSummary(job) {

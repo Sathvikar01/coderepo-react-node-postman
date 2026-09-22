@@ -13,8 +13,8 @@ import {
 const TABS = [
 	{ id: "passport", label: "Passport" },
 	{ id: "compare", label: "Compare" },
-	{ id: "capsule", label: "Capsule" },
 	{ id: "minimize", label: "Minimize" },
+	{ id: "capsule", label: "Capsule" },
 ];
 
 function Fingerprint({ label, value }) {
@@ -174,12 +174,19 @@ export function FlightRecorderDialog({ comparisonIds = null, executionId, onClos
 					{tab === "passport" && <PassportView receipt={receipt} />}
 					{tab === "compare" && <ComparisonView comparison={comparison} loading={loadingComparison} />}
 					{tab === "capsule" && <div className="recorder-stack">
-						<p className="field-hint">Capsules contain placeholders and evidence fingerprints. Import always opens an unsent, unsaved draft.</p>
-						<label className="checkbox-row"><input checked={includeResponseBody} type="checkbox" onChange={(event) => setIncludeResponseBody(event.target.checked)} />Include the scrubbed bounded response body</label>
-						<div className="recorder-actions"><button className="primary-button" disabled={busy} type="button" onClick={exportCapsule}><MaterialIcon size={17}>download</MaterialIcon>Export capsule</button></div>
-						<textarea aria-label="Reproduction capsule JSON" className="recorder-capsule-text" placeholder="Paste a ReproCapsuleV1 file here to preview it" value={capsuleText} onChange={(event) => { setCapsuleText(event.target.value); setImportPreview(null); }} />
-						<div className="recorder-actions"><button disabled={!capsuleText || busy} type="button" onClick={previewImport}>Preview import</button>{importPreview && <button className="primary-button" type="button" onClick={() => onOpenDraft(importPreview)}>Open dirty draft</button>}</div>
-						{importPreview && <p className="field-hint">{importPreview.requiredInputs.length} required input(s). Nothing has been sent or saved.</p>}
+						<section className="recorder-card">
+							<h3>Export Capsule</h3>
+							<p className="field-hint">Capsules hold placeholders and evidence fingerprints only. Resolved secrets are redacted before export.</p>
+							<label className="checkbox-row"><input checked={includeResponseBody} type="checkbox" onChange={(event) => setIncludeResponseBody(event.target.checked)} />Include the scrubbed bounded response body</label>
+							<div className="recorder-actions"><button className="primary-button" disabled={busy} type="button" onClick={exportCapsule}><MaterialIcon size={17}>download</MaterialIcon>Export Capsule</button></div>
+						</section>
+						<section className="recorder-card">
+							<h3>Import Capsule</h3>
+							<p className="field-hint">Import always opens an unsent, unsaved dirty draft. Nothing is sent or saved automatically.</p>
+							<textarea aria-label="Reproduction capsule JSON" className="recorder-capsule-text" placeholder="Paste a ReproCapsuleV1 file here to preview it" value={capsuleText} onChange={(event) => { setCapsuleText(event.target.value); setImportPreview(null); }} />
+							<div className="recorder-actions"><button disabled={!capsuleText || busy} type="button" onClick={previewImport}>Preview import</button>{importPreview && <button className="primary-button" type="button" onClick={() => onOpenDraft(importPreview)}>Open dirty draft</button>}</div>
+							{importPreview && <p className="field-hint">{importPreview.requiredInputs.length} required input(s). Nothing has been sent or saved.</p>}
+						</section>
 					</div>}
 					{tab === "minimize" && <div className="recorder-stack">
 						<p className="field-hint">Tracer verifies the failure twice, then removes query rows, headers, and top-level JSON fields within a 12-probe budget.</p>

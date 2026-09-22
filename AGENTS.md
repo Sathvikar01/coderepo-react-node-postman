@@ -293,6 +293,7 @@ This section is the repo-level source of truth for phase numbers. Agents must no
 | 25 | Ecosystem | Extensibility/integration surface around stable portable, runner, docs, and collaboration contracts. |
 | 26 | AI + Enterprise Layer | AI-assisted and enterprise controls added last, on top of deterministic existing authority. |
 | 27 | Execution Intelligence / API Flight Recorder | Evidence-grade execution receipts, causal comparison, redacted reproduction capsules, and bounded failure minimization. |
+| 28 | Flight Recorder Acceptance | Prove and polish the complete Passport → Compare → Minimize → Capsule → Reproduce flow with one deterministic local demo. No new unrelated features. |
 
 ### 10.2 Dependency graph
 
@@ -304,6 +305,7 @@ Mandatory chains:
 - `16 → 17`
 - `22 → 23`
 - `12 + 16 + 18 + 19 → 27`
+- `27 → 28` (Phase 28 accepts and polishes the merged Flight Recorder; it may not reimplement it)
 - Phase 20 should reuse runner/CLI semantics from 13–15 rather than invent a second execution model.
 - Phases 24–26 start only after the platform foundations they depend on have converged; 24, 25, and 26 may later run in parallel if ownership is non-overlapping.
 
@@ -338,6 +340,7 @@ Current parallel branches:
 | 19 | `phase19/examples-mocks` | `backend/src/features/{examples,mocks}/**`, `frontend/src/features/{examples,mocks}/**` |
 | 22 | `phase22/generated-docs` | dedicated generated-docs/docs feature modules; consume canonical request/project data without changing execution |
 | 27 | `phase27/execution-intelligence` | `backend/src/features/execution-intelligence/**`, `frontend/src/features/execution-intelligence/**`; narrow execution, history, portable-model, and mock integration hooks only |
+| 28 | `phase28/flight-recorder-acceptance` | Flight Recorder demo/acceptance artifacts under `**/execution-intelligence/**`; narrow import-boundary, workspace, and recorder UI changes only where a proven gap requires them |
 
 Shared/high-conflict files are integrator-owned unless the phase cannot be completed without a narrow change:
 
@@ -597,6 +600,14 @@ When the user assigns a phase, the agent MUST execute the matching specification
 - **Do not:** create an alternate execution path, expose resolved secrets, auto-Send or auto-Save imported capsules, resume Phase 10 or Phase 23, or add unrelated Postman-parity features.
 - **Exit:** Phase 27 feature/security/browser tests, the normal phase gate, and the repository Baseline Gate are green; finish with `PHASE 27 VERDICT: PASS` or `PHASE 27 VERDICT: BLOCKED`.
 
+#### Phase 28 — Flight Recorder Acceptance
+- **Branch:** `phase28/flight-recorder-acceptance`.
+- **Dependencies:** Phase 27 merged into `main`.
+- **Goal:** prove and polish the complete Flight Recorder flow `Passport → Compare → Minimize → Capsule → Reproduce` on top of the merged Phase 27 implementation. No new unrelated features.
+- **Do:** build one deterministic demo over local seeded infrastructure only (successful request → one subtle change → request fails → compare the runs → identify the first meaningful divergence → minimize to the smallest reproducing request → export a redacted reproduction capsule → import it through the Phase 7 normalized import boundary → open as an unsent dirty draft → manually reproduce the failure); verify passport immutability after request/env/auth/cookie/assertion changes, comparison coverage of request/env/auth/script/cookie/DNS/policy/response changes, contract diff for removed fields, type changes, unexpected statuses, and required-header changes, minimizer budgets, cancellation, flaky predicates, SSRF and unsafe-method restrictions, mutating probes only against approved local or mock targets, capsule round-trip without semantic drift, capsule import never auto-Sending or auto-Saving, and zero resolved secrets in passports, comparisons, capsules, minimizer records, history, or errors; polish only what is necessary so users can clearly find Passport, Compare, Minimize, and Export Capsule, keyboard-accessible at 375 / 768 / 1024 / 1440; reposition README as **Tracer — API Flight Recorder** with core flow `record → compare → minimize → reproduce`, keeping HackerRank and run instructions intact.
+- **Do not:** add unrelated features, broaden refactors, change dependencies or the lockfile, weaken any Phase 27 invariant, or rewrite protected baseline code without a proven regression.
+- **Exit:** `bun install --frozen-lockfile`, `bun test`, backend syntax, frontend build, isolated seed/reset, the full Flight Recorder demo, baseline regressions, responsive browser smoke, GitHub Actions, and `skills/validate/SKILL.md` are green; finish with `PHASE 28 VERDICT: PASS — FLIGHT RECORDER ACCEPTED` or `PHASE 28 VERDICT: BLOCKED`.
+
 ### 10.7 Common phase completion gate
 
 Unless a phase explicitly requires more, every implementation phase must:
@@ -614,12 +625,13 @@ Unless a phase explicitly requires more, every implementation phase must:
 
 ### 10.5 Current roadmap state
 
-As of the Phase 27 authorization:
+As of the Phase 28 assignment:
 
-- Phases **1–9, 11–12, 16, 18–19, and 22: COMPLETE / MERGED**.
+- Phases **1–9, 11–12, 16, 18–19, 22, and 27: COMPLETE / MERGED**.
 - Phases **1–6: PROTECTED / FROZEN baseline**.
-- Phase **27: ACTIVE** on `phase27/execution-intelligence`, based on latest `main` after all four required dependencies merged.
-- Phases **10 and 23: INACTIVE** and must not be resumed as part of Phase 27.
+- Phase **27: MERGED** as `8fe4026` (Execution Intelligence / API Flight Recorder).
+- Phase **28: ACTIVE** on `phase28/flight-recorder-acceptance`, based on latest `main` after the Phase 27 merge.
+- Phases **10 and 23: INACTIVE** and must not be resumed as part of Phase 28.
 - Other phases remain governed by their dependency chains and explicit user assignment.
 
 The user may advance this state over time. When a phase passes and merges, update only this subsection plus any dependency/ownership facts that actually changed; do not rewrite historical phase definitions.

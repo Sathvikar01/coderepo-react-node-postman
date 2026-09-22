@@ -120,3 +120,66 @@ describe("import workflows", () => {
 		expect(requestDefinitionSchema.safeParse(imported.tab.request).success).toBe(false);
 	});
 });
+
+describe("import boundary for richer adapters (reproduction capsules)", () => {
+	const capsuleRequest = {
+		schemaVersion: 1,
+		id: "22222222-2222-4222-8222-222222222222",
+		folderId: null,
+		name: "Failing orders call",
+		method: "POST",
+		urlTemplate: "{{base_url}}/orders",
+		query: [{ id: "33333333-3333-4333-8333-333333333333", key: "status", value: "paid", enabled: true }],
+		headers: [{ id: "44444444-4444-4444-8444-444444444444", key: "X-Demo", value: "flight", enabled: true }],
+		body: { mode: "json", text: '{"customer":"[REQUIRED_INPUT]"}' },
+		auth: { mode: "bearer", tokenTemplate: "{{orders_token}}" },
+		scripts: { preRequest: "", test: "pm.test('status', () => {});" },
+		assertions: [
+			{
+				id: "55555555-5555-4555-8555-555555555555",
+				name: "orders are listed",
+				enabled: true,
+				target: "status",
+				operator: "equals",
+				path: "",
+				expected: "200",
+				valueType: "string",
+				min: null,
+				max: null,
+			},
+		],
+		settings: { timeoutMs: 8000 },
+	};
+
+	test("preserves auth, scripts, assertions, and request semantics without drift", () => {
+		const built = buildImportedTab({ ok: true, request: structuredClone(capsuleRequest), authOverride: null });
+
+		expect(built.tab.dirty).toBe(true);
+		expect(built.tab.status).toBe("idle");
+		expect(built.tab.executionId).toBeNull();
+		expect(built.tab.request).toMatchObject({
+			name: "Failing orders call",
+			method: "POST",
+			urlTemplate: "{{base_url}}/orders",
+			body: { mode: "json", text: '{"customer":"[REQUIRED_INPUT]"}' },
+			auth: { mode: "bearer", tokenTemplate: "{{orders_token}}" },
+			scripts: { preRequest: "", test: "pm.test('status', () => {});" },
+			settings: { timeoutMs: 8000 },
+		});
+		expect(built.tab.request.query.map((row) => [row.key, row.value])).toEqual([["status", "paid"]]);
+		expect(built.tab.request.headers.map((row) => [row.key, row.value])).toEqual([["X-Demo", "flight"]]);
+		expect(built.tab.request.assertions).toHaveLength(1);
+		expect(built.tab.request.assertions[0]).toMatchObject({ name: "orders are listed", target: "status", expected: "200" });
+		expect(requestDefinitionSchema.safeParse(built.tab.request).success).toBe(true);
+	});
+
+	test("cURL imports keep the existing defaults", () => {
+		const parsed = parseCurl(`curl ${echo}`);
+		const built = buildImportedTab(parsed);
+
+		expect(built.tab.request.auth).toEqual({ mode: "none" });
+		expect(built.tab.request.scripts).toEqual({ preRequest: "", test: "" });
+		expect(built.tab.request.assertions).toEqual([]);
+		expect(requestDefinitionSchema.safeParse(built.tab.request).success).toBe(true);
+	});
+});

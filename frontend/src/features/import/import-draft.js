@@ -23,6 +23,30 @@ function normalizeBody(body) {
 	return { mode: "none" };
 }
 
+// Adapters that carry richer request semantics (reproduction capsules today,
+// Postman/OpenAPI/Insomnia tomorrow) pass auth, scripts, and assertions in the
+// normalized request. They are preserved verbatim so importing never changes
+// what the request means. Adapters without them (cURL) keep the old defaults.
+function normalizeAuth(auth) {
+	if (!auth) return { mode: "none" };
+	if (auth.mode === "inherit" || auth.mode === "none") return { mode: auth.mode };
+	if (auth.mode === "bearer") return { mode: "bearer", tokenTemplate: String(auth.tokenTemplate ?? "") };
+	if (auth.mode === "basic")
+		return {
+			mode: "basic",
+			usernameTemplate: String(auth.usernameTemplate ?? ""),
+			passwordTemplate: String(auth.passwordTemplate ?? ""),
+		};
+	if (auth.mode === "apiKey")
+		return {
+			mode: "apiKey",
+			key: String(auth.key ?? ""),
+			valueTemplate: String(auth.valueTemplate ?? ""),
+			in: auth.in === "query" ? "query" : "header",
+		};
+	return { mode: "none" };
+}
+
 export function importedRequestDefinition(request) {
 	return {
 		schemaVersion: 1,
@@ -34,7 +58,12 @@ export function importedRequestDefinition(request) {
 		query: (request?.query ?? []).map(withId),
 		headers: (request?.headers ?? []).map(withId),
 		body: normalizeBody(request?.body),
-		auth: { mode: "none" },
+		auth: normalizeAuth(request?.auth),
+		scripts: {
+			preRequest: String(request?.scripts?.preRequest ?? ""),
+			test: String(request?.scripts?.test ?? ""),
+		},
+		assertions: Array.isArray(request?.assertions) ? structuredClone(request.assertions) : [],
 		settings: { timeoutMs: request?.settings?.timeoutMs ?? DEFAULT_TIMEOUT_MS },
 	};
 }

@@ -152,6 +152,24 @@ describe("RunComparisonV1", () => {
 		]);
 	});
 
+	test("surfaces script and assertion outcome divergence when the request is unchanged", () => {
+		const candidate = receipt({
+			executionId: "33333333-3333-4333-8333-333333333333",
+			tests: { counts: { passed: 0, failed: 1, error: 0 }, failureFingerprint: "tests-b" },
+		});
+
+		const comparison = compareReceipts(receipt(), candidate);
+		expect(comparison.changes.map((change) => `${change.category}:${change.path}`)).toEqual([
+			"tests:tests.counts",
+			"tests:tests.failureFingerprint",
+		]);
+		expect(comparison.firstDivergence).toEqual({
+			category: "tests",
+			path: "tests.counts",
+			message: "The test results changed from 1 passed, 0 failed, 0 error to 0 passed, 1 failed, 0 error.",
+		});
+	});
+
 	test("does not invent structured diffs for binary or truncated bodies", () => {
 		const comparison = compareReceipts(
 			receipt(),

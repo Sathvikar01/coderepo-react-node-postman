@@ -18,14 +18,22 @@ function label(path) {
 		"transport.durationMs": "total duration",
 		outcome: "execution outcome",
 		"response.bodyFingerprint": "response body",
+		"tests.counts": "test results",
+		"tests.failureFingerprint": "test failures",
 	};
 	return labels[path] ?? path;
+}
+
+function formatCounts(counts) {
+	if (!counts) return "none";
+	return `${counts.passed ?? 0} passed, ${counts.failed ?? 0} failed, ${counts.error ?? 0} error`;
 }
 
 function message(path, before, after) {
 	const display = (value) => (value === null || value === undefined ? "none" : typeof value === "object" ? "a different value" : String(value));
 	if (path === "source.collectionRevision") return `The collection revision changed from ${display(before)} to ${display(after)}.`;
 	if (path === "source.environmentRevision") return `The environment revision changed from ${display(before)} to ${display(after)}.`;
+	if (path === "tests.counts") return `The test results changed from ${formatCounts(before)} to ${formatCounts(after)}.`;
 	return `The ${label(path)} changed from ${display(before)} to ${display(after)}.`;
 }
 
@@ -99,6 +107,8 @@ export function compareReceipts(base, candidate) {
 	addIfChanged(changes, "transport", "transport.durationMs", base?.transport?.durationMs, candidate?.transport?.durationMs);
 	addIfChanged(changes, "response", "outcome", base?.outcome, candidate?.outcome, "warning");
 	addIfChanged(changes, "response", "response.bodyFingerprint", base?.response?.bodyFingerprint, candidate?.response?.bodyFingerprint);
+	addIfChanged(changes, "tests", "tests.counts", base?.tests?.counts, candidate?.tests?.counts, "warning");
+	addIfChanged(changes, "tests", "tests.failureFingerprint", base?.tests?.failureFingerprint, candidate?.tests?.failureFingerprint, "warning");
 	if (
 		base?.response &&
 		candidate?.response &&
