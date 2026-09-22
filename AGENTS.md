@@ -294,6 +294,7 @@ This section is the repo-level source of truth for phase numbers. Agents must no
 | 26 | AI + Enterprise Layer | AI-assisted and enterprise controls added last, on top of deterministic existing authority. |
 | 27 | Execution Intelligence / API Flight Recorder | Evidence-grade execution receipts, causal comparison, redacted reproduction capsules, and bounded failure minimization. |
 | 28 | Flight Recorder Acceptance | Prove and polish the complete Passport → Compare → Minimize → Capsule → Reproduce flow with one deterministic local demo. No new unrelated features. |
+| 29 | Product UI/UX Polish | Raise the shipped frontend to an intentional, distinctive developer-tool standard. Presentation only: no new features, no behavioural or data changes, no new dependencies. |
 
 ### 10.2 Dependency graph
 
@@ -341,6 +342,7 @@ Current parallel branches:
 | 22 | `phase22/generated-docs` | dedicated generated-docs/docs feature modules; consume canonical request/project data without changing execution |
 | 27 | `phase27/execution-intelligence` | `backend/src/features/execution-intelligence/**`, `frontend/src/features/execution-intelligence/**`; narrow execution, history, portable-model, and mock integration hooks only |
 | 28 | `phase28/flight-recorder-acceptance` | Flight Recorder demo/acceptance artifacts under `**/execution-intelligence/**`; narrow import-boundary, workspace, and recorder UI changes only where a proven gap requires them |
+| 29 | `phase29/ui-ux-polish` | `frontend/src/**` presentation: stylesheets, tokens, and shared component markup/ARIA only where a proven accessibility defect requires it; no backend files, no feature or workflow logic |
 
 Shared/high-conflict files are integrator-owned unless the phase cannot be completed without a narrow change:
 
@@ -608,6 +610,15 @@ When the user assigns a phase, the agent MUST execute the matching specification
 - **Do not:** add unrelated features, broaden refactors, change dependencies or the lockfile, weaken any Phase 27 invariant, or rewrite protected baseline code without a proven regression.
 - **Exit:** `bun install --frozen-lockfile`, `bun test`, backend syntax, frontend build, isolated seed/reset, the full Flight Recorder demo, baseline regressions, responsive browser smoke, GitHub Actions, and `skills/validate/SKILL.md` are green; finish with `PHASE 28 VERDICT: PASS — FLIGHT RECORDER ACCEPTED` or `PHASE 28 VERDICT: BLOCKED`.
 
+#### Phase 29 — Product UI/UX Polish
+- **Branch:** `phase29/ui-ux-polish`.
+- **Dependency:** latest approved `main` (Phase 28 merged).
+- **Goal:** the shipped product should read as one intentional, distinctive developer tool — dense but calm, precise, keyboard-usable, and visually consistent — without changing what it does.
+- **Do:** inspect the real running app before editing; audit against an explicit design direction; unify type/mono/easing/duration tokens; repair contrast and minimum hit areas; make text-entry focus rings visible instead of suppressed; remove generic-UI tells (side-stripe notices, animated layout properties); give tabs, switches, and progress a single coherent motion language with `prefers-reduced-motion` parity; keep the light and dark themes equally correct; verify at 375/768/1024/1440.
+- **Primary paths:** `frontend/src/styles.css`, feature stylesheets, and shared frontend components — presentation, tokens, and proven accessibility fixes only.
+- **Do not:** touch backend code, request/execution semantics, persistence, tests' contracts, dependencies, or `bun.lock`; do not restructure the app shell, rename workflows, or add capabilities.
+- **Exit:** `bun install --frozen-lockfile`, `bun test`, frontend tests, backend syntax, frontend build, isolated seed/reset, runtime smoke, baseline regressions, keyboard/contrast/target/overflow sweeps at 375/768/1024/1440 in light and dark, the full Flight Recorder flow, and `skills/validate/SKILL.md` green; finish with `PHASE 29 VERDICT: PASS — UI/UX POLISHED` or `PHASE 29 VERDICT: BLOCKED`.
+
 ### 10.7 Common phase completion gate
 
 Unless a phase explicitly requires more, every implementation phase must:
@@ -625,14 +636,16 @@ Unless a phase explicitly requires more, every implementation phase must:
 
 ### 10.5 Current roadmap state
 
-As of the Phase 13 assignment:
+As of the Phase 29 assignment:
 
 - Phases **1–9, 11–12, 16, 18–19, 22, and 27–28: COMPLETE / MERGED**.
 - Phases **1–6: PROTECTED / FROZEN baseline**.
+- Phase **13: MERGED** as `e75d306` (Collection Runner); Phase **14: MERGED** as `bfcd441` (headless CLI); Phase **17: MERGED** as `cc8dc56`.
 - Phase **27: MERGED** as `8fe4026` (Execution Intelligence / API Flight Recorder).
 - Phase **28: MERGED** as `0a630e2` (Flight Recorder Acceptance).
-- Phase **13: ACTIVE** on `phase13/collection-runner`, based on latest `main` after the Phase 28 merge.
-- Phases **10 and 23: INACTIVE** and must not be resumed as part of Phase 13.
+- Phase **29: ACTIVE** on `phase29/ui-ux-polish`, based on latest `main` after the Phase 14 merge.
+- Phase **29 owns presentation**: it is frontend-wide and overlaps every frontend feature path, so it merges before other frontend phases rebase; it adds no capability and changes no contract.
+- Phases **10 and 23: INACTIVE** and must not be resumed as part of Phase 29.
 - Other phases remain governed by their dependency chains and explicit user assignment.
 
 The user may advance this state over time. When a phase passes and merges, update only this subsection plus any dependency/ownership facts that actually changed; do not rewrite historical phase definitions.

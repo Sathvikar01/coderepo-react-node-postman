@@ -196,7 +196,9 @@ function CollectionVariablesEditor({ rows, onChange }) {
 		<div className="kv-editor">
 			{rows.map((row) => (
 				<div className="variable-row" key={row.id}>
-					<input aria-label="Variable enabled" checked={row.enabled} type="checkbox" onChange={(event) => update(row.id, { enabled: event.target.checked })} />
+					<label className="kv-check compact">
+						<input aria-label="Variable enabled" checked={row.enabled} type="checkbox" onChange={(event) => update(row.id, { enabled: event.target.checked })} />
+					</label>
 					<input aria-label="Variable name" placeholder="name" value={row.key} onChange={(event) => update(row.id, { key: event.target.value })} />
 					<SelectMenu
 						ariaLabel="Variable kind"

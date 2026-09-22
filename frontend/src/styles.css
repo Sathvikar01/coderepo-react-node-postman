@@ -14,7 +14,7 @@
 	--ink: #c9d2dc;
 	--ink-strong: #f5f7f4;
 	--muted: #8b96a5;
-	--quiet: #6e7a89;
+	--quiet: #7e8a9c;
 	--brand: #63f5b5;
 	--brand-ink: #04231a;
 	--brand-soft: #12352a;
@@ -42,6 +42,10 @@
 	--radius-md: 8px;
 	--radius-lg: 12px;
 	--font-sans: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+	--font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, ui-monospace, monospace;
+	--ease: cubic-bezier(0.22, 0.8, 0.24, 1);
+	--dur-fast: 120ms;
+	--dur: 170ms;
 	--header-height: 64px;
 	color: var(--ink);
 	background: var(--surface);
@@ -63,27 +67,27 @@
 	--scrollbar: #b4bfb4;
 	--ink: #2a3439;
 	--ink-strong: #10161d;
-	--muted: #5a6672;
-	--quiet: #6e7a89;
-	--brand: #0b8a5c;
+	--muted: #57636f;
+	--quiet: #606b7a;
+	--brand: #096d47;
 	--brand-ink: #ffffff;
 	--brand-soft: #d8f5e6;
-	--blue: #0b8a5c;
-	--blue-hover: #096f4a;
+	--blue: #096d47;
+	--blue-hover: #086b47;
 	--blue-tint: #d8f5e6;
-	--accent: #0b8a5c;
+	--accent: #096d47;
 	--accent-on: #ffffff;
 	--accent-container: #d8f5e6;
 	--accent-container-ink: #06331f;
-	--danger: #c6303f;
+	--danger: #b8242f;
 	--danger-ink: #7a1520;
 	--danger-container: #fbe3e5;
-	--success: #0b8a5c;
+	--success: #096d47;
 	--success-container: #d8f5e6;
 	--warning: #8a6200;
 	--warning-container: #fbf0d2;
-	--info: #1b6fa8;
-	--method-get: #0b8a5c;
+	--info: #17618f;
+	--method-get: #096d47;
 	--method-post: #8a6200;
 	--method-put: #1b6fa8;
 	--method-patch: #6b3fa0;
@@ -118,6 +122,16 @@ textarea {
 button {
 	cursor: pointer;
 }
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.001ms !important;
+		animation-iteration-count: 1 !important;
+		scroll-behavior: auto !important;
+		transition-duration: 0.001ms !important;
+	}
+}
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
@@ -127,9 +141,8 @@ textarea:focus-visible,
 	outline-offset: 2px;
 }
 code,
-pre,
-.mono {
-	font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+pre {
+	font-family: var(--font-mono);
 }
 .sr-only {
 	position: absolute;
@@ -497,6 +510,7 @@ pre,
 }
 .sidebar-tab {
 	display: flex;
+	position: relative;
 	flex: 1;
 	align-items: center;
 	justify-content: center;
@@ -507,11 +521,34 @@ pre,
 	background: transparent;
 	color: var(--muted);
 	font-size: 13px;
+	transition:
+		background-color var(--dur-fast) var(--ease),
+		color var(--dur-fast) var(--ease);
+}
+.sidebar-tab:hover:not([aria-selected="true"]) {
+	background: var(--hover);
+	color: var(--ink);
+}
+.sidebar-tab::after {
+	position: absolute;
+	right: 10px;
+	bottom: 0;
+	left: 10px;
+	height: 2px;
+	border-radius: 2px;
+	background: var(--brand);
+	content: "";
+	transform: scaleX(0);
+	transform-origin: center;
+	transition: transform var(--dur) var(--ease);
 }
 .sidebar-tab[aria-selected="true"] {
 	background: var(--surface-muted);
 	color: var(--ink-strong);
 	font-weight: 500;
+}
+.sidebar-tab[aria-selected="true"]::after {
+	transform: scaleX(1);
 }
 .sidebar-panel {
 	display: flex;
@@ -527,10 +564,17 @@ pre,
 	align-items: center;
 	gap: 8px;
 	padding: 0 10px;
-	border: 1px solid transparent;
+	border: 1px solid var(--border);
 	border-radius: 10px;
 	background: var(--field);
 	color: var(--muted);
+	transition:
+		border-color var(--dur-fast) var(--ease),
+		box-shadow var(--dur-fast) var(--ease);
+}
+.sidebar-search:focus-within {
+	border-color: var(--blue);
+	box-shadow: 0 0 0 2px var(--blue);
 }
 .sidebar-search input {
 	width: 100%;
@@ -547,14 +591,6 @@ pre,
 	min-height: 0;
 	overflow-y: auto;
 	overscroll-behavior: contain;
-}
-.sidebar-footer {
-	display: flex;
-	flex: none;
-	flex-direction: column;
-	gap: 8px;
-	padding-top: 8px;
-	border-top: 1px solid var(--divider);
 }
 .sidebar-section-label {
 	display: flex;
@@ -650,7 +686,7 @@ pre,
 	flex: none;
 	min-width: 44px;
 	color: var(--muted);
-	font-family: "SFMono-Regular", Consolas, monospace;
+	font-family: var(--font-mono);
 	font-size: 10.5px;
 	font-weight: 500;
 	letter-spacing: 0.2px;
@@ -761,8 +797,9 @@ pre,
 }
 .request-tab-close {
 	display: grid;
-	width: 20px;
-	height: 20px;
+	width: 24px;
+	height: 24px;
+	margin: -2px -5px -2px 0;
 	place-items: center;
 	border: 0;
 	border-radius: 50%;
@@ -771,6 +808,7 @@ pre,
 }
 .request-tab-close:hover {
 	background: var(--field-active);
+	color: var(--ink-strong);
 }
 .request-pane {
 	display: flex;
@@ -793,7 +831,8 @@ pre,
 }
 .pane-splitter {
 	display: flex;
-	height: 7px;
+	position: relative;
+	height: 13px;
 	flex: none;
 	align-items: center;
 	justify-content: center;
@@ -803,12 +842,28 @@ pre,
 	cursor: row-resize;
 	touch-action: none;
 }
+/* Overlay the panes so the drag handle clears the 24px minimum hit area. */
+.pane-splitter::after {
+	position: absolute;
+	z-index: 1;
+	top: -6px;
+	right: 0;
+	bottom: -6px;
+	left: 0;
+	content: "";
+}
 .pane-splitter::before {
-	width: 46px;
+	width: 56px;
 	height: 3px;
 	border-radius: 3px;
 	background: var(--border-strong);
 	content: "";
+	transition:
+		background-color var(--dur-fast) var(--ease),
+		width var(--dur-fast) var(--ease);
+}
+.pane-splitter:hover::before {
+	width: 72px;
 }
 .pane-splitter:hover::before,
 .pane-splitter:focus-visible::before {
@@ -849,7 +904,6 @@ pre,
 .request-name-input:focus {
 	border-color: var(--blue);
 	background: var(--field);
-	outline: 0;
 }
 .url-bar {
 	display: flex;
@@ -865,7 +919,7 @@ pre,
 	padding: 0 10px;
 	border-radius: 10px;
 	background: var(--field);
-	font-family: "SFMono-Regular", Consolas, monospace;
+	font-family: var(--font-mono);
 	font-size: 12.5px;
 	font-weight: 500;
 }
@@ -878,13 +932,12 @@ pre,
 	border-radius: 10px;
 	background: var(--field);
 	color: var(--ink-strong);
-	font-family: "SFMono-Regular", Consolas, monospace;
+	font-family: var(--font-mono);
 	font-size: 13px;
 }
 .url-input:focus {
 	border-color: var(--blue);
 	background: var(--surface);
-	outline: 0;
 }
 .send-button {
 	display: flex;
@@ -927,23 +980,37 @@ pre,
 	border-bottom: 1px solid var(--divider);
 }
 .editor-tab {
+	position: relative;
 	padding: 10px 12px;
 	border: 0;
 	border-bottom: 2px solid transparent;
 	background: transparent;
 	color: var(--muted);
 	font-size: 13px;
-	transition:
-		color 120ms ease-out,
-		border-color 120ms ease-out;
+	transition: color var(--dur-fast) var(--ease);
+}
+.editor-tab::after {
+	position: absolute;
+	right: 8px;
+	bottom: 0;
+	left: 8px;
+	height: 2px;
+	border-radius: 2px;
+	background: var(--blue);
+	content: "";
+	transform: scaleX(0);
+	transform-origin: center;
+	transition: transform var(--dur) var(--ease);
 }
 .editor-tab:hover {
 	color: var(--ink-strong);
 }
 .editor-tab[aria-selected="true"] {
-	border-bottom-color: var(--blue);
 	color: var(--blue);
 	font-weight: 500;
+}
+.editor-tab[aria-selected="true"]::after {
+	transform: scaleX(1);
 }
 .editor-tab .badge {
 	margin-left: 6px;
@@ -992,13 +1059,12 @@ pre,
 	border: 1px solid var(--border);
 	border-radius: 8px;
 	background: var(--field);
-	font-family: "SFMono-Regular", Consolas, monospace;
+	font-family: var(--font-mono);
 	font-size: 12.5px;
 }
 .kv-row input[type="text"]:focus {
 	border-color: var(--blue);
 	background: var(--surface);
-	outline: 0;
 }
 .kv-check {
 	display: grid;
@@ -1010,6 +1076,11 @@ pre,
 	width: 17px;
 	height: 17px;
 	accent-color: var(--blue);
+}
+/* Same wrapper, sized to the 24px checkbox column used by collection defaults. */
+.kv-check.compact {
+	width: 24px;
+	height: 24px;
 }
 .kv-empty {
 	padding: 12px 4px;
@@ -1030,7 +1101,7 @@ pre,
 	border-radius: 10px;
 	background: var(--field);
 	color: var(--ink-strong);
-	font-family: "SFMono-Regular", Consolas, monospace;
+	font-family: var(--font-mono);
 	font-size: 12.5px;
 	line-height: 1.6;
 	resize: vertical;
@@ -1038,7 +1109,6 @@ pre,
 .raw-editor textarea:focus {
 	border-color: var(--blue);
 	background: var(--surface);
-	outline: 0;
 }
 .field-hint {
 	color: var(--muted);
@@ -1181,6 +1251,9 @@ pre,
 	background: transparent;
 	color: var(--muted);
 	font-size: 12.5px;
+	transition:
+		background-color var(--dur-fast) var(--ease),
+		color var(--dur-fast) var(--ease);
 }
 .view-switch button[aria-pressed="true"] {
 	background: var(--surface);
@@ -1188,7 +1261,7 @@ pre,
 	box-shadow: 0 1px 2px rgb(0 0 0 / 20%);
 }
 .json-tree {
-	font-family: "SFMono-Regular", Consolas, monospace;
+	font-family: var(--font-mono);
 	font-size: 12.5px;
 	line-height: 1.7;
 }
@@ -1202,6 +1275,7 @@ pre,
 	gap: 6px;
 }
 .json-toggle {
+	position: relative;
 	width: 18px;
 	height: 18px;
 	flex: none;
@@ -1211,6 +1285,12 @@ pre,
 	color: var(--muted);
 	text-align: center;
 	line-height: 1;
+}
+/* Keep the 18px glyph but bring the hit area up to the 24px minimum. */
+.json-toggle::after {
+	position: absolute;
+	inset: -3px;
+	content: "";
 }
 .json-key {
 	color: var(--blue);
@@ -1431,7 +1511,7 @@ pre,
 .history-item-url {
 	overflow: hidden;
 	color: var(--muted);
-	font-family: "SFMono-Regular", Consolas, monospace;
+	font-family: var(--font-mono);
 	font-size: 11.5px;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -1466,6 +1546,38 @@ pre,
 }
 
 /* Controls */
+/* Buttons that carry no class of their own (dialog footers, action rows, the
+   profile-picker retry) would otherwise fall back to the browser's native
+   chrome-grey control, which reads as an unstyled browser default. Style them
+   like a secondary button at zero specificity so any component rule still wins. */
+:where(.form-dialog footer, .recorder-actions, .recorder-card, .profile-picker-error) :where(button:not([class])) {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	min-height: 38px;
+	padding: 0 16px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	background: transparent;
+	color: var(--ink-strong);
+	font-family: inherit;
+	font-size: 13.5px;
+	font-weight: 500;
+	transition:
+		background-color var(--dur-fast) var(--ease),
+		border-color var(--dur-fast) var(--ease),
+		color var(--dur-fast) var(--ease);
+}
+:where(.form-dialog footer, .recorder-actions, .recorder-card, .profile-picker-error) :where(button:not([class]):hover:not(:disabled)) {
+	background: var(--hover);
+	border-color: var(--outline);
+}
+:where(.form-dialog footer, .recorder-actions, .recorder-card, .profile-picker-error) :where(button:not([class]):disabled) {
+	cursor: not-allowed;
+	opacity: 0.5;
+}
+
 .button {
 	display: inline-flex;
 	align-items: center;
@@ -1479,6 +1591,10 @@ pre,
 	color: var(--ink-strong);
 	font-size: 13.5px;
 	font-weight: 500;
+	transition:
+		background-color var(--dur-fast) var(--ease),
+		border-color var(--dur-fast) var(--ease),
+		color var(--dur-fast) var(--ease);
 }
 .button:hover:not(:disabled) {
 	background: var(--hover);
@@ -1500,6 +1616,7 @@ pre,
 	color: var(--brand-ink);
 	font-size: 14px;
 	font-weight: 600;
+	transition: background-color var(--dur-fast) var(--ease);
 }
 :root[data-theme="light"] .primary-button {
 	color: #fff;
@@ -1564,7 +1681,6 @@ pre,
 }
 .outlined-input input:focus {
 	border-color: var(--blue);
-	outline: 0;
 }
 .outlined-input label {
 	position: absolute;
@@ -1755,7 +1871,8 @@ dialog::backdrop {
 }
 .confirmation-dialog footer .confirmation-confirm {
 	background: var(--danger);
-	color: var(--danger-ink);
+	/* Dark ink on the solid danger fill; the light theme overrides to #fff. */
+	color: var(--danger-container);
 }
 :root[data-theme="light"] .confirmation-dialog footer .confirmation-confirm {
 	color: #fff;
@@ -1826,7 +1943,7 @@ dialog::backdrop {
 	border-radius: 10px;
 	background: var(--field);
 	color: var(--ink-strong);
-	font-family: "SFMono-Regular", Consolas, monospace;
+	font-family: var(--font-mono);
 	font-size: 12.5px;
 	line-height: 1.55;
 	resize: vertical;
@@ -1834,7 +1951,6 @@ dialog::backdrop {
 .import-field textarea:focus {
 	border-color: var(--blue);
 	background: var(--surface);
-	outline: 0;
 }
 .import-preview {
 	display: flex;
@@ -1955,23 +2071,37 @@ dialog::backdrop {
 	border-bottom: 1px solid var(--divider);
 }
 .code-format {
+	position: relative;
 	padding: 9px 12px;
 	border: 0;
 	border-bottom: 2px solid transparent;
 	background: transparent;
 	color: var(--muted);
 	font-size: 13px;
-	transition:
-		color 120ms ease-out,
-		border-color 120ms ease-out;
+	transition: color var(--dur-fast) var(--ease);
+}
+.code-format::after {
+	position: absolute;
+	right: 8px;
+	bottom: 0;
+	left: 8px;
+	height: 2px;
+	border-radius: 2px;
+	background: var(--blue);
+	content: "";
+	transform: scaleX(0);
+	transform-origin: center;
+	transition: transform var(--dur) var(--ease);
 }
 .code-format:hover {
 	color: var(--ink-strong);
 }
 .code-format[aria-selected="true"] {
-	border-bottom-color: var(--blue);
 	color: var(--blue);
 	font-weight: 500;
+}
+.code-format[aria-selected="true"]::after {
+	transform: scaleX(1);
 }
 .code-preview {
 	max-height: min(52vh, 420px);
@@ -1986,7 +2116,7 @@ dialog::backdrop {
 }
 .code-preview code {
 	color: var(--ink-strong);
-	font-family: "SFMono-Regular", Consolas, monospace;
+	font-family: var(--font-mono);
 	font-size: 12.5px;
 	line-height: 1.55;
 	white-space: pre;
@@ -2103,9 +2233,10 @@ dialog::backdrop {
 	gap: 8px;
 }
 .recorder-capsule-text {
+	width: 100%;
 	min-height: 180px;
 	resize: vertical;
-	font-family: "SFMono-Regular", Consolas, monospace;
+	font-family: var(--font-mono);
 	font-size: 12px;
 	line-height: 1.45;
 }
@@ -2113,6 +2244,8 @@ dialog::backdrop {
 	display: flex;
 	align-items: flex-start;
 	gap: 8px;
+	/* The whole label is the hit target, so keep it above the 24px minimum. */
+	min-height: 24px;
 	color: var(--muted);
 	font-size: 12.5px;
 }
@@ -2146,6 +2279,9 @@ dialog::backdrop {
 	color: var(--muted);
 	font-size: 11.5px;
 }
+.environment-row.active small {
+	color: var(--ink);
+}
 .variable-row {
 	display: grid;
 	grid-template-columns: 24px minmax(0, 1fr) minmax(0, 1.2fr) 48px 30px;
@@ -2160,7 +2296,7 @@ dialog::backdrop {
 	border: 1px solid var(--border);
 	border-radius: 8px;
 	background: var(--field);
-	font-family: "SFMono-Regular", Consolas, monospace;
+	font-family: var(--font-mono);
 	font-size: 12px;
 }
 .menu-anchor {
@@ -2180,40 +2316,57 @@ dialog::backdrop {
 }
 .toast {
 	display: flex;
-	align-items: center;
+	align-items: flex-start;
 	gap: 10px;
 	min-width: 260px;
 	max-width: 420px;
-	padding: 12px 16px;
+	padding: 12px 14px;
 	border: 1px solid var(--border);
-	border-left: 3px solid var(--muted);
-	border-radius: 10px;
+	border-radius: 12px;
 	background: var(--surface-raised);
-	box-shadow: 0 10px 28px rgb(0 0 0 / 35%);
+	box-shadow: 0 12px 30px rgb(0 0 0 / 34%);
 	color: var(--ink);
 	font-size: 13px;
-	animation: toast-in 160ms ease-out;
+	line-height: 1.45;
+	animation: toast-in var(--dur) var(--ease);
+}
+.toast > svg {
+	flex: none;
+	margin-top: 1px;
+	color: var(--muted);
+}
+.toast.info > svg {
+	color: var(--info);
+}
+.toast.error > svg {
+	color: var(--danger);
+}
+.toast.warning > svg {
+	color: var(--warning);
+}
+.toast.success > svg {
+	color: var(--success);
 }
 .toast span {
 	min-width: 0;
 	overflow-wrap: anywhere;
 }
 .toast.error {
-	border-left-color: var(--danger);
+	border-color: var(--danger);
 	color: var(--ink-strong);
 }
 .toast.error svg {
 	color: var(--danger);
 }
 .toast.warning {
-	border-left-color: var(--warning);
+	border-color: var(--warning);
 	color: var(--ink-strong);
 }
 .toast.warning svg {
 	color: var(--warning);
 }
 .toast.success {
-	border-left-color: var(--success);
+	border-color: var(--success);
 	color: var(--ink-strong);
 }
 .toast.success svg {
@@ -2242,9 +2395,44 @@ dialog::backdrop {
 	font-size: 13.5px;
 }
 .local-runtime-toggle input {
+	position: relative;
+	width: 42px;
+	height: 24px;
+	flex: none;
+	margin: 0;
+	border: 1px solid var(--border-strong);
+	border-radius: 999px;
+	appearance: none;
+	background: var(--field);
+	cursor: pointer;
+	transition:
+		background-color var(--dur) var(--ease),
+		border-color var(--dur) var(--ease);
+}
+.local-runtime-toggle input::after {
+	position: absolute;
+	top: 2px;
+	left: 2px;
 	width: 18px;
 	height: 18px;
-	accent-color: var(--accent);
+	border-radius: 50%;
+	background: var(--muted);
+	content: "";
+	transition:
+		transform var(--dur) var(--ease),
+		background-color var(--dur) var(--ease);
+}
+.local-runtime-toggle input:checked {
+	border-color: var(--brand);
+	background: var(--accent-container);
+}
+.local-runtime-toggle input:checked::after {
+	background: var(--brand);
+	transform: translateX(20px);
+}
+.local-runtime-toggle input:disabled {
+	cursor: not-allowed;
+	opacity: 0.6;
 }
 .local-runtime-add {
 	display: flex;
@@ -2446,7 +2634,7 @@ dialog::backdrop {
 	border: 1px solid var(--border);
 	border-radius: var(--radius-md);
 	padding: 12px;
-	font-family: "Cascadia Code", Consolas, "Courier New", monospace;
+	font-family: var(--font-mono);
 	font-size: 13px;
 	line-height: 1.5;
 	tab-size: 2;
@@ -2536,7 +2724,7 @@ dialog::backdrop {
 	border: 1px solid var(--divider);
 	border-radius: var(--radius-sm);
 	padding: 10px;
-	font-family: "Cascadia Code", Consolas, "Courier New", monospace;
+	font-family: var(--font-mono);
 	font-size: 12px;
 	white-space: pre-wrap;
 	word-break: break-word;
@@ -2708,7 +2896,7 @@ dialog::backdrop {
 	border-radius: 10px;
 	background: var(--field);
 	color: var(--ink-strong);
-	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-family: var(--font-mono);
 	font-size: 12px;
 	resize: vertical;
 }
@@ -2791,7 +2979,7 @@ dialog::backdrop {
 	border: 1px solid var(--divider);
 	border-radius: 4px;
 	padding: 1px 5px;
-	font-family: "Cascadia Code", Consolas, "Courier New", monospace;
+	font-family: var(--font-mono);
 	font-size: 11px;
 	overflow-wrap: anywhere;
 }
@@ -2867,10 +3055,13 @@ dialog::backdrop {
 }
 .run-progress span {
 	display: block;
+	width: 100%;
 	height: 100%;
 	border-radius: 6px;
 	background: var(--blue);
-	transition: width 220ms ease;
+	transform: scaleX(0);
+	transform-origin: left center;
+	transition: transform 220ms var(--ease);
 }
 @media (prefers-reduced-motion: reduce) {
 	.run-progress span {
