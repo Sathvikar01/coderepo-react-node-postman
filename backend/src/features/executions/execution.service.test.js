@@ -203,6 +203,11 @@ describe("execution pipeline order", () => {
 		expect(result.effectCertainty).toBe("not_dispatched");
 		expect(result.error.code).toBe("TARGET_BLOCKED");
 		expect(result.persistence).toEqual({ state: "saved" });
+		// Phase 28: the passport records that the policy was evaluated and blocked
+		// the target, instead of claiming the policy was never evaluated.
+		expect(result.receipt.policy).toEqual({ decision: "blocked", version: null, local: false });
+		expect(result.receipt.target).toBeNull();
+		expect(result.receipt.request.compiledFingerprint).toBeTruthy();
 	});
 
 	test("carries the executed URL when a dispatched send fails", async () => {

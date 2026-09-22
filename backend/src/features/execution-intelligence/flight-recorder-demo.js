@@ -42,6 +42,7 @@ const DEMO_TARGET = "http://127.0.0.1:8000/demo/v1";
 const checks = [];
 const errorBodies = [];
 const created = { executions: [], collectionId: null, collectionRevision: null };
+const demoState = { environmentId: null, name: null, variables: null, originalAlias: null, revertRevision: null };
 let authToken = "";
 
 const say = (message) => process.stdout.write(`${message}\n`);
@@ -91,6 +92,46 @@ function assertNoSecrets(label, serialized) {
 }
 
 const row = (key, value) => ({ id: randomUUID(), key, value, enabled: true });
+
+const withAlias = (variables, aliasForSecrets) =>
+	variables.map((variable) =>
+		variable.key === "orders_token"
+			? { id: variable.id, key: variable.key, kind: "secretRef", alias: aliasForSecrets, enabled: true }
+			: {
+					id: variable.id,
+					key: variable.key,
+					kind: variable.kind,
+					enabled: variable.enabled !== false,
+					...(variable.kind === "plain" ? { value: variable.value } : { alias: variable.alias }),
+				},
+	);
+
+// Runs whether the demo passes, fails, or crashes, so a rerun always starts
+// from the seeded baseline.
+async function cleanupLeftovers() {
+	if (authToken) {
+		say("· Cleanup");
+		if (created.collectionId)
+			await api(`/collections/${created.collectionId}?revision=${created.collectionRevision}`, { method: "DELETE" }).catch(() => undefined);
+		if (demoState.environmentId && demoState.originalAlias && demoState.revertRevision)
+			await api(`/environments/${demoState.environmentId}`, {
+				method: "PUT",
+				body: {
+					expectedRevision: demoState.revertRevision,
+					environment: { name: demoState.name, variables: withAlias(demoState.variables, demoState.originalAlias) },
+				},
+			}).catch(() => undefined);
+		for (const executionId of created.executions) {
+			await api(`/history/${executionId}`, { method: "DELETE" }).catch(() => undefined);
+		}
+		say("  removed the scratch collection, environment change, and demo history entries.");
+	}
+	const failed = checks.filter((item) => !item.passed);
+	say("");
+	say(`Flight Recorder demo: ${checks.length - failed.length}/${checks.length} checks passed${failed.length ? `, ${failed.length} FAILED` : ""}.`);
+	for (const item of failed) say(`  FAILED: ${item.name}`);
+	if (failed.length > 0) process.exitCode = 1;
+}
 
 function recorderRequest() {
 	return {
@@ -174,18 +215,10 @@ async function main() {
 	const environment = await api(`/environments/${environmentSummary._id}`);
 	const originalAlias = environment.variables.find((variable) => variable.key === "orders_token")?.alias;
 	check("seeded Local environment provides the orders_token secret reference", Boolean(environment && originalAlias));
-	const withAlias = (variables, aliasForSecrets) =>
-		variables.map((variable) =>
-			variable.key === "orders_token"
-				? { id: variable.id, key: variable.key, kind: "secretRef", alias: aliasForSecrets, enabled: true }
-				: {
-						id: variable.id,
-						key: variable.key,
-						kind: variable.kind,
-						enabled: variable.enabled !== false,
-						...(variable.kind === "plain" ? { value: variable.value } : { alias: variable.alias }),
-					},
-		);
+	demoState.environmentId = environment._id;
+	demoState.name = environment.name;
+	demoState.variables = environment.variables;
+	demoState.originalAlias = originalAlias;
 
 	const request = recorderRequest();
 
@@ -212,6 +245,7 @@ async function main() {
 		},
 	});
 	check("the environment revision advanced", updated.revision === environment.revision + 1);
+	demoState.revertRevision = updated.revision;
 	check("passport is immutable after the environment change", JSON.stringify(await receiptOf(okRun.executionId)) === passportOneSnapshot);
 
 	// ── 3. request fails ─────────────────────────────────────────────────────
@@ -359,7 +393,8 @@ async function main() {
 	created.collectionRevision = scratchFirst.revision;
 	scratchAggregate.auth = { mode: "apiKey", key: "X-API-Key", valueTemplate: "{{orders_token}}", in: "header" };
 	scratchAggregate.requests[0].name = "Mutable request edited";
-	scratchAggregate.requests[0].body = { mode: "json", text: '{"edited":true}' };
+	scratchAggregate.requests[0].urlTemplate = "{{base_url}}/orders/{{order_id}}";
+	scratchAggregate.requests[0].query = [row("limit", "1")];
 	scratchAggregate.requests[0].assertions[0].expected = "201";
 	const scratchSecond = await api(`/collections/${created.collectionId}`, {
 		method: "PUT",
@@ -456,31 +491,11 @@ async function main() {
 	assertNoSecrets("comparison", JSON.stringify(comparison));
 	assertNoSecrets("history list", JSON.stringify(await api("/history?limit=25")));
 	assertNoSecrets("error responses", JSON.stringify(errorBodies));
-
-	say("· Cleanup");
-	await api(`/collections/${created.collectionId}?revision=${created.collectionRevision}`, { method: "DELETE" }).catch(() => undefined);
-	await api(`/environments/${environment._id}`, {
-		method: "PUT",
-		body: {
-			expectedRevision: updated.revision,
-			environment: { name: environment.name, variables: withAlias(environment.variables, originalAlias) },
-		},
-	}).catch(() => undefined);
-	for (const executionId of created.executions) {
-		await api(`/history/${executionId}`, { method: "DELETE" }).catch(() => undefined);
-	}
-	say("  removed the scratch collection, environment change, and demo history entries.");
-
-	const failed = checks.filter((item) => !item.passed);
-	say("");
-	say(`Flight Recorder demo: ${checks.length - failed.length}/${checks.length} checks passed${failed.length ? `, ${failed.length} FAILED` : ""}.`);
-	if (failed.length > 0) {
-		for (const item of failed) say(`  FAILED: ${item.name}`);
-		process.exitCode = 1;
-	}
 }
 
-main().catch((error) => {
-	say(`Flight Recorder demo could not complete: ${error.message}`);
-	process.exitCode = 1;
-});
+main()
+	.catch((error) => {
+		say(`Flight Recorder demo could not complete: ${error.message}`);
+		process.exitCode = 1;
+	})
+	.finally(cleanupLeftovers);

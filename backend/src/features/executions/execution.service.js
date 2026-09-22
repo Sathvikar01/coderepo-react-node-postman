@@ -430,7 +430,15 @@ export function createExecutionService({
 		if (validation.state === "cancelled")
 			return preDispatchFailure("cancelled", "CANCELLED", "This execution was cancelled before dispatch.", null, compiled);
 		if (validation.state === "error")
-			return semanticFailure(validation.error.code ?? "TARGET_INVALID", validation.error.message, validation.error.details);
+			// The policy was evaluated and refused this target, so the passport must
+			// record the blocked decision together with the compiled evidence.
+			return preDispatchFailure(
+				"validation_error",
+				validation.error.code ?? "TARGET_INVALID",
+				validation.error.message,
+				validation.error.details,
+				compiled,
+			);
 		const target = validation.value;
 		const localAccess = target.local === true;
 
