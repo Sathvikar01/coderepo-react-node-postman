@@ -291,7 +291,7 @@ This section is the repo-level source of truth for phase numbers. Agents must no
 | 23 | Learning System | Tutorials/guided learning built on generated docs and real product workflows, not disconnected static content. |
 | 24 | Collaboration + Versioning | Multi-user/version workflows after portable/Git foundations converge. |
 | 25 | Ecosystem | Extensibility/integration surface around stable portable, runner, docs, and collaboration contracts. |
-| 26 | AI + Enterprise Layer | AI-assisted and enterprise controls added last, on top of deterministic existing authority. |
+| 26 | AI + Enterprise Layer | **SKIPPED / NOT APPLICABLE** for this submission: external AI SDKs / hosted model APIs are not permitted; do not schedule without explicit user approval. |
 | 27 | Execution Intelligence / API Flight Recorder | Evidence-grade execution receipts, causal comparison, redacted reproduction capsules, and bounded failure minimization. |
 | 28 | Flight Recorder Acceptance | Prove and polish the complete Passport → Compare → Minimize → Capsule → Reproduce flow with one deterministic local demo. No new unrelated features. |
 | 29 | Product UI/UX Polish | Raise the shipped frontend to an intentional, distinctive developer-tool standard. Presentation only: no new features, no behavioural or data changes, no new dependencies. |
@@ -643,9 +643,14 @@ As of the Phase 29 assignment:
 - Phase **13: MERGED** as `e75d306` (Collection Runner); Phase **14: MERGED** as `bfcd441` (headless CLI); Phase **17: MERGED** as `cc8dc56`.
 - Phase **27: MERGED** as `8fe4026` (Execution Intelligence / API Flight Recorder).
 - Phase **28: MERGED** as `0a630e2` (Flight Recorder Acceptance).
-- Phase **29: ACTIVE** on `phase29/ui-ux-polish`, based on latest `main` after the Phase 14 merge.
+- Phase **29: MERGED** as `ba412ff` (Product UI/UX Polish).
 - Phase **29 owns presentation**: it is frontend-wide and overlaps every frontend feature path, so it merges before other frontend phases rebase; it adds no capability and changes no contract.
 - Phases **10 and 23: INACTIVE** and must not be resumed as part of Phase 29.
+- Phase **13: MERGED** as `e75d306` (Collection Runner).
+- Phase **14: MERGED** as `bfcd441` (Headless CLI).
+- Phase **15: MERGED** as `434d86a` (CI/CD Parity).
+- Phase **17: MERGED** as `cc8dc56` (Git-Native Workflow).
+- Phase **26: SKIPPED / NOT APPLICABLE** unless the user explicitly re-authorizes a local/embedded alternative.
 - Other phases remain governed by their dependency chains and explicit user assignment.
 
 The user may advance this state over time. When a phase passes and merges, update only this subsection plus any dependency/ownership facts that actually changed; do not rewrite historical phase definitions.
