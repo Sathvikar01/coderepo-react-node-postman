@@ -9,6 +9,11 @@ import { Collection } from "../features/collections/collection.model.js";
 import { Environment } from "../features/environments/environment.model.js";
 import { ExecutionHistory } from "../features/history/history.model.js";
 import { DemoOrder } from "../features/demo/demo-order.model.js";
+import { CollectionRun } from "../features/collection-runner/collection-run.model.js";
+import { ProfileCookie } from "../features/cookies/cookie.model.js";
+import { Example } from "../features/examples/example.model.js";
+import { MinimizationJob } from "../features/execution-intelligence/minimization.model.js";
+import { LocalRuntimeSetting } from "../features/local-runtime/local-runtime.model.js";
 import { createHash } from "node:crypto";
 
 dotenv.config({ quiet: true });
@@ -246,6 +251,11 @@ async function seed() {
 		Environment.deleteMany({}),
 		ExecutionHistory.deleteMany({}),
 		DemoOrder.deleteMany({}),
+		CollectionRun.deleteMany({}),
+		ProfileCookie.deleteMany({}),
+		Example.deleteMany({}),
+		MinimizationJob.deleteMany({}),
+		LocalRuntimeSetting.deleteMany({}),
 	]);
 
 	const passwordHash = await bcrypt.hash("password123", 10);
