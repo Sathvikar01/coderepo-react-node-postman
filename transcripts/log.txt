@@ -1558,4 +1558,337 @@ Actions:
 * git push -u origin phase4/frontend-workflows
 * gh pr create -> https://github.com/Sathvikar01/coderepo-react-node-postman/pull/4
 * gh pr checks 4 -> contract pass (Baseline Gate)
-* stopped local backend/frontend dev servers; verified ports 3000/80
+* stopped local backend/frontend dev servers; verified ports 3000/8000 closed and git status clean
+
+Context:
+tool=opencode
+branch=phase4/frontend-workflows
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=main
+parent_agent=none
+agent=opencode
+
+## [2026-09-21T05:12:16+05:30] Phase 5 response inspector audit, fixes, tests, and browser evidence
+
+User Prompt (verbatim, secrets redacted):
+# Phase 5 — Response Inspector
+
+First ensure PR #4 is merged into `main`.
+
+Then create:
+
+`phase5/response-inspector`
+
+from latest `main`.
+
+## Goal
+
+Audit and harden the response-inspector experience only.
+
+Verify:
+
+* Status, timing, size and outcome are accurate
+* duplicate response headers preserved in order
+* Raw view preserves exact body
+* JSON pretty/tree view never changes meaning
+* JSON search actually finds/highlights results
+* malformed JSON falls back safely
+* XML/HTML formatting fails safely to Raw
+* raw-text HTML (`script/style/pre/...`) stays semantically unchanged
+* text/binary/empty bodies handled correctly
+* UTF-8/multibyte boundaries correct
+* truncated history body clearly differs from full live response
+* gzip/deflate/Brotli results display correctly
+* HEAD / 204 / 304 display correctly
+* errors/timeouts/cancelled/blocked executions show correct metadata
+* relative redirects resolve against executed URL
+* non-HTTP(S) redirects are not opened/copied as trusted URLs
+* large responses remain usable without freezing the UI
+* copy actions copy the correct raw/formatted value
+
+## Adversarial tests
+
+Include:
+
+* malformed/deep JSON
+* mixed-content + malformed XML
+* `<script>` containing `<`
+* duplicate headers
+* binary body
+* empty body
+* multibyte text
+* > 256 KiB live vs history result
+* invalid compression
+* relative/absolute/malformed redirects
+* timeout/cancel/security-block outcomes
+
+Fix real bugs and add regression tests.
+
+## Scope
+
+Prefer:
+
+`frontend/src/features/executions/**`
+
+Touch backend normalization/capture only if a real inspector contract bug requires it.
+
+No new features.
+No broad App.jsx refactor.
+No dependency/architecture/port changes.
+
+## Gate
+
+Run:
+
+* `bun test`
+* frontend production build
+* browser checks at 375 / 768 / 1024 / 1440
+* existing GitHub CI
+
+Return:
+
+* bugs found
+* fixes made
+* tests added
+* inspector/browser evidence
+* remaining blockers
+* clean git status + PR
+
+Finish exactly:
+
+`PHASE 5 VERDICT: PASS`
+
+or
+
+`PHASE 5 VERDICT: BLOCKED`
+
+Agent Response Summary:
+Merged PR #4 into main, created phase5/response-inspector from latest main, and audited the inspector end to end. Found and fixed meaning-changing JSON pretty printing (big integers rounded, 1e400 nulled, duplicate keys dropped, deep nesting crashed), XML corruption of attributes/comments/CDATA plus mixed-content reindentation, missing outcome metadata for failed sends, generic history truncation notices, a dead redirect copy action, and a missing executed URL on non-response outcomes. Added regression tests (226 total, was 188), verified the production build, GitHub CI, and headless-browser behavior at 375/768/1024/1440 against the seeded demo target. Opened PR #5.
+
+Actions:
+* merged PR #4 (squash) into main; created branch phase5/response-inspector
+* added json-format.js, body-view.js, redirect.js and their tests; added markup-format.test.js
+* rewrote formatXml in markup-format.js; updated JsonTree.jsx, ResponseViewer.jsx, App.jsx, styles.css
+* added backend capture regression tests and the executedUrl field in execution.service.js with tests
+* ran bun test (226 pass), frontend production build, and CDP browser checks at four widths
+* pushed phase5/response-inspector and opened PR #5
+
+Context:
+tool=opencode
+branch=phase5/response-inspector
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=main
+parent_agent=none
+
+## [2026-09-21T06:41:01+05:30] SESSION START
+
+tool=opencode
+Repo Root: C:\Users\arsat\Downloads\postman
+Branch: phase5/response-inspector
+Worktree: main
+Parent Agent: none
+Language: node
+Time Remaining: 1d 16h 50m
+
+## [2026-09-21T09:54:28+05:30] Phase 6 acceptance freeze: full matrix execution
+
+User Prompt (verbatim, secrets redacted):
+# Phase 6 — HackerRank Acceptance Freeze
+
+Work on:
+
+`phase6/hackerrank-acceptance-freeze`
+
+Goal: produce the final protected HackerRank baseline.
+
+Do NOT add features or refactor broadly.
+Fix only genuine acceptance failures.
+
+## Verify
+
+Run the full frozen matrix:
+
+* clean `bun install --frozen-lockfile`
+* full `bun test`
+* backend syntax
+* frontend production build
+* isolated Mongo seed/reset
+* runtime on 3000/8000
+* login/profile ownership
+* all seeded requests
+* execution/security regressions
+* persistence/CAS/restart
+* frontend Send/Save/tab/conflict flows
+* response inspector
+* responsive UI at 375/768/1024/1440
+* keyboard/accessibility basics
+* GitHub Actions green
+* clean git status
+
+Also verify packaging:
+
+* README included
+* no secrets/transcripts/internal junk unless required
+* archive <5 MB
+* required HackerRank paths/config intact
+* `hackerrank.yml` unchanged
+* exact startup instructions work from clean checkout
+
+## Freeze rule
+
+If a failure appears:
+
+1. prove it is real,
+2. make the smallest fix,
+3. add regression coverage,
+4. rerun the affected gate.
+
+Do not opportunistically improve anything.
+
+## Final output
+
+Return:
+
+* full PASS/FAIL matrix
+* fixes made, if any
+* final test/build/runtime evidence
+* package/archive evidence
+* GitHub Actions result
+* final commit + git status
+* remaining blockers
+
+Finish exactly:
+
+`PHASE 6 VERDICT: PASS — HACKRANK BASELINE FROZEN`
+
+or
+
+`PHASE 6 VERDICT: BLOCKED`
+
+Agent Response Summary:
+Ran the full Phase 6 acceptance matrix against branch phase6/hackerrank-acceptance-freeze (remote tip 903c020, identical tree to local HEAD). No genuine product failures found; all FAILs encountered were harness artifacts (rate limiter pacing, payload schema mismatches, stale-selector clicks) and were fixed in the throwaway test harness outside the repo, not in product code. Verified: install --frozen-lockfile, 226 backend tests (225 pass, 1 conditional skip, 0 fail), 62 frontend tests pass, node --check on all 70 backend JS files, Vite production build, isolated mongod on 27018 seed/reset determinism, runtime on 3000/8000 with health database=connected, 72/72 API checks (anon rejection, login, profile switch, cross-profile ownership 404s, all 21 seeded requests x 2 profiles, SSRF validation_error for loopback/private/metadata/demo-API, timeout, cancel, duplicate execution id, stale/fresh CAS 409/200, delete CAS, secret-ref non-leak), backend-only restart persistence, UI flows via Chrome DevTools Protocol (send, save toast + Mongo persistence, request tab create/switch, stale-revision "Collection changed" conflict dialog, history list + reopen, response inspector Headers/Pretty/Raw with JSON body, Ctrl+Enter and Ctrl+S shortcuts), responsive layouts at 375/768/1024/1440 with no horizontal overflow and Escape-closed overlay, accessibility names/landmarks/arrow-key tab roving focus. Packaging: 727,040-byte git archive (0.69 MB), README/hackerrank.yml/setup.sh present, GUIDELINES.md/skills/AGENTS.md/transcripts/.env/node_modules absent, hackerrank.yml byte-identical to main, clean-checkout install+seed+bun start reachable on both ports. GitHub Actions Baseline Gate run 35549981056 on main at 903c020: success.
+
+Actions:
+* Commands: bun install --frozen-lockfile; bun test (backend and frontend); node --check over backend/src; bun run build (frontend); bash setup.sh --seed (default, isolated 27018, and clean checkout); bun start polling 3000/8000; gh api actions/runs; git archive + tar inspection.
+* Files: no tracked repository files modified; verification harness scripts written under %TEMP%\opencode\phase6 only.
+* Branch: phase6/hackerrank-acceptance-freeze reset to origin tip 903c020 (tree identical to prior local commits).
+
+Context:
+tool=opencode
+branch=phase6/hackerrank-acceptance-freeze
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=main
+parent_agent=none
+
+## [2026-09-21T09:54:28+05:30] Progress-reporting guardrail
+
+User Prompt (normalized, secrets redacted):
+Use short, explicit timeouts for commands/scripts and continue as soon as output is available; do not leave the session blocked on completed work.
+
+Agent Response Summary:
+Acknowledged and continued executing the acceptance matrix without further delay; batched commands and kept running the browser/API gates. No repository changes made. (This nudge was repeated twice; both acknowledged the same way.)
+
+Actions:
+* Continued gate execution; no file edits.
+
+Context:
+tool=opencode
+branch=phase6/hackerrank-acceptance-freeze
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=main
+parent_agent=none
+
+## [2026-09-21T10:02:59+05:30] SESSION START
+
+tool=opencode
+Repo Root: C:\Users\arsat\Downloads\postman
+Branch: phase6/hackerrank-acceptance-freeze
+Worktree: main
+Parent Agent: none
+Language: node
+Time Remaining: 1d 13h 29m
+
+## [2026-09-21T10:24:10+05:30] Phase 7 import foundation - parser, draft adapter, UI wiring
+
+User Prompt (verbatim, secrets redacted):
+Phase 7 brief: add a clean cURL-only import pipeline on branch phase7/import-foundation (paste cURL -> parse -> normalized draft -> preview -> open as dirty draft, no auto-save/send), covering common cURL options, safe failure on file/shell/dangerous options, warnings for ignored flags, one Import entry point, tests for the listed matrix, bun test + frontend build + browser smoke at 375/768/1024/1440 + GitHub Actions, PR to main. Finish with PHASE 7 VERDICT.
+
+Agent Response Summary:
+Read AGENTS.md, the frozen ASTRA_ARCHITECTURE.md baseline, and the Phase 1-6 code (request schema, compiler, workspace reducer, App wiring). Confirmed the request model constraints that shape import: duplicate enabled headers and GET/HEAD bodies are rejected by requestDefinitionSchema, saved bearer/basic/apiKey credentials must use {{variable}} references, so -u/--user maps to the existing send-only authOverride channel instead of the request. Created branch phase7/import-foundation from main (903c020). Implemented frontend/src/features/import with a pure cURL tokenizer/parser (quoting, ANSI-C, backslash/caret/backtick continuations, -X/-H/-d/--data-raw/--data-binary/--json/-u/--oauth2-bearer/-A/-e/-b/--url/-G/-I/-m), fail-closed handling for file reads, shell substitution/operators, proxies/TLS/network options, multipart and unsupported auth, plus warnings for ignored flags, reserved transport headers, duplicates, and GET/HEAD bodies. Added import-draft.js as the shared adapter boundary (adds ids, opens a dirty tab, returns authOverride) and ImportCurlDialog.jsx as the single entry point wired through WorkspaceHeader -> workspace dialog -> App dialogActions.importCurl. All 65 new tests pass (56 parser + 9 adapter/workflow, including an import->edit->Send and import->Save contract check against the backend requestDefinitionSchema and a no-mutation-of-existing-tabs test).
+
+Actions:
+* git checkout -b phase7/import-foundation
+* Created frontend/src/features/import/curl-parser.js, curl-parser.test.js, import-draft.js, import-draft.test.js, ImportCurlDialog.jsx
+* Edited frontend/src/App.jsx, frontend/src/features/workspace/WorkspaceHeader.jsx, WorkspaceDialogs.jsx, frontend/src/styles.css
+* Ran bun test (291 pass, 1 skip, 0 fail across 23 files) and frontend vite build (success)
+
+Context:
+tool=opencode
+branch=phase7/import-foundation
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=main
+parent_agent=none
+
+## [2026-09-21T10:46:24+05:30] Phase 7 — bounded verification continuation
+
+User Prompt (normalized, secrets redacted):
+Use short, explicit timeouts for commands/scripts and continue as soon as output is available; do not leave the session blocked on completed work.
+
+Agent Response Summary:
+Acknowledged and resumed. The previous step had started the backend and frontend dev servers with Start-Process and returned their PIDs; no blocking command was pending. Continuing immediately with the health check and the browser smoke run.
+
+Actions:
+* Checked GET http://127.0.0.1:8000/api/v1/health and GET http://127.0.0.1:3000/
+
+Context:
+tool=opencode
+branch=phase7/import-foundation
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=main
+parent_agent=none
+
+## [2026-09-21T11:07:27+05:30] Phase 7 - verification, PR, CI, and cleanup
+
+User Prompt (normalized, secrets redacted):
+Continue Phase 7 from the previously logged assignment. Complete verification, open the PR, confirm CI/Baseline Gate, and clean up only Phase 7-owned artifacts.
+
+Agent Response Summary:
+Completed verification and delivery for phase7/import-foundation. bun test: 290 pass, 1 conditional skip, 0 fail across 23 files (65 new import tests). Frontend vite build succeeds. Browser smoke (Puppeteer, real app on 3000/8000 with seeded MongoDB) passed 17/17 checks at 375/768/1024/1440: import dialog from the single header entry point, blocked file read (@payload.json), rejected shell substitution, rejected proxy option, preview with method/URL/headers/body plus ignored-flag warnings, import opening a dirty tab with method and URL applied, existing tab left unmodified, import -> Send -> 200 OK with the echoed body, import -> Save persisting and clearing the dirty marker, -u credentials landing in the send-only auth override, no horizontal overflow at 375, and no uncaught page errors. Committed 6c42432 ("Phase 7: add cURL import foundation"), pushed the branch, and opened PR #6 to main (Sathvikar01/coderepo-react-node-postman). GitHub Actions Baseline Gate passed on the PR (run 35565053839, contract job pass); a diagnostic chatgpt/ci-probe branch was created to confirm Actions was healthy and then deleted. Stopped the dev servers started for the smoke and reseeded the demo database via Git Bash setup.sh --seed (Histories: 0, pristine seed). The PR is left open and CLEAN (checks green) for the user to merge. No execution core, history, persistence, inspector, or frozen file was modified.
+
+Actions:
+* Ran bun test, frontend vite build, Puppeteer browser smoke (17/17), all on the final commit
+* git commit 6c42432, git push -u origin phase7/import-foundation
+* gh pr create -> https://github.com/Sathvikar01/coderepo-react-node-postman/pull/6
+* gh pr checks / gh run list -> Baseline Gate success; deleted chatgpt/ci-probe probe branch
+* Stop-Process backend/frontend dev servers; bash setup.sh --seed via Git Bash
+* Appended this log entry
+
+Context:
+tool=opencode
+branch=phase7/import-foundation
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=main
+parent_agent=none
+phase_7_verdict=PASS
+
+## [2026-09-21T12:33:44+05:30] SESSION START
+
+tool=opencode
+Repo Root: C:\Users\arsat\Downloads\postman
+Branch: phase18/local-runtime
+Worktree: C:\Users\arsat\Downloads\postman-phase18
+Parent Agent: none
+Language: node
+Time Remaining: 1d 10h 58m
+
+## [2026-09-21T12:34:10+05:30] Phase 18 - local execution runtime kickoff and reconnaissance
+
+User Prompt (verbatim, secrets redacted):
+Phase 18 - Local Execution Runtime. Work only on phase18/local-runtime. Run in parallel with Phases 8, 9, and 11. Goal: add a controlled local runtime for executing requests against local/private development targets without weakening the existing default SSRF policy. Default behavior must remain unchanged. Model: normal Send keeps the existing frozen execution policy; explicit Local Runtime mode is user opt-in -> constrained local target policy -> normal transport/capture/history. Support localhost, 127.0.0.1, ::1, and explicitly approved LAN/private hosts. Require explicit user opt-in and never silently broaden normal request policy. Security: local mode must be profile-scoped, show clearly when enabled, use an explicit allowlist, prevent wildcard/private-network access by default, prevent metadata endpoints, prevent DNS rebinding, pin resolved addresses through transport, preserve Host/SNI validation, use existing timeout/cancel/body limits, and preserve secret redaction; changing DNS between validation and transport must not bypass the allowlist. UX: minimal controls - Enable Local Runtime, add/remove approved host, show active local-runtime state, warn clearly when a request is using local access; no daemon/agent installer. Tests must cover localhost allowed only after opt-in, normal mode still blocking localhost/private targets, explicit LAN host allowlist, unapproved private IP blocked, metadata IP always blocked, DNS rebinding / mixed answers, IPv4 + IPv6, hostname -> pinned approved IP, profile isolation, timeout/cancel, restart persistence of approved targets if product semantics require it, and disabling Local Runtime immediately restoring normal policy. Run bun test, frontend build, browser smoke, GitHub Actions. Prefer backend/src/features/local-runtime/** and frontend/src/features/local-runtime/**; use narrow integration hooks into target policy; do not rewrite transport/compiler; do not modify Phase 8, 9, or 11 ownership areas. Finish exactly with PHASE 18 VERDICT: PASS or PHASE 18 VERDICT: BLOCKED.
+
+Agent Response Summary:
+Reconnaissance only so far; no repository files have been modified. Read AGENTS.md, the frozen ASTRA_ARCHITECTURE.md target-policy decisions, the execution feature (execution.service.js, target-policy.js, address-policy.js, address-resolver.js, http-transport.js), the environment/collections CRUD patterns, app.js route mounting, and the frontend workspace structure to identify the narrow integration seams. Found that the main worktree had been switched to phase8/export-snippets by a parallel agent, so phase 18 work is isolated in a dedicated git worktree at C:\Users\arsat\Downloads\postman-phase18 on branch phase18/local-runtime. Key finding: the transport already dials the validated literal target.ip and re-verifies remoteAddress, and TLS uses originalHostname for SNI, so the local runtime can reuse that pinning path by extending only the target policy decision.
+
+Actions:
+* Inspected git worktrees and the transcript log; confirmed the onboarding agreement for this repo root
+* Read ASTRA_ARCHITECTURE.md SSRF/target-policy sections and the executions fea
