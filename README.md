@@ -279,10 +279,10 @@ The [Tracer CLI workflow](.github/workflows/tracer-cli.yml) runs the same scenar
 
 ## Testing
 
-Tests live next to the code they cover as `*.test.js` files and run on Bun's built-in test runner. From the repo root, `bun test` discovers every suite — backend and frontend together. The full suite is 84 test files and 918 tests (640 backend across 60 files, 278 frontend across 24 files), currently green with one intentional skip (the TLS SNI test dials a pinned address and is skipped in local runs).
+Tests live next to the code they cover as `*.test.js` files and run on Bun's built-in test runner. From the repo root, `bun test` discovers every suite — backend and frontend together. The full suite is 84 test files and 920 tests, with the current Linux CI run reporting 920 pass / 0 fail.
 
 ```bash
-bun test                       # everything: 84 files, 918 tests
+bun test                       # everything: 84 files, 920 tests
 bun run test                   # backend only (cd backend && bun test)
 cd frontend && bun test        # frontend only
 ```
