@@ -65,8 +65,11 @@ bun run demo:flight-recorder
 │   ├── src/shared/              # API client, reusable controls, formatting
 │   └── public/                  # Local static assets
 ├── examples/ci/                 # Deterministic CLI/CI proof fixtures
+├── design/                      # UI audit and design artifacts
 ├── docs/                        # Product/design implementation notes
 ├── skills/validate/             # Acceptance validator
+├── DESIGN.md                    # Visual direction and interaction language
+├── PRODUCT.md                   # Product identity and scope commitments
 ├── hackerrank.yml               # HackerRank install/run and packaging contract
 ├── package.json                 # Bun workspace scripts
 ├── setup.sh                     # Safe local setup/reset/start entry point
@@ -74,6 +77,75 @@ bun run demo:flight-recorder
 ```
 
 Every backend domain keeps routes, controllers, services, repositories, and models separate. Controllers validate with Zod and map HTTP; services own the rules; repositories are the only code that queries MongoDB.
+
+## Architecture
+
+Tracer is one Bun workspace with two applications and one database. The browser never executes HTTP requests against a target: every send goes through the Express API, so the security policy, secret handling, and evidence capture are enforced in one place.
+
+```mermaid
+flowchart LR
+    subgraph FE["Browser - React 19 + Vite, port 3000"]
+        UI["Workspace UI<br/>request composer, collections, environments<br/>history, cookies, examples and mocks, docs<br/>Collection Runner, Flight Recorder"]
+    end
+
+    subgraph BE["Express 5 API, port 8000"]
+        Routes["Routes and controllers<br/>Zod validation, auth, error mapping"]
+        Services["Domain services<br/>auth, profiles, collections, environments<br/>executions, history, cookies, examples, mocks<br/>scripts, runner, local-runtime, projects<br/>execution-intelligence"]
+        Pipeline["Execution pipeline<br/>compile to policy to DNS to transport<br/>to capture to normalize to history"]
+        Demo["Demo target /demo/v1<br/>real HTTP, MongoDB-backed orders"]
+        CLI["Headless CLI - bun run tracer<br/>reuses the same runner and pipeline"]
+    end
+
+    DB[("MongoDB - request_desk_demo")]
+    Targets["External HTTP targets"]
+
+    UI -->|fetch /api/v1| Routes
+    Routes --> Services
+    Services --> DB
+    Services --> Pipeline
+    Pipeline -->|approved public targets| Targets
+    Pipeline -->|loopback with Local Runtime only| Demo
+    CLI --> Services
+```
+
+How the layers fit together:
+
+- **Frontend (`frontend/src`).** `features/` holds one folder per product domain (workspace, import, export, cookies, examples, mocks, scripts, docs, collection-runner, execution-intelligence, and more); `shared/` holds the API client, reusable controls, and formatting. State is plain React state and a workspace reducer: drafts live in the browser and are only persisted when you Save.
+- **API (`backend/src`).** Each `features/<domain>/` folder separates routes, controllers, services, repositories, and models. Controllers validate input with Zod and translate errors to HTTP; services hold the rules (ownership, revisions/CAS, limits); repositories are the only MongoDB access. `shared/` carries configuration, auth middleware, error handling, and limits.
+- **Execution pipeline (`backend/src/features/executions`).** One pipeline serves manual sends, collection runs, the CLI, and failure minimization. There is no second execution path.
+
+```mermaid
+flowchart LR
+    C["compile<br/>variables, auth, headers, body"] --> P["policy<br/>SSRF and target rules"]
+    P --> D["DNS<br/>resolve and pin address"]
+    D --> T["transport<br/>node:net and node:tls"]
+    T --> CA["capture<br/>bounded body and headers"]
+    CA --> N["normalize<br/>outcome, timings, sizes"]
+    N --> H["history<br/>immutable snapshot plus<br/>Execution Passport receipt"]
+```
+
+- **Security boundaries.** Target requests carry only request/collection auth plus that profile's cookie jar; application sign-in tokens never reach a target. Private, loopback, and reserved addresses are rejected before dispatch (SSRF boundary), with two explicit exceptions: the seeded demo target and hosts approved through Local Runtime. Secrets are stored as alias references and resolved server-side at send time; every stored or displayed artifact is redacted.
+- **Flight Recorder (`backend/src/features/execution-intelligence`).** Every history entry carries an immutable `ExecutionReceiptV1` passport. Compare, Minimize, and Reproduction Capsules build on those receipts as deterministic evidence, never a second transport.
+- **Headless CLI (`backend/src/features/cli`).** `bun run tracer` wires the same compiler, policy, transport, and collection runner over in-memory stores, so UI runs and CLI runs are equivalent by construction.
+
+### Execution and analysis flow
+
+```mermaid
+flowchart LR
+    Draft["Request tab - draft<br/>params, headers, body, auth<br/>scripts, assertions"]
+    Draft -->|Send| Run["Execution pipeline"]
+    Run --> Insp["Response inspector<br/>status, timing, size, body, headers"]
+    Run --> Hist[("History and Passport")]
+    Draft -->|Save| Col[("Collections and environments")]
+    Col -->|Run collection or CLI| Run
+    Hist --> FR{"API Flight Recorder"}
+    FR --> Compare["Compare<br/>first meaningful divergence"]
+    FR --> Minimize["Minimize<br/>smallest failing request"]
+    Minimize --> Capsule["ReproCapsuleV1<br/>redacted reproduction bundle"]
+    Capsule -.->|import as unsent dirty draft| Draft
+```
+
+Send and Save are deliberately separate: sending executes the draft and records evidence; saving commits it to a collection. Imported cURL, portable projects, and reproduction capsules always open as unsent, dirty drafts — nothing is ever auto-sent or auto-saved.
 
 ## Prerequisites
 
@@ -199,9 +271,42 @@ The [Tracer CLI workflow](.github/workflows/tracer-cli.yml) runs the same scenar
 | `bun run demo:flight-recorder` | Run the deterministic Flight Recorder demo (app must be running) |
 | `bun run tracer`        | Headless collection runner (see [Headless CLI](#headless-cli))  |
 | `bash examples/ci/ci-demo.sh` | Local pass/fail parity demo for the CLI (no database)      |
-| `bun test`              | Run the backend unit tests (Bun's built-in runner)             |
+| `bun test`              | Run the full test suite (backend + frontend, Bun's built-in runner) |
+| `bun run test`          | Backend tests only                                              |
+| `cd frontend && bun test` | Frontend tests only                                           |
 | `bun run dev:backend`   | Backend only, with reload                                      |
 | `bun run dev:frontend`  | Frontend only                                                  |
+
+## Testing
+
+Tests live next to the code they cover as `*.test.js` files and run on Bun's built-in test runner. From the repo root, `bun test` discovers every suite — backend and frontend together. The full suite is 84 test files and 918 tests (640 backend across 60 files, 278 frontend across 24 files), currently green with one intentional skip (the TLS SNI test dials a pinned address and is skipped in local runs).
+
+```bash
+bun test                       # everything: 84 files, 918 tests
+bun run test                   # backend only (cd backend && bun test)
+cd frontend && bun test        # frontend only
+```
+
+What the suites cover:
+
+| Area                         | Examples of what is proven                                                                 |
+| ---------------------------- | ------------------------------------------------------------------------------------------ |
+| Execution core               | request compiler, target/address policy (SSRF), DNS pinning, transport, response capture/normalization, history CAS |
+| Persistence & projects       | ownership, revisions/CAS, restart/reset, portable `TracerProjectV1` round-trip, git-native layout, seed reset |
+| Cookies, examples, mocks     | Set-Cookie parsing and matching, jar replay through real execution, example persistence, deterministic mock matching |
+| Scripts & assertions         | sandbox capability blocks, timeouts, variable writes, assertion semantics and diagnostics |
+| Collection Runner            | run plan/order, failure policy, iteration, run summary, variable propagation |
+| CLI                          | argument/exit-code contract, JSON/JUnit reports, secret safety (resolved on the wire, never in artifacts), timeouts, CI parity against a real local server |
+| Flight Recorder              | execution receipts, run comparison, repro capsules, failure minimizer, end-to-end acceptance |
+| Frontend workflows           | workspace reducer and tab/draft workflows, import (cURL) parsing and drafts, export snippets, response body/JSON/markup views, docs model/view, dialog stack, design contracts |
+
+Test infrastructure notes:
+
+- Tests are self-contained: fake adapters or in-process `Bun.serve` targets stand in for the network, so the suite needs no MongoDB and no hosted service.
+- `backend/.env` (written by `setup.sh`) is auto-loaded by Bun when tests run inside `backend/`; suites that need their own secret-alias configuration merge it explicitly rather than depending on ambient values.
+- Two deterministic end-to-end proofs run outside `bun test`: `bash examples/ci/ci-demo.sh` (CLI pass/fail parity against a local target, no database) and `bun run demo:flight-recorder` (the full Passport → Compare → Minimize → Capsule → Reproduce demo against the seeded app).
+
+Continuous integration runs the same gates on every pull request: the **Baseline Gate** (`.github/workflows/baseline-gate.yml`) runs `bun install --frozen-lockfile`, `bun test`, backend syntax checks, the frontend build, a seeded start with a runtime health smoke; the **Tracer CLI** workflow (`.github/workflows/tracer-cli.yml`) runs the headless runner scenario and uploads JSON and JUnit reports.
 
 ## Product Limits and Behavior
 
