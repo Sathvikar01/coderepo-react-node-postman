@@ -4,11 +4,17 @@
 // and the project, resolves selectors, builds the plan with the same pure
 // `buildRunPlan` the workspace uses, starts a run through the real collection
 // runner, waits for it, and renders a report. It never calls `process.exit`, so
-// every path — including usage errors and cancellation — is testable in-process.
+// every path — including usage errors, timeouts, and cancellation — is testable
+// in-process.
 //
 // A CLI run is not a second execution engine. The steps are ordinary executions
 // through the normally-compiled pipeline, so a result carries its own execution
 // id and can be opened in the Flight Recorder exactly like an in-app run.
+//
+// For CI parity the same report object drives three destinations: stdout/human
+// text for logs, an authoritative JSON file (`--report`), and a JUnit XML file
+// (`--junit`). All three are derived from one render of one outcome, so they can
+// never disagree.
 
 import { buildRunPlan } from "../collection-runner/run-plan.js";
 import { CLI_VERSION, formatCliUsage, parseCliArgs } from "./cli-args.js";
@@ -19,23 +25,47 @@ import {
 	buildErrorReport,
 	buildPlanReport,
 	buildRunReport,
+	buildValidateReport,
+	ERROR_REPORT_KIND,
 	renderErrorHuman,
-	renderPlanHuman,
-	renderRunHuman,
+	renderReportHuman,
 	stringifyReport,
 } from "./cli-output.js";
+import { writeJsonReport, writeJUnitReport } from "./cli-report-writer.js";
 import { createCliRuntime } from "./cli-runtime.js";
+import { resolveRunVariables } from "./cli-variables.js";
 import { buildDomainDocuments, CLI_PROFILE_ID, loadProjectSource, resolveRunTargets } from "./project-source.js";
 
 function wantsJson(argv) {
 	return argv.some((token) => token === "--json" || String(token).startsWith("--json="));
 }
 
-function emitError({ error, json, stdout, stderr }) {
-	const report = buildErrorReport({ error, exitCode: error.exitCode });
-	if (json) stdout.write(stringifyReport(report));
-	else stderr.write(renderErrorHuman(report));
-	return error.exitCode;
+// One sink for every outcome. `stdout` carries the machine document (or, in text
+// mode, the human report); `stderr` carries diagnostics, artifact notices, and
+// text-mode errors. An artifact write failure is a system failure even when the
+// run itself passed, because CI cannot consume a report that was never saved.
+function emitOutcome({ report, json, stdout, stderr, reportPath = null, junitPath = null, cwd }) {
+	const isError = report.kind === ERROR_REPORT_KIND;
+	if (json) {
+		stdout.write(stringifyReport(report));
+		if (isError) stderr.write(`${report.error.code}: ${report.error.message}\n`);
+	} else if (isError) {
+		stderr.write(renderErrorHuman(report));
+	} else {
+		stdout.write(renderReportHuman(report));
+	}
+
+	try {
+		if (reportPath) stderr.write(`JSON report: ${writeJsonReport(reportPath, report, { cwd })}\n`);
+		if (junitPath) stderr.write(`JUnit report: ${writeJUnitReport(junitPath, report, { cwd })}\n`);
+	} catch (error) {
+		const issue = classifyCliError(error);
+		if (json) stderr.write(`${issue.code}: ${issue.message}\n`);
+		else stderr.write(renderErrorHuman(buildErrorReport({ error: issue, exitCode: issue.exitCode })));
+		return issue.exitCode;
+	}
+
+	return report.exitCode;
 }
 
 // Cancellation is cooperative: an abort signal asks the runner to cancel the
@@ -57,12 +87,14 @@ function attachCancellation({ runtime, profileId, runId, signal }) {
 export async function runCli(argv = [], io = {}) {
 	const stdout = io.stdout ?? process.stdout;
 	const stderr = io.stderr ?? process.stderr;
+	const cwd = io.cwd ?? process.cwd();
 
 	let parsed;
 	try {
 		parsed = parseCliArgs(argv);
 	} catch (error) {
-		return emitError({ error: classifyCliError(error), json: wantsJson(argv), stdout, stderr });
+		const classified = classifyCliError(error);
+		return emitOutcome({ report: buildErrorReport({ error: classified, exitCode: classified.exitCode }), json: wantsJson(argv), stdout, stderr, cwd });
 	}
 
 	if (parsed.versionRequested) {
@@ -74,27 +106,31 @@ export async function runCli(argv = [], io = {}) {
 		return EXIT_CODES.success;
 	}
 
+	const { json, reportPath, junitPath } = parsed.options;
+	const emit = (report) => emitOutcome({ report, json, stdout, stderr, reportPath, junitPath, cwd });
+
 	const profileId = io.profileId ?? CLI_PROFILE_ID;
 	let source;
 	let resolved;
 	let plan;
 	let collections;
 	let environments;
+	let variables;
 	try {
 		loadCliConfig(io.env ?? process.env, { loader: io.configLoader });
-		source = loadProjectSource(parsed.projectPath, { cwd: io.cwd });
+		source = loadProjectSource(parsed.projectPath, { cwd });
+		if (parsed.options.validateOnly) return emit(buildValidateReport({ source, domain: source.domain }));
 		({ collections, environments } = buildDomainDocuments({ domain: source.domain, profileId }));
 		resolved = resolveRunTargets({ domain: { collections, environments } }, parsed.options);
+		variables = resolveRunVariables(parsed.options, io.env ?? process.env);
 		plan = buildRunPlan({ collection: resolved.collection, selection: resolved.selection, iterations: parsed.options.iterations });
 	} catch (error) {
-		return emitError({ error: classifyCliError(error), json: parsed.options.json, stdout, stderr });
+		const classified = classifyCliError(error);
+		return emit(buildErrorReport({ error: classified, exitCode: classified.exitCode }));
 	}
 
 	if (parsed.options.planOnly) {
-		const report = buildPlanReport({ source, resolved, plan, options: parsed.options });
-		if (parsed.options.json) stdout.write(stringifyReport(report));
-		else stdout.write(renderPlanHuman(report));
-		return EXIT_CODES.success;
+		return emit(buildPlanReport({ source, resolved, plan, options: parsed.options, variables }));
 	}
 
 	const runtime = createCliRuntime({
@@ -112,14 +148,28 @@ export async function runCli(argv = [], io = {}) {
 		...(resolved.environment ? { environmentId: String(resolved.environment._id), environmentRevision: resolved.environment.revision } : {}),
 		iterations: plan.iterations,
 		stopOnFailure: parsed.options.stopOnFailure,
-		variables: parsed.options.variables,
+		variables,
 	};
 
 	let started;
 	try {
 		started = await runtime.runners.start(profileId, input);
 	} catch (error) {
-		return emitError({ error: classifyCliError(error), json: parsed.options.json, stdout, stderr });
+		const classified = classifyCliError(error);
+		return emit(buildErrorReport({ error: classified, exitCode: classified.exitCode }));
+	}
+
+	// A `--timeout` is a hard wall-clock budget for the whole run. When it fires
+	// we ask the runner to cancel, exactly as a SIGINT would; the timeout only
+	// counts if the run did not reach a terminal completed state first.
+	let timerFired = false;
+	let timeoutHandle = null;
+	if (parsed.options.timeoutMs) {
+		timeoutHandle = setTimeout(() => {
+			timerFired = true;
+			runtime.runners.cancel(profileId, started.runId).catch(() => null);
+		}, parsed.options.timeoutMs);
+		timeoutHandle.unref?.();
 	}
 
 	const detach = attachCancellation({ runtime, profileId, runId: started.runId, signal: io.abortSignal });
@@ -128,20 +178,25 @@ export async function runCli(argv = [], io = {}) {
 		run = await runtime.runners.wait(profileId, started.runId);
 	} catch (error) {
 		detach?.();
-		return emitError({ error: classifyCliError(error), json: parsed.options.json, stdout, stderr });
+		if (timeoutHandle) clearTimeout(timeoutHandle);
+		const classified = classifyCliError(error);
+		return emit(buildErrorReport({ error: classified, exitCode: classified.exitCode }));
 	}
 	detach?.();
+	if (timeoutHandle) clearTimeout(timeoutHandle);
 
-	const exitCode = exitCodeForRun(run);
-	const report = buildRunReport({
-		source,
-		resolved,
-		plan,
-		run,
-		exitCode,
-		allowLocal: parsed.options.allowLocal,
-	});
-	if (parsed.options.json) stdout.write(stringifyReport(report));
-	else stdout.write(renderRunHuman(report));
-	return exitCode;
+	const timedOut = timerFired && run.status !== "completed";
+	const exitCode = timedOut ? EXIT_CODES.timeout : exitCodeForRun(run);
+	return emit(
+		buildRunReport({
+			source,
+			resolved,
+			plan,
+			run,
+			exitCode,
+			allowLocal: parsed.options.allowLocal,
+			timeoutMs: parsed.options.timeoutMs,
+			timedOut,
+		}),
+	);
 }

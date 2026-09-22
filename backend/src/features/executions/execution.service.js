@@ -329,15 +329,21 @@ export function createExecutionService({
 		const persist = async (update) => {
 			const expiresAt = new Date(Date.now() + RETENTION_MS());
 			let finalized = null;
+			let watchdog;
 			try {
 				finalized = await Promise.race([
 					history.finalize(profileId, executionId, { status: "terminal", finishedAt: new Date(), expiresAt, ...update }),
-					new Promise((_, reject) =>
-						setTimeout(() => reject(new Error("finalize timeout")), getConfig().execution.finalizeTimeoutMs),
-					),
+					new Promise((_, reject) => {
+						watchdog = setTimeout(() => reject(new Error("finalize timeout")), getConfig().execution.finalizeTimeoutMs);
+					}),
 				]);
 			} catch {
 				finalized = null;
+			} finally {
+				// The watchdog must be cleared when finalize wins, otherwise its timer
+				// keeps the event loop alive after the execution is done. In the CLI that
+				// would delay process exit past the run's reported finish time.
+				if (watchdog) clearTimeout(watchdog);
 			}
 			if (finalized) return { persistence: persistenceFrom(finalized), record: finalized };
 			const current = await history.get(profileId, executionId).catch(() => null);

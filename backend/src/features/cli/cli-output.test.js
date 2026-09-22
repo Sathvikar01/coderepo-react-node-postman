@@ -3,7 +3,7 @@
 // must never carry a resolved secret value.
 
 import { describe, expect, test } from "bun:test";
-import { buildErrorReport, buildPlanReport, buildRunReport, renderErrorHuman, renderPlanHuman, renderRunHuman, stringifyReport } from "./cli-output.js";
+import { buildErrorReport, buildPlanReport, buildRunReport, buildValidateReport, renderErrorHuman, renderPlanHuman, renderReportHuman, renderRunHuman, renderValidateHuman, stringifyReport } from "./cli-output.js";
 
 const source = { path: "/tmp/project", kind: "directory", name: "CLI fixtures", fingerprint: "abc123" };
 const resolved = {
@@ -60,11 +60,23 @@ describe("cli json report", () => {
 			"error",
 			"startedAt",
 			"finishedAt",
+			"timedOut",
 			"exitCode",
 		]);
 		expect(report.kind).toBe("tracer.cli-run");
 		expect(report.options).toMatchObject({ selectionLabel: 'collection "Alpha"', allowLocal: ["127.0.0.1"] });
 		expect(report.plan.steps[0]).toEqual({ index: 0, iteration: 1, requestId: "r1", name: "Create order", method: "POST" });
+		expect(report.options.timeoutMs).toBeNull();
+		expect(report.timedOut).toBe(false);
+	});
+
+	test("a timed-out run records the budget and the timeout flag", () => {
+		const report = buildRunReport({ source, resolved, plan, run: { ...run, status: "cancelled", stopReason: "cancelled" }, exitCode: 124, timeoutMs: 1500, timedOut: true });
+		expect(report.options.timeoutMs).toBe(1500);
+		expect(report.timedOut).toBe(true);
+		expect(report.exitCode).toBe(124);
+		const text = renderRunHuman(report);
+		expect(text).toContain("Timed out:   exceeded 1500ms budget");
 	});
 
 	test("two identical runs serialize byte-for-byte the same", () => {
@@ -87,12 +99,25 @@ describe("cli json report", () => {
 			source,
 			resolved,
 			plan,
-			options: { iterations: 1, stopOnFailure: true, variables: [{ key: "token", value: "x" }], allowLocal: [] },
+			options: { iterations: 1, stopOnFailure: true, allowLocal: [] },
+			variables: [{ key: "token", value: "x" }],
 		});
 		expect(report.kind).toBe("tracer.cli-plan");
 		expect(report.collection.id).toBe("c1");
 		expect(report.options.variableKeys).toEqual(["token"]);
 		expect(report.exitCode).toBe(0);
+	});
+
+	test("the validate report states the project and its counts", () => {
+		const report = buildValidateReport({
+			source,
+			domain: { collections: [{ requests: [{}, {}] }, { requests: [{}] }], environments: [{}] },
+		});
+		expect(report.kind).toBe("tracer.cli-validate");
+		expect(report.valid).toBe(true);
+		expect(report.counts).toEqual({ collections: 2, requests: 3, environments: 1 });
+		const text = renderValidateHuman(report);
+		expect(text).toContain("Valid:       2 collection(s) · 3 request(s) · 1 environment(s)");
 	});
 
 	test("the error report is invalid for caller mistakes and an error otherwise", () => {
@@ -123,9 +148,11 @@ describe("cli human report", () => {
 		expect(text).toContain("No requests were sent (plan mode).");
 	});
 
-	test("the error report shows the code and exit code", () => {
-		const text = renderErrorHuman(buildErrorReport({ error: { code: "CLI_USAGE", message: "Unknown option --nope.", details: null }, exitCode: 2 }));
+	test("the error report shows the code and exit code, and the dispatcher routes it", () => {
+		const report = buildErrorReport({ error: { code: "CLI_USAGE", message: "Unknown option --nope.", details: null }, exitCode: 2 });
+		const text = renderErrorHuman(report);
 		expect(text).toContain("CLI_USAGE: Unknown option --nope.");
 		expect(text).toContain("Exit code: 2");
+		expect(renderReportHuman(report)).toBe(text);
 	});
 });

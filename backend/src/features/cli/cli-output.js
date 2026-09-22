@@ -12,7 +12,10 @@ import { CLI_NAME, CLI_VERSION } from "./cli-args.js";
 import { EXIT_CODE_MEANINGS } from "./cli-exit.js";
 
 export const REPORT_KIND = "tracer.cli-run";
-export const REPORT_SCHEMA_VERSION = 1;
+export const PLAN_REPORT_KIND = "tracer.cli-plan";
+export const VALIDATE_REPORT_KIND = "tracer.cli-validate";
+export const ERROR_REPORT_KIND = "tracer.cli-error";
+export const REPORT_SCHEMA_VERSION = 2;
 
 function publicPlan(plan) {
 	if (!plan) return null;
@@ -30,7 +33,7 @@ function publicPlan(plan) {
 	};
 }
 
-export function buildRunReport({ source, resolved, plan, run, exitCode, allowLocal = [] }) {
+export function buildRunReport({ source, resolved, plan, run, exitCode, allowLocal = [], timeoutMs = null, timedOut = false }) {
 	return {
 		schemaVersion: REPORT_SCHEMA_VERSION,
 		kind: REPORT_KIND,
@@ -47,6 +50,7 @@ export function buildRunReport({ source, resolved, plan, run, exitCode, allowLoc
 			stopOnFailure: run.options.stopOnFailure,
 			variableKeys: run.options.variableKeys,
 			allowLocal: [...allowLocal],
+			timeoutMs,
 		},
 		plan: publicPlan(plan),
 		runId: run.runId,
@@ -58,14 +62,33 @@ export function buildRunReport({ source, resolved, plan, run, exitCode, allowLoc
 		error: run.error ?? null,
 		startedAt: run.startedAt ?? null,
 		finishedAt: run.finishedAt ?? null,
+		timedOut,
 		exitCode,
 	};
 }
 
-export function buildPlanReport({ source, resolved, plan, options }) {
+export function buildValidateReport({ source, domain }) {
+	const collections = domain.collections ?? [];
+	const requestCount = collections.reduce((total, collection) => total + (collection.requests ?? []).length, 0);
 	return {
 		schemaVersion: REPORT_SCHEMA_VERSION,
-		kind: "tracer.cli-plan",
+		kind: VALIDATE_REPORT_KIND,
+		tool: { name: CLI_NAME, version: CLI_VERSION },
+		project: { path: source.path, kind: source.kind, name: source.name, fingerprint: source.fingerprint },
+		valid: true,
+		counts: {
+			collections: collections.length,
+			requests: requestCount,
+			environments: (domain.environments ?? []).length,
+		},
+		exitCode: 0,
+	};
+}
+
+export function buildPlanReport({ source, resolved, plan, options, variables = [] }) {
+	return {
+		schemaVersion: REPORT_SCHEMA_VERSION,
+		kind: PLAN_REPORT_KIND,
 		tool: { name: CLI_NAME, version: CLI_VERSION },
 		project: { path: source.path, kind: source.kind, name: source.name, fingerprint: source.fingerprint },
 		collection: { id: resolved.collection._id ? String(resolved.collection._id) : null, name: resolved.collection.name, revision: resolved.collection.revision ?? null },
@@ -77,7 +100,7 @@ export function buildPlanReport({ source, resolved, plan, options }) {
 			selectionLabel: resolved.selectionLabel ?? null,
 			iterations: options.iterations,
 			stopOnFailure: options.stopOnFailure,
-			variableKeys: options.variables.map((variable) => variable.key),
+			variableKeys: variables.map((variable) => variable.key),
 			allowLocal: [...options.allowLocal],
 		},
 		plan: publicPlan(plan),
@@ -88,7 +111,7 @@ export function buildPlanReport({ source, resolved, plan, options }) {
 export function buildErrorReport({ error, exitCode }) {
 	return {
 		schemaVersion: REPORT_SCHEMA_VERSION,
-		kind: "tracer.cli-error",
+		kind: ERROR_REPORT_KIND,
 		tool: { name: CLI_NAME, version: CLI_VERSION },
 		status: exitCode === 2 ? "invalid" : "error",
 		error: { code: error.code, message: error.message, details: error.details ?? null },
@@ -145,6 +168,7 @@ export function renderRunHuman(report) {
 	if (report.results.length > 0) lines.push("");
 	lines.push(summaryLine(report));
 	if (report.stopReason) lines.push(`Stop reason: ${report.stopReason}`);
+	if (report.timedOut) lines.push(`Timed out:   exceeded ${report.options.timeoutMs}ms budget`);
 	if (report.error) lines.push(`Error:       ${report.error.code} — ${report.error.message}`);
 	lines.push(`Run id:      ${report.runId}`);
 	lines.push(`Exit code:   ${report.exitCode} (${EXIT_CODE_MEANINGS[report.exitCode] ?? "unknown"})`);
@@ -169,6 +193,28 @@ export function renderPlanHuman(report) {
 	lines.push("");
 	lines.push("No requests were sent (plan mode).");
 	return `${lines.join("\n")}\n`;
+}
+
+export function renderValidateHuman(report) {
+	const lines = [];
+	lines.push(`${report.tool.name} ${report.tool.version} — project validation`);
+	lines.push(`Project:     ${report.project.path} (${report.project.kind})`);
+	lines.push(`Name:        ${report.project.name}`);
+	lines.push(`Fingerprint: ${report.project.fingerprint}`);
+	lines.push("");
+	lines.push(
+		`Valid:       ${report.counts.collections} collection(s) · ${report.counts.requests} request(s) · ${report.counts.environments} environment(s)`,
+	);
+	return `${lines.join("\n")}\n`;
+}
+
+// Single dispatcher so every caller renders a report the same way regardless of
+// whether it is a run, plan, validation, or error document.
+export function renderReportHuman(report) {
+	if (report.kind === REPORT_KIND) return renderRunHuman(report);
+	if (report.kind === PLAN_REPORT_KIND) return renderPlanHuman(report);
+	if (report.kind === VALIDATE_REPORT_KIND) return renderValidateHuman(report);
+	return renderErrorHuman(report);
 }
 
 export function renderErrorHuman(report) {

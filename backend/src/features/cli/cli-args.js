@@ -6,6 +6,8 @@
 //
 // Long flags accept both `--flag value` and `--flag=value`. `--variable` uses
 // `KEY=VALUE` and splits on the first `=`, so values may contain `=`.
+// `--variable-env` uses `KEY=ENV_VAR` and keeps only the environment variable
+// name, so a secret value is never placed in argv (where `ps` could read it).
 
 import { LIMITS } from "../../shared/utils/limits.js";
 import { RUN_LIMITS } from "../collection-runner/run-limits.js";
@@ -15,12 +17,32 @@ import { CliError } from "./cli-errors.js";
 export const CLI_NAME = "tracer";
 export const CLI_VERSION = "1.0.0";
 
-const COMMANDS = new Set(["run", "plan", "help"]);
+// GNU `timeout` style ceiling. A run longer than this should be batched by the
+// caller rather than pinned to one CI job.
+export const TIMEOUT_MAX_SECONDS = 3600;
+
+const COMMANDS = new Set(["run", "plan", "validate", "help"]);
 
 const BOOLEAN_FLAGS = new Set(["--json", "--plan", "--continue", "--stop-on-failure", "--help"]);
-const VALUE_FLAGS = new Set(["--collection", "--environment", "--folder", "--request", "--iterations", "--variable", "--allow-local"]);
-const REPEATABLE_FLAGS = new Set(["--request", "--variable", "--allow-local"]);
+const VALUE_FLAGS = new Set([
+	"--collection",
+	"--environment",
+	"--folder",
+	"--request",
+	"--iterations",
+	"--variable",
+	"--variable-env",
+	"--allow-local",
+	"--timeout",
+	"--report",
+	"--junit",
+]);
+const REPEATABLE_FLAGS = new Set(["--request", "--variable", "--variable-env", "--allow-local"]);
 const VARIABLE_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+// Options that only make sense when a run is actually going to be executed.
+const RUN_ONLY_FLAGS = ["--collection", "--environment", "--folder", "--request", "--iterations", "--variable", "--variable-env", "--allow-local", "--timeout", "--junit", "--plan"];
 
 export function formatCliUsage() {
 	return [
@@ -29,6 +51,7 @@ export function formatCliUsage() {
 		"USAGE",
 		`  ${CLI_NAME} run <project> [options]`,
 		`  ${CLI_NAME} plan <project> [options]`,
+		`  ${CLI_NAME} validate <project> [options]`,
 		`  ${CLI_NAME} help`,
 		"",
 		"PROJECT",
@@ -41,10 +64,15 @@ export function formatCliUsage() {
 		"  --request <name|id>         Run one request; repeat to run several in order.",
 		"  --iterations <n>            Repeat the selection 1.." + RUN_LIMITS.iterationsPerRun + " times (default: 1).",
 		"  --variable <KEY=VALUE>      Initial run variable; repeat for several.",
+		"  --variable-env <KEY=ENV>    Bind a run variable to an environment variable; repeat for several.",
+		"                              The variable value never appears in argv or in any report.",
 		"  --allow-local <host>        Opt in to one exact loopback/private host; repeat to allow several.",
+		"  --timeout <seconds>         Stop the run after this many seconds (1.." + TIMEOUT_MAX_SECONDS + "); exit code 124.",
 		"  --continue                  Keep running after a failed request.",
 		"  --stop-on-failure           Stop at the first failed request (default).",
 		"  --plan                      Resolve and print the run plan without sending anything.",
+		"  --report <path>             Write the authoritative JSON report to a file (CI artifact).",
+		"  --junit <path>              Write a JUnit XML report to a file (CI test summary).",
 		"  --json                      Emit machine-readable JSON.",
 		"  --help                      Print this help.",
 		"",
@@ -53,7 +81,12 @@ export function formatCliUsage() {
 		"  1    the run completed but at least one request failed",
 		"  2    invalid arguments, project, selection, or configuration",
 		"  3    the runner or execution pipeline failed unexpectedly",
+		"  124  the run exceeded the --timeout budget",
 		"  130  the run was cancelled (SIGINT)",
+		"",
+		"OUTPUT",
+		"  stdout carries the machine document when --json is set (otherwise the human report).",
+		"  stderr carries diagnostics, artifact notices, and text-mode errors.",
 		"",
 		"SECRETS",
 		"  Secret references resolve from the server secret aliases (SERVER_SECRET_ALIASES_JSON +",
@@ -81,6 +114,14 @@ function parseIntOption(raw) {
 	return value;
 }
 
+function parseTimeoutOption(raw) {
+	if (!/^\d+$/.test(raw)) throw usageError(`--timeout expects a whole number of seconds between 1 and ${TIMEOUT_MAX_SECONDS}.`);
+	const seconds = Number(raw);
+	if (seconds < 1 || seconds > TIMEOUT_MAX_SECONDS)
+		throw usageError(`--timeout must be between 1 and ${TIMEOUT_MAX_SECONDS} seconds.`);
+	return seconds * 1000;
+}
+
 function parseVariable(raw) {
 	const separator = raw.indexOf("=");
 	if (separator <= 0) throw usageError("--variable expects KEY=VALUE.");
@@ -90,6 +131,16 @@ function parseVariable(raw) {
 	if (Buffer.byteLength(value, "utf8") > LIMITS.variableValueBytes)
 		throw usageError(`The value for "${key}" exceeds the ${LIMITS.variableValueBytes}-byte variable limit.`);
 	return { key, value };
+}
+
+function parseVariableEnv(raw) {
+	const separator = raw.indexOf("=");
+	if (separator <= 0) throw usageError("--variable-env expects KEY=ENV_VAR.");
+	const key = raw.slice(0, separator).trim();
+	const env = raw.slice(separator + 1).trim();
+	if (!VARIABLE_NAME.test(key)) throw usageError(`"${key}" is not a valid variable name.`);
+	if (!ENV_NAME.test(env)) throw usageError(`"${env}" is not a valid environment variable name.`);
+	return { key, env };
 }
 
 function parseLocalHost(raw) {
@@ -108,10 +159,10 @@ export function parseCliArgs(argv = []) {
 	if (first === "--help" || first === "-h") return baseResult({ helpRequested: true });
 	if (first === "--version") return baseResult({ versionRequested: true });
 	if (first.startsWith("-")) throw usageError(`Unknown option ${first}.`);
-	if (!COMMANDS.has(first)) throw usageError(`Unknown command "${first}". Use run, plan, or help.`);
+	if (!COMMANDS.has(first)) throw usageError(`Unknown command "${first}". Use run, plan, validate, or help.`);
 
 	const command = first;
-	const parsed = baseResult({ command, planOnly: command === "plan" });
+	const parsed = baseResult({ command, planOnly: command === "plan", validateOnly: command === "validate" });
 	if (command === "help") {
 		parsed.helpRequested = true;
 		return parsed;
@@ -137,6 +188,7 @@ export function parseCliArgs(argv = []) {
 				parsed.helpRequested = true;
 				continue;
 			}
+			seen.set(name, true);
 			if (name === "--json") parsed.options.json = true;
 			if (name === "--plan") parsed.options.planOnly = true;
 			if (name === "--continue") stopOnFailureChosen = stopOnFailureChosen === "stop" ? "conflict" : "continue";
@@ -157,7 +209,11 @@ export function parseCliArgs(argv = []) {
 			if (name === "--request") parsed.options.requests.push(value);
 			if (name === "--iterations") parsed.options.iterations = parseIntOption(value);
 			if (name === "--variable") parsed.options.variables.push(parseVariable(value));
+			if (name === "--variable-env") parsed.options.variablesFromEnv.push(parseVariableEnv(value));
 			if (name === "--allow-local") parsed.options.allowLocal.push(parseLocalHost(value));
+			if (name === "--timeout") parsed.options.timeoutMs = parseTimeoutOption(value);
+			if (name === "--report") parsed.options.reportPath = value;
+			if (name === "--junit") parsed.options.junitPath = value;
 			continue;
 		}
 
@@ -169,13 +225,22 @@ export function parseCliArgs(argv = []) {
 	if (stopOnFailureChosen === "conflict") throw usageError("--continue and --stop-on-failure cannot be combined.");
 	if (stopOnFailureChosen) parsed.options.stopOnFailure = stopOnFailureChosen === "stop";
 
+	if (parsed.options.validateOnly) {
+		const disallowed = RUN_ONLY_FLAGS.filter((flag) => seen.has(flag));
+		if (disallowed.length > 0) throw usageError(`validate only accepts --json and --report; remove ${disallowed.join(", ")}.`);
+	}
+	if (parsed.options.planOnly && parsed.options.junitPath)
+		throw usageError("--junit requires an actual run; it cannot be combined with --plan.");
+	if (parsed.options.planOnly && parsed.options.timeoutMs)
+		throw usageError("--timeout requires an actual run; it cannot be combined with --plan.");
+
 	parsed.options.allowLocal = [...new Set(parsed.options.allowLocal)];
 	if (parsed.options.allowLocal.length > LIMITS.localRuntimeTargets)
 		throw usageError(`At most ${LIMITS.localRuntimeTargets} approved local hosts may be supplied.`);
-	if (parsed.options.variables.length > LIMITS.variablesPerScope)
+	const variableCount = parsed.options.variables.length + parsed.options.variablesFromEnv.length;
+	if (variableCount > LIMITS.variablesPerScope)
 		throw usageError(`At most ${LIMITS.variablesPerScope} run variables may be supplied.`);
-	if (parsed.options.folder && parsed.options.requests.length > 0)
-		throw usageError("--folder and --request cannot be combined.");
+	if (parsed.options.folder && parsed.options.requests.length > 0) throw usageError("--folder and --request cannot be combined.");
 
 	if (!parsed.helpRequested && projectPath === null) throw new CliError("A project path is required.", { code: "CLI_NO_PROJECT" });
 	parsed.projectPath = projectPath;
@@ -196,9 +261,14 @@ function baseResult(overrides = {}) {
 			iterations: 1,
 			stopOnFailure: true,
 			variables: [],
+			variablesFromEnv: [],
 			allowLocal: [],
+			timeoutMs: null,
+			reportPath: null,
+			junitPath: null,
 			json: false,
 			planOnly: overrides.planOnly ?? false,
+			validateOnly: overrides.validateOnly ?? false,
 		},
 	};
 }

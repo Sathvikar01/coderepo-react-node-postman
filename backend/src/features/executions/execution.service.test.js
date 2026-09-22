@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { beforeAll, describe, expect, test } from "bun:test";
 import { AppError } from "../../shared/errors/app-error.js";
-import { initConfig } from "../../shared/config/index.js";
+import { getConfig, initConfig } from "../../shared/config/index.js";
 import { fingerprintOf } from "../history/fingerprint.js";
 import { createOperationRegistry } from "./active-registry.js";
 import { createExecutionService, terminalResult } from "./execution.service.js";
@@ -579,5 +579,36 @@ describe("collection runner scope hook", () => {
 		const { service } = makeService({ history });
 		const result = await service.send(nextProfile(), sendInput());
 		expect(result.variableWrites).toBeUndefined();
+	});
+});
+
+describe("execution finalize watchdog", () => {
+	// Regression: the finalize watchdog used to keep the event loop alive for
+	// `finalizeTimeoutMs` after a completed execution. In the CLI that delayed
+	// process exit past the run's own finish time, which is a CI reliability bug.
+	test("the finalize watchdog timer is cleared once finalize wins", async () => {
+		const history = fakeHistory();
+		const { service } = makeService({ history });
+		const finalizeTimeoutMs = getConfig().execution.finalizeTimeoutMs;
+		const pending = new Set();
+		const realSetTimeout = globalThis.setTimeout;
+		const realClearTimeout = globalThis.clearTimeout;
+		globalThis.setTimeout = (fn, ms, ...rest) => {
+			const handle = realSetTimeout(fn, ms, ...rest);
+			if (ms === finalizeTimeoutMs) pending.add(handle);
+			return handle;
+		};
+		globalThis.clearTimeout = (handle) => {
+			pending.delete(handle);
+			return realClearTimeout(handle);
+		};
+		try {
+			const result = await service.send(nextProfile(), sendInput());
+			expect(result.persistence).toEqual({ state: "saved" });
+			expect(pending.size).toBe(0);
+		} finally {
+			globalThis.setTimeout = realSetTimeout;
+			globalThis.clearTimeout = realClearTimeout;
+		}
 	});
 });
