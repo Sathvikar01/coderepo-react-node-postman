@@ -177,6 +177,18 @@ describe("execution pipeline order", () => {
 		expect(result.effectCertainty).toBe("may_have_reached_target");
 	});
 
+	test("persists internal probes for audit while excluding them from visible history", async () => {
+		const history = fakeHistory();
+		const { service } = makeService({ history });
+
+		const result = await service.send(nextProfile(), sendInput(), { rateLimit: false, visible: false });
+		const stored = [...history.records.values()][0];
+
+		expect(stored.visible).toBe(false);
+		expect(result.visible).toBe(false);
+		expect(stored.receipt.kind).toBe("tracer.execution-receipt");
+	});
+
 	test("policy failure fails closed before dispatch", async () => {
 		const { service, calls } = makeService({
 			policy: async () => {

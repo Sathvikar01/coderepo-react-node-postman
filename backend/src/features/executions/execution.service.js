@@ -192,8 +192,8 @@ export function createExecutionService({
 		};
 	}
 
-	async function send(profileId, input) {
-		registry.rateLimit(profileId, "send");
+	async function send(profileId, input, internal = {}) {
+		if (internal.rateLimit !== false) registry.rateLimit(profileId, "send");
 		const { executionId, tabId, draftVersion, request, context = {}, authOverride } = input;
 		const timeoutMs = Math.min(
 			Math.max(request?.settings?.timeoutMs ?? getConfig().execution.defaultTimeoutMs, getConfig().execution.minTimeoutMs),
@@ -288,6 +288,7 @@ export function createExecutionService({
 				status: "running",
 				effectCertainty: "not_dispatched",
 				persistence: { state: "saved" },
+				visible: internal.visible !== false,
 				request: sanitizeRequestForHistory(workingRequest),
 				context: { tabId, draftVersion, source: resolved.source, environment: environment.source },
 				snapshot,

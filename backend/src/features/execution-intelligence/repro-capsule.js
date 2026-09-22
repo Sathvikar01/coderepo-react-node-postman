@@ -160,7 +160,7 @@ function sanitizeBody(state, body) {
 	};
 }
 
-function sanitizeRequest(request) {
+export function sanitizeCapsuleRequest(request) {
 	const state = { inputs: new Map(), secrets: new Set() };
 	const auth = sanitizeAuth(state, request?.auth);
 	const query = sanitizeRows(state, request?.query, "query");
@@ -184,7 +184,7 @@ function sanitizeRequest(request) {
 	return { request: requestDefinitionSchema.parse(sanitized), state };
 }
 
-function failurePredicate(record) {
+export function failurePredicateForRecord(record) {
 	const failures = executionFailurePredicate(record?.snapshot?.scriptResults);
 	const first = failures.failures[0];
 	if (first?.assertionId)
@@ -244,13 +244,13 @@ const capsuleSchema = z
 
 export function buildReproCapsule(record, { includeResponseBody = false } = {}) {
 	if (!record?.receipt) throw new AppError(409, "RECEIPT_UNAVAILABLE", "This history entry has no execution passport.");
-	const sanitized = sanitizeRequest(record.request);
+	const sanitized = sanitizeCapsuleRequest(record.request);
 	const capsule = {
 		schemaVersion: REPRO_CAPSULE_VERSION,
 		kind: REPRO_CAPSULE_KIND,
 		request: sanitized.request,
 		requiredInputs: [...sanitized.state.inputs.values()].sort((left, right) => left.name.localeCompare(right.name)),
-		predicate: failurePredicate(record),
+		predicate: failurePredicateForRecord(record),
 		receipt: receiptSummary(record.receipt),
 	};
 	if (includeResponseBody && record.response?.body) {

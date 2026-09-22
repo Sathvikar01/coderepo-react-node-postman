@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { executionIntelligenceService } from "./execution-intelligence.service.js";
+import { minimizationService } from "./minimization.service.js";
 
 const executionIdSchema = z.uuid("Provide a valid execution identifier.");
 const comparisonSchema = z
@@ -18,9 +19,23 @@ const capsuleExportSchema = z
 	.object({ executionId: executionIdSchema, includeResponseBody: z.boolean().default(false) })
 	.strict();
 const capsuleImportSchema = z.object({ text: z.string().min(1).max(600 * 1024) }).strict();
+const minimizationPredicateSchema = z.discriminatedUnion("type", [
+	z.object({ type: z.literal("status"), equals: z.number().int().min(100).max(599) }).strict(),
+	z.object({ type: z.literal("outcome"), equals: z.string().min(1).max(64) }).strict(),
+	z.object({ type: z.literal("assertion"), assertionId: z.string().min(1).max(128) }).strict(),
+]);
+const minimizationSchema = z
+	.object({
+		sourceExecutionId: executionIdSchema,
+		predicate: minimizationPredicateSchema.optional(),
+		targetMode: z.enum(["execution", "mock"]).default("execution"),
+		allowUnsafeLocal: z.boolean().default(false),
+	})
+	.strict();
 
 export const parseCapsuleExportInput = (value) => capsuleExportSchema.parse(value);
 export const parseCapsuleImportInput = (value) => capsuleImportSchema.parse(value);
+export const parseMinimizationInput = (value) => minimizationSchema.parse(value);
 
 export async function getExecutionReceipt(request, response, next) {
 	try {
@@ -63,6 +78,33 @@ export async function importReproCapsule(request, response, next) {
 	try {
 		const input = parseCapsuleImportInput(request.body);
 		response.json({ data: executionIntelligenceService.importCapsule(input.text) });
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function startMinimization(request, response, next) {
+	try {
+		const input = parseMinimizationInput(request.body);
+		response.status(202).json({ data: await minimizationService.start(request.profileId, input) });
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function getMinimization(request, response, next) {
+	try {
+		const jobId = executionIdSchema.parse(request.params.jobId);
+		response.json({ data: await minimizationService.status(request.profileId, jobId) });
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function cancelMinimization(request, response, next) {
+	try {
+		const jobId = executionIdSchema.parse(request.params.jobId);
+		response.json({ data: await minimizationService.cancel(request.profileId, jobId) });
 	} catch (error) {
 		next(error);
 	}
