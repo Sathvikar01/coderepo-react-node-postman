@@ -1232,4 +1232,330 @@ Trace it end-to-end from Send to terminal history receipt.
 * cancellation works during DNS/connect/send/read/decode/finalize
 * exactly one terminal result can win
 * HTTP framing: Content-Length / chunked / EOF
-* HEAD / 204 / 30
+* HEAD / 204 / 304 semantics
+* gzip / deflate / Brotli
+* encoded + decoded size limits
+* live response is not incorrectly history-truncated
+* secret redaction before persistence
+* history receipt matches the actual execution outcome
+* duplicate/stale execution IDs cannot corrupt another attempt
+
+## Testing
+
+Add adversarial regression tests for any uncovered boundary.
+
+Include:
+
+* mixed DNS answers
+* alternate IP spellings
+* redirects must NOT auto-follow
+* malformed chunking
+* early disconnect
+* compression bomb
+* timeout at phase boundaries
+* cancel vs response race
+* DB/finalization race
+
+Do not weaken existing tests.
+
+## Scope
+
+Prefer changes only under:
+
+`backend/src/features/executions/**`
+
+Touch history/policy/shared files only if required by a demonstrated execution-core bug.
+
+No frontend work.
+No new Postman features.
+No architecture/dependency/port changes.
+
+## Gate
+
+Run:
+
+```bash
+bun test
+cd frontend && bun run build
+```
+
+Run the execution/security regression matrix and existing GitHub CI.
+
+Return:
+
+* bugs found
+* fixes made
+* tests added
+* execution pipeline evidence
+* remaining blockers
+* git status
+
+Finish:
+
+`PHASE 2 VERDICT: PASS`
+
+or
+
+`PHASE 2 VERDICT: BLOCKED`
+
+Agent Response Summary:
+Audited the full compile -> policy -> DNS -> transport -> capture -> normalize -> history pipeline against the frozen ASTRA contracts and found four real defects: live responses were truncated to the 256 KiB history body cap, the absolute deadline and cancellation did not cover target validation (DNS) or the decode phase, malformed/conflicting Content-Length framing was silently treated as EOF-delimited, and raw deflate responses failed as decode errors. Fixed each within backend/src/features/executions: live envelopes now stay full-size while only the persisted history body is capped and marked (historyBodyTruncated, omittedReason history_limit), target validation and decompression run under the same deadline and abort signal, framing is strict and fail-closed, and deflate falls back to inflateRaw. Added 41 tests (88 -> 129; 128 pass + 1 Windows-only skip locally, 129 pass in Ubuntu CI) covering mixed DNS answers, alternate numeric spellings, redirect non-follow, malformed chunking, early disconnects, compression bombs, phase-boundary timeouts, cancel races, DB terminal CAS, receipt integrity, duplicate execution IDs, identity conflicts, and secret redaction. Verified the pipeline live against the seeded backend (8/8 outcomes matched their history receipts) and ran the existing GitHub Actions Baseline Gate on PR #2: all 14 steps pass including seed and runtime smoke. One residual upstream limitation: Bun 1.3.9 on Windows does not emit the TLS SNI extension (certificate identity is still verified via servername); the SNI assertion runs and passes on the Linux CI runtime and is skipped locally with a documented capability probe.
+
+Actions:
+* read AGENTS.md, ASTRA_ARCHITECTURE.md, REQUIREMENTS/INSTRUCTIONS/GUIDELINES, and the full executions/history/shared code paths
+* created branch phase2/execution-core from origin/main (f2e1f90)
+* fixed live-vs-history body capping in response-normalizer.js and execution.service.js
+* added deadline/cancel budget race for target validation and decode in execution.service.js / response-capture.js
+* strict Content-Length / Transfer-Encoding framing in http-transport.js
+* compiled-method validation in request-compiler.js
+* injectable history dependency in createExecutionService for deterministic pipeline tests
+* added execution.service.test.js, history-cas.test.js, and adversarial cases in http-transport/response-capture/response-normalizer/target-policy/request-compiler tests
+* ran bun test (129 tests, 0 fail in CI), node --check on 56 backend files, frontend bun run build
+* ran live E2E against the seeded backend: 200/204/HEAD/gzip/br/404/timeout/blocked-target cases, 8/8 history receipts matched
+* committed 9061973, pushed phase2/execution-core, opened PR #2, verified Baseline Gate run 35472579544 all steps success
+
+Context:
+tool=opencode
+branch=phase2/execution-core
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=main
+parent_agent=none
+
+## [2026-09-20T19:56:18+05:30] Bounded-command and transcript guardrail
+
+User Prompt (normalized, secrets redacted):
+Use explicit bounded timeouts for every command/script, poll long-running work in short intervals, and never commit or push the transcript/log files to GitHub.
+
+Agent Response Summary:
+Acknowledged and enforced: every command and script now runs with an explicit hard stop, leftover probe/test processes are killed immediately, and long-running helpers are launched detached with short bounded polls instead of blocking waits. Confirmed transcripts/hackerrank-log.txt is ignored by .gitignore and untracked, so it cannot be pushed; no log or transcript content is staged.
+
+Actions:
+* verified .gitignore ignores transcripts/ and git ls-files shows no tracked transcript files
+* replaced blocking waits with bounded polls and killed leftover bun test processes
+* kept the running backend alive while avoiding unbounded waits
+
+Context:
+tool=opencode
+branch=phase3/persistence-state
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=main
+parent_agent=none
+
+## [2026-09-20T19:56:18+05:30] Bounded-command and transcript guardrail reaffirmed
+
+User Prompt (normalized, secrets redacted):
+Use explicit bounded timeouts for every command/script, poll long-running work in short intervals, and never commit or push the transcript/log files to GitHub.
+
+Agent Response Summary:
+Acknowledged and enforced: every command and script now runs with an explicit hard stop, leftover probe/test processes are killed immediately, and long-running helpers are launched detached with short bounded polls instead of blocking waits. Confirmed transcripts/hackerrank-log.txt is ignored by .gitignore and untracked, so it cannot be pushed; no log or transcript content is staged.
+
+Actions:
+* verified .gitignore ignores transcripts/ and git ls-files shows no tracked transcript files
+* replaced blocking waits with bounded polls and killed leftover bun test processes
+* kept the running backend alive while avoiding unbounded waits
+
+Context:
+tool=opencode
+branch=phase3/persistence-state
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=main
+parent_agent=none
+
+## [2026-09-20T19:56:18+05:30] Phase 3 persistence and state correctness verification
+
+User Prompt (verbatim, secrets redacted):
+# Phase 3 — Persistence & State Correctness
+
+Work only on:
+
+`phase3/persistence-state`
+
+Phase 1–2 are verified baseline. Do not modify execution-core behavior unless a persistence bug proves it necessary.
+
+## Goal
+
+Verify and harden:
+
+`collections → environments → preferences → history → revisions/CAS → ownership → restart/reset`
+
+## Check
+
+* every Mongo read/write is profile-scoped
+* collection/environment revisions enforce CAS correctly
+* stale writes return deterministic conflict responses
+* concurrent disjoint edits do not lose data
+* duplicate names/IDs fail correctly
+* Save vs Send remains separated
+* drafts are never accidentally persisted
+* environment create/update/delete reconciles correctly
+* secret aliases persist; secret values do not
+* preferences persist independently per profile
+* history is immutable after terminalization
+* expiry/clear/delete semantics remain correct
+* pagination/cursors are stable and validated
+* restart preserves user-created state
+* `setup.sh --seed` resets only as frozen
+* deterministic seeds stay identical
+* partial DB failures cannot leave misleading frontend state
+
+## Adversarial tests
+
+Cover:
+
+* two writers using same revision
+* simultaneous edits to different requests in one collection
+* deleted request/folder while another tab saves
+* profile A attempting profile B CRUD
+* stale environment revision
+* secretRef round-trip
+* malformed/duplicate Mongo records
+* restart between write and subsequent read
+* clear/expired history races
+* cursor boundary cases
+* seed → mutate → restart → reset → compare
+
+Fix real bugs you find. Add regression tests.
+
+## Scope
+
+Prefer:
+
+`backend/src/features/{collections,environments,profiles,history}/**`
+
+and persistence-facing frontend reconciliation only when required.
+
+Do not add product features.
+Do not refactor broadly.
+Do not change dependencies, ports, architecture, or `hackerrank.yml`.
+
+## Gate
+
+Run:
+
+```bash
+bun test
+cd frontend && bun run build
+```
+
+Also run Mongo-backed persistence/CAS tests, restart/reset tests, and existing CI.
+
+Return:
+
+* bugs found
+* fixes made
+* tests added
+* persistence evidence
+* remaining blockers
+* git status / PR
+
+Finish exactly:
+
+`PHASE 3 VERDICT: PASS`
+
+or
+
+`PHASE 3 VERDICT: BLOCKED`
+
+Agent Response Summary:
+Audited the persistence path and found three real defects: secret references accepted and stored a literal value at the API boundary, duplicate-key races (same-name creates and renames) surfaced as 500 INTERNAL_ERROR instead of a deterministic 409, and cursor pagination silently replaced the history expiry filter so later pages could include expired records. Fixed each with bounded changes: secretRef variables now reject values in the shared schema, collection/environment writes map duplicate-key errors to their specific name-conflict 409s with a generic duplicate-key 409 safety net, and the history list query combines the cursor predicate with the expiry filter under $and. Added 28 Mongo-backed tests (157 total in CI, 0 fail) covering profile scoping, CAS winners/losers, concurrent disjoint edits, stale deletes, name races, secretRef round-trips, preference independence and reconciliation, history immutability/expiry/clear/cursor boundaries, save-vs-send separation, and reconnect-preserves-state. Verified seed reset behavior end to end: seed → mutate → reconnect → seed produced an identical canonical content hash, removed the mutation, and restored the frozen counts, with Mongo-generated _id values for preferences and demo orders excluded because the read-only seed script does not pin them. Live API checks confirmed profile A cannot read profile B data (404), concurrent same-revision updates returned 200/409 with the winner intact, and both live-test collections survived a backend watcher restart before cleanup.
+
+Actions:
+* created branch phase3/persistence-state from origin/main (8069541)
+* rejected secretRef values in backend/src/shared/utils/schemas.js
+* mapped duplicate-key races to 409 in collection.service.js and environment.service.js plus error-handler.js
+* fixed cursor/expiry query merge in history.repository.js
+* added backend/src/features/persistence.test.js and backend/src/shared/utils/test-db.js
+* ran bun test (157 pass, 0 fail in CI), frontend bun run build, and the full Baseline Gate on PR #3
+* live API checks: cross-profile 404, concurrent revision 200/409, watcher restart preserved user-created collections, then cleaned them up
+* seed reset check: seed -> mutate -> reconnect -> seed, canonical hash equal, counts restored
+* committed 6a6363c, pushed phase3/persistence-state, opened PR #3
+
+Context:
+tool=opencode
+branch=phase3/persistence-state
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=main
+parent_agent=none
+
+## [2026-09-20T20:07:14+05:30] SESSION START
+
+tool=opencode
+Repo Root: C:\Users\arsat\Downloads\postman
+Branch: phase3/persistence-state
+Worktree: main
+Parent Agent: none
+Language: node
+Time Remaining: 2d 3h 24m
+
+## [2026-09-20T22:00:29+05:30] Phase 4 frontend workflow correctness
+
+User Prompt (verbatim, secrets redacted):
+# Phase 4 - Frontend Workflow Correctness
+
+First check PR #3. If already merged: continue. If still open with green CI + clean mergeability: merge it. Create phase4/frontend-workflows from the resulting main. Do not start from the old Phase 3 branch.
+
+Goal: Verify/fix frontend workflow correctness: tabs -> drafts -> edit -> Send / Save -> async response -> conflicts -> close/switch. Focus on real bugs only.
+
+Verify: Send never persists drafts; Save never triggers Send; switching tabs preserves independent drafts/results; edit-during-Send keeps edits and attaches result to correct attempt; stale/late responses cannot overwrite newer sends; only one active attempt per tab; reconciliation/cancel states are correct; dirty close requires confirmation; tab close/profile switch/logout clean active execution state; Save/Save As preserve correct originating tab; CAS conflicts keep local edits recoverable; collection/environment changes reconcile without reload; deleted/moved request/folder does not corrupt an open tab; history reopen/inspect/save-as does not mutate unrelated tabs; keyboard tab close and focus behavior work; no state leaks between profiles.
+
+Adversarial tests: rapid tab switching during Send/Save; edit -> Send -> edit again before response; two tabs saving same request; delayed old response after newer execution; close tab while running/reconciling; profile switch with dirty/running tabs; CAS 409 during Save; source request/folder deleted while tab remains open; history Save-as with dirty unrelated tab. Fix failures and add regression tests.
+
+Scope: Prefer frontend/src/App.jsx, frontend/src/features/workspace/**, frontend/src/features/history/**, frontend/src/features/requests/**. Do not broadly refactor App.jsx. No new features, dependencies, architecture, ports, or contract changes.
+
+Gate: Run bun test; frontend production build; browser workflow checks at 375 / 768 / 1024 / 1440; existing GitHub Actions. Return: bugs found; fixes made; tests added; browser/workflow evidence; remaining blockers; clean git status + PR. Finish exactly: PHASE 4 VERDICT: PASS or PHASE 4 VERDICT: BLOCKED
+
+Agent Response Summary:
+Merged PR #3 (CLEAN, green Baseline Gate) as e253d13 and created phase4/frontend-workflows from main. Audited the tab/draft/save/send/history state machine and fixed eight real workflow defects: draft/inspect clobbered a running tab's execution state (allowing a second concurrent send), Save As dropped edits made while the save was in flight, the conflict dialog's Save-as-copy used the active tab instead of the originating tab, saving a request deleted from its collection silently reported success, Reload in the CAS conflict dialog targeted the active tab and could overwrite a different tab, collection edits did not reconcile open tabs' revisions (spurious 409s), tab close/profile switch/logout left execution timers and sends running, and keyboard users could not close a tab. Added 31 frontend regression tests (workspace-reducer, workspace-workflow, collection-edit, history-replay) that fail on the pre-fix code, plus browser workflow checks.
+
+Actions:
+* merged PR #3, created branch phase4/frontend-workflows from origin/main (e253d13)
+* added frontend/src/features/workspace/workspace-workflow.js and workspace-workflow.test.js
+* added frontend/src/features/workspace/workspace-reducer.test.js, frontend/src/features/collections/collection-edit.test.js, frontend/src/features/history/history-replay.test.js
+* fixed frontend/src/features/workspace/workspace-reducer.js (draft/inspect, draft/saved identity, collection/reconciled)
+* fixed frontend/src/App.jsx (save/reload targeting, orphan request save, execution release on close/profile switch, profile-switch confirmation, keyboard close and focus, beforeunload, reconciling cancel, history result target, liveResult dead state)
+* fixed frontend/src/features/workspace/useExecutionReconciliation.js (clearAllTimers)
+* fixed frontend/src/features/workspace/WorkspaceDialogs.jsx (reload tab target, switch-profile dialog)
+* ran bun test (188 pass, 1 skip, 0 fail), frontend bun run build, backend node --check, 26/26 CDP browser checks at 375/768/1024/1440
+
+Context:
+tool=opencode
+branch=phase4/frontend-workflows
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=main
+parent_agent=none
+
+## [2026-09-20T22:00:29+05:30] Continue phase 4 verification and evidence
+
+User Prompt (normalized, secrets redacted):
+Continue the current authorized phase from the latest verified checkpoint.
+
+Agent Response Summary:
+Continued the Phase 4 run: completed the browser workflow script, fixed the test harness selectors (active-tab scoping for dirty markers, native dialog element instead of role=dialog, roving-focus assertion), and reached 26/26 passing checks covering sign-in, send-without-persist, independent tab drafts/results, save-without-send, keyboard close and focus, history inspect/reopen/save-as isolation, external revision bump -> CAS 409 conflict with recoverable edits, deleted source request -> save-as instead of false success, profile-switch confirmation, and closing a running tab. Confirmed via the history API that the closed running send was recorded as cancelled, then re-seeded the canonical demo data and re-ran the full gate.
+
+Actions:
+* ran 26/26 browser checks and captured screenshots at 375/768/1024/1440
+* verified cancelled execution via GET /api/v1/history (cancelled, delay/8000)
+* re-ran bun run seed to restore canonical data
+* re-ran bun test (188 pass, 0 fail), frontend build, backend node --check
+
+Context:
+tool=opencode
+branch=phase4/frontend-workflows
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=main
+parent_agent=none
+
+## [2026-09-20T22:03:37+05:30] Phase 4 commit, PR, and CI
+
+User Prompt (normalized, secrets redacted):
+Continue the current authorized phase from the latest verified checkpoint.
+
+Agent Response Summary:
+Committed the Phase 4 fixes and tests as a94f8da on phase4/frontend-workflows, pushed the branch, and opened PR #4 against main. The existing Baseline Gate workflow passed (contract, 44s) on the first run, and the dev servers started for browser checks were stopped, leaving a clean git status.
+
+Actions:
+* git commit a94f8da "Fix frontend workflow state ownership and add regression tests"
+* git push -u origin phase4/frontend-workflows
+* gh pr create -> https://github.com/Sathvikar01/coderepo-react-node-postman/pull/4
+* gh pr checks 4 -> contract pass (Baseline Gate)
+* stopped local backend/frontend dev servers; verified ports 3000/80
