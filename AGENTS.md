@@ -658,7 +658,7 @@ As of the Phase 30 assignment:
 - Phase **28: MERGED** as `0a630e2` (Flight Recorder Acceptance).
 - Phase **29: MERGED** as `ba412ff` (Product UI/UX Polish).
 - Phase **29 owns presentation**: it is frontend-wide and overlaps every frontend feature path, so it merges before other frontend phases rebase; it adds no capability and changes no contract.
-- Phase **30: ACTIVE** on `phase30/ui-rebuild-rescue`, based on latest `main` at `5bff668`; it owns the complete frontend rebuild while preserving all behavior and contracts. The reporting handoff is documented in `docs/phase30/ui-rebuild-rescue-report.md` and `design/audit.md`.
+- Phase **30: COMPLETE / MERGED** as `a72ccb6` (UI/UX rebuild + browser E2E + Locust verification).
 - Phases **10 and 23: INACTIVE** and must not be resumed as part of Phase 30.
 - Phase **13: MERGED** as `e75d306` (Collection Runner).
 - Phase **14: MERGED** as `bfcd441` (Headless CLI).
