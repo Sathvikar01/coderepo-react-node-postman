@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
 	capsuleDraftRequest,
+	capsuleDraftTab,
 	contractBadge,
 	groupComparisonChanges,
 	minimizationSummary,
@@ -15,10 +16,11 @@ describe("Flight Recorder view model", () => {
 				{ category: "target", path: "target.address" },
 				{ category: "source", path: "source.environmentRevision" },
 				{ category: "auth", path: "request.auth" },
+				{ category: "tests", path: "tests.counts" },
 			],
 		});
 
-		expect(groups.map((group) => group.category)).toEqual(["source", "auth", "target", "response"]);
+		expect(groups.map((group) => group.category)).toEqual(["source", "auth", "target", "response", "tests"]);
 		expect(groups[0].changes[0].path).toBe("source.environmentRevision");
 	});
 
@@ -39,6 +41,46 @@ describe("Flight Recorder view model", () => {
 
 		expect(request).toMatchObject({ id: "new-id", folderId: null, name: "Repro", method: "GET" });
 		expect(imported.draft).toMatchObject({ id: "old-id", folderId: "folder" });
+	});
+
+	test("opens capsule imports through the Phase 7 boundary as unsent dirty drafts", () => {
+		const imported = {
+			dirty: true,
+			autoSend: false,
+			autoSave: false,
+			draft: {
+				schemaVersion: 1,
+				id: "old-id",
+				folderId: null,
+				name: "Repro",
+				method: "POST",
+				urlTemplate: "{{base_url}}/orders",
+				query: [{ id: "11111111-1111-4111-8111-111111111111", key: "status", value: "paid", enabled: true }],
+				headers: [],
+				body: { mode: "json", text: '{"customer":"[REQUIRED_INPUT]"}' },
+				auth: { mode: "bearer", tokenTemplate: "{{orders_token}}" },
+				scripts: { preRequest: "", test: "" },
+				assertions: [],
+				settings: { timeoutMs: 5000 },
+			},
+		};
+		const tab = capsuleDraftTab(imported);
+
+		expect(tab).not.toBeNull();
+		expect(tab.dirty).toBe(true);
+		expect(tab.status).toBe("idle");
+		expect(tab.executionId).toBeNull();
+		expect(tab.request).toMatchObject({
+			name: "Repro",
+			method: "POST",
+			urlTemplate: "{{base_url}}/orders",
+			body: { mode: "json", text: '{"customer":"[REQUIRED_INPUT]"}' },
+			auth: { mode: "bearer", tokenTemplate: "{{orders_token}}" },
+		});
+		expect(tab.request.query.map((row) => [row.key, row.value])).toEqual([["status", "paid"]]);
+		expect(imported.draft).toMatchObject({ id: "old-id" });
+		expect(capsuleDraftTab({ ...imported, autoSend: true })).toBeNull();
+		expect(capsuleDraftTab({ ...imported, autoSave: true })).toBeNull();
 	});
 
 	test("summarizes running, completed, cancelled, and failed jobs", () => {
