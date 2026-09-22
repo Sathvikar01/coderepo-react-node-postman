@@ -1,6 +1,16 @@
 import { AppError } from "../../shared/errors/app-error.js";
 import { historyService } from "../history/history.service.js";
 import { compareReceipts } from "./run-comparison.js";
+import { buildReproCapsule, parseReproCapsule, serializeReproCapsule } from "./repro-capsule.js";
+
+function capsuleFilename(name) {
+	const slug = String(name ?? "request")
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "")
+		.slice(0, 64);
+	return `${slug || "request"}.repro.json`;
+}
 
 export function createExecutionIntelligenceService({ history = historyService } = {}) {
 	async function record(profileId, executionId) {
@@ -26,6 +36,24 @@ export function createExecutionIntelligenceService({ history = historyService } 
 				receipt(profileId, candidateExecutionId),
 			]);
 			return compareReceipts(base, candidate);
+		},
+		async exportCapsule(profileId, executionId, options = {}) {
+			const value = await record(profileId, executionId);
+			const capsule = buildReproCapsule(value, options);
+			return { filename: capsuleFilename(value.request?.name), text: serializeReproCapsule(capsule) };
+		},
+		importCapsule(text) {
+			const capsule = parseReproCapsule(text);
+			return {
+				draft: structuredClone(capsule.request),
+				dirty: true,
+				autoSend: false,
+				autoSave: false,
+				requiredInputs: capsule.requiredInputs,
+				predicate: capsule.predicate,
+				receiptSummary: capsule.receipt,
+				warnings: ["Review and provide every required input before sending this draft."],
+			};
 		},
 	};
 }

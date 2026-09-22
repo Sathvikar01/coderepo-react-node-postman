@@ -14,6 +14,13 @@ const comparisonSchema = z
 	});
 
 export const parseComparisonInput = (value) => comparisonSchema.parse(value);
+const capsuleExportSchema = z
+	.object({ executionId: executionIdSchema, includeResponseBody: z.boolean().default(false) })
+	.strict();
+const capsuleImportSchema = z.object({ text: z.string().min(1).max(600 * 1024) }).strict();
+
+export const parseCapsuleExportInput = (value) => capsuleExportSchema.parse(value);
+export const parseCapsuleImportInput = (value) => capsuleImportSchema.parse(value);
 
 export async function getExecutionReceipt(request, response, next) {
 	try {
@@ -34,6 +41,28 @@ export async function compareExecutionRuns(request, response, next) {
 				input.candidateExecutionId,
 			),
 		});
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function exportReproCapsule(request, response, next) {
+	try {
+		const input = parseCapsuleExportInput(request.body);
+		response.json({
+			data: await executionIntelligenceService.exportCapsule(request.profileId, input.executionId, {
+				includeResponseBody: input.includeResponseBody,
+			}),
+		});
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function importReproCapsule(request, response, next) {
+	try {
+		const input = parseCapsuleImportInput(request.body);
+		response.json({ data: executionIntelligenceService.importCapsule(input.text) });
 	} catch (error) {
 		next(error);
 	}
