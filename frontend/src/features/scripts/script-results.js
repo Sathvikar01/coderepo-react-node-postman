@@ -17,6 +17,20 @@ export function scriptTests(results) {
 	return Array.isArray(results?.tests) ? results.tests : [];
 }
 
+export function testStatusTone(status) {
+	if (status === "passed" || status === "failed" || status === "error") return status;
+	return "error";
+}
+
+export function testDiagnostics(test) {
+	if (!test) return null;
+	const expected = test.expected === undefined ? null : test.expected;
+	const actual = test.actual === undefined ? null : test.actual;
+	if (expected === null && actual === null && !test.kind) return null;
+	const location = test.kind ? `${test.kind}${test.path ? ` \u00b7 ${test.path}` : ""}` : null;
+	return { expected, actual, location };
+}
+
 export function scriptConsoleEntries(results) {
 	const entries = [];
 	for (const phase of [results?.preRequest, results?.postResponse]) {

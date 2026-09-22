@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { LIMITS, utf8Bytes } from "../../shared/utils/limits.js";
 import { MANAGED_TRANSPORT_HEADERS } from "../executions/request-compiler.js";
+import { assertionsDefinitionOf, evaluateAssertions } from "./assertions.js";
 import { runSandboxedScript } from "./sandbox.js";
 
 const HEADER_TOKEN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
@@ -142,6 +143,7 @@ export function composeScriptResults({ preRequest = null, postResponse = null, t
 	const counts = { passed: 0, failed: 0, errors: 0 };
 	for (const test of tests) {
 		if (test.status === "passed") counts.passed += 1;
+		else if (test.status === "error") counts.errors += 1;
 		else counts.failed += 1;
 	}
 	for (const phase of [preRequest, postResponse]) {
@@ -200,45 +202,53 @@ export function createScriptService({ sandbox = runSandboxedScript } = {}) {
 
 	function runPostResponse({ request, response, collection, environment, variables = null }) {
 		const definition = scriptDefinitionOf(request);
-		if (!definition.test.trim()) return { phase: null, tests: [], warnings: [] };
-		const scope = scriptVariableScopes(collection, environment);
-		const merged = { ...scope.merged };
-		if (variables) {
-			for (const [key, value] of variables) {
-				if (value === null) delete merged[key];
-				else merged[key] = String(value);
+		const assertions = assertionsDefinitionOf(request);
+		const hasScript = Boolean(definition.test.trim());
+		if (!hasScript && assertions.length === 0) return { phase: null, tests: [], warnings: [] };
+		const view = responseView(response);
+		const warnings = [];
+		let phase = phaseRecord("passed", null, null);
+		let tests = [];
+		if (hasScript) {
+			const scope = scriptVariableScopes(collection, environment);
+			const merged = { ...scope.merged };
+			if (variables) {
+				for (const [key, value] of variables) {
+					if (value === null) delete merged[key];
+					else merged[key] = String(value);
+				}
+			}
+			const outcome = sandbox({
+				source: definition.test,
+				phase: "test",
+				input: {
+					phase: "test",
+					request: requestView(request),
+					variables: merged,
+					collection: scope.collection,
+					environment: scope.environment,
+					response: view,
+				},
+			});
+			if (!outcome.ok) {
+				phase = phaseRecord("error", outcome.error, null);
+				warnings.push(phaseWarning("Test", outcome.error));
+			} else {
+				const scratch = new Map();
+				applyVariableWrites(scratch, outcome.output.variables, secretReferenceKeys(collection, environment), warnings);
+				phase = phaseRecord(outcome.error ? "error" : "passed", outcome.error, outcome.output);
+				if (outcome.error) warnings.push(phaseWarning("Test", outcome.error));
+				tests = outcome.output.tests;
 			}
 		}
-		const outcome = sandbox({
-			source: definition.test,
-			phase: "test",
-			input: {
-				phase: "test",
-				request: requestView(request),
-				variables: merged,
-				collection: scope.collection,
-				environment: scope.environment,
-				response: responseView(response),
-			},
-		});
-		if (!outcome.ok) {
-			return {
-				phase: phaseRecord("error", outcome.error, null),
-				tests: [],
-				warnings: [phaseWarning("Test", outcome.error)],
-			};
-		}
-		const warnings = [];
-		const scratch = new Map();
-		applyVariableWrites(scratch, outcome.output.variables, secretReferenceKeys(collection, environment), warnings);
-		const phase = phaseRecord(outcome.error ? "error" : "passed", outcome.error, outcome.output);
-		if (outcome.error) warnings.push(phaseWarning("Test", outcome.error));
-		return { phase, tests: outcome.output.tests, warnings };
+		tests = tests.concat(evaluateAssertions(assertions, view));
+		return { phase, tests, warnings };
 	}
 
 	function skippedPostResponse(request) {
 		const definition = scriptDefinitionOf(request);
-		if (!definition.test.trim()) return { phase: null, tests: [], warnings: [] };
+		if (!definition.test.trim() && assertionsDefinitionOf(request).length === 0)
+			return { phase: null, tests: [], warnings: [] };
 		return { phase: phaseRecord("skipped", null, null), tests: [], warnings: [] };
 	}
 

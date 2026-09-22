@@ -44,6 +44,10 @@ export const LIMITS = {
 	cookieBytes: 4096,
 	cookiePathBytes: 1024,
 	cookieHeaderBytes: 8 * 1024,
+	assertionsPerRequest: 50,
+	assertionName: 200,
+	assertionPathBytes: 1024,
+	assertionValueBytes: 4 * 1024,
 };
 
 export const utf8Bytes = (value) => Buffer.byteLength(String(value ?? ""), "utf8");

@@ -10,9 +10,10 @@
 // workspace fails closed because the workspace cannot represent semantics it
 // does not understand.
 //
-// Assertions (Phase 12) are not applied here. They come back in `deferred`
-// keyed by request id so the Phase 12 integration can attach them once
-// assertion semantics land.
+// Assertions. The portable envelope is mapped onto the Phase 12 request
+// assertion field before domain validation. Phase 12's request schema owns
+// assertion semantics and fails closed on anything it cannot represent; this
+// layer only carries the versioned envelope shape.
 
 import { z } from "zod";
 import { LIMITS } from "../../shared/utils/limits.js";
@@ -33,7 +34,9 @@ export function projectToDomain(project) {
 	const collections = parsed.collections.map((collection, index) => {
 		const applied = {
 			...collection,
-			requests: collection.requests.map(({ assertions, ...request }) => request),
+			requests: collection.requests.map((request) =>
+				request.assertions === undefined ? request : { ...request, assertions: request.assertions.items },
+			),
 		};
 		const valid = collectionAggregateSchema.safeParse(applied);
 		if (!valid.success)
@@ -54,13 +57,5 @@ export function projectToDomain(project) {
 		return valid.data;
 	});
 
-	const deferred = {
-		assertions: parsed.collections.flatMap((collection) =>
-			collection.requests
-				.filter((request) => request.assertions !== undefined)
-				.map((request) => ({ requestId: request.id, contract: request.assertions.contract, items: request.assertions.items })),
-		),
-	};
-
-	return { collections, environments, examples: parsed.examples, deferred };
+	return { collections, environments, examples: parsed.examples };
 }
