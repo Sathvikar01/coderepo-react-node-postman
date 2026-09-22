@@ -37,9 +37,25 @@ import {
 process.env.MONGODB_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/request_desk_cli_test";
 process.env.EXECUTION_FINGERPRINT_KEY = process.env.EXECUTION_FINGERPRINT_KEY || "phase14-cli-test-fingerprint-key-0123456789";
 process.env.JWT_SECRET = process.env.JWT_SECRET || "phase14-cli-test-jwt-secret";
-process.env.DEMO_CLI_TOKEN = process.env.DEMO_CLI_TOKEN || "cli-secret-token-value";
-process.env.SERVER_SECRET_ALIASES_JSON =
-	process.env.SERVER_SECRET_ALIASES_JSON || JSON.stringify([{ alias: "cli_token", env: "DEMO_CLI_TOKEN", profileIds: [] }]);
+// The alias map must be deterministic for this suite. Bun auto-loads backend/.env
+// (written by setup.sh with local_token/staging_token) when tests run inside
+// backend/, so a bare `||` fallback would leave `cli_token` unregistered and fail
+// the secret tests below with "Unknown variable: cli_token.". Force the token
+// value the assertions below expect, and merge the `cli_token` alias into any
+// ambient aliases instead of dropping them.
+process.env.DEMO_CLI_TOKEN = "cli-secret-token-value";
+const ambientAliases = (() => {
+	try {
+		const parsed = JSON.parse(process.env.SERVER_SECRET_ALIASES_JSON || "[]");
+		return Array.isArray(parsed) ? parsed : [];
+	} catch {
+		return [];
+	}
+})();
+process.env.SERVER_SECRET_ALIASES_JSON = JSON.stringify([
+	...ambientAliases.filter((entry) => entry?.alias !== "cli_token"),
+	{ alias: "cli_token", env: "DEMO_CLI_TOKEN", profileIds: [] },
+]);
 
 beforeAll(() => {
 	initConfig();
