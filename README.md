@@ -45,18 +45,32 @@ bun run demo:flight-recorder
 │       │   ├── profiles/        # Profiles and per-profile preferences
 │       │   ├── collections/     # Versioned collection aggregates and requests
 │       │   ├── environments/    # Named environments and secret references
-│       │   ├── executions/      # Compiler, target policy, transport, capture
-│       │   ├── history/         # Execution receipts, history, retention
+│       │   ├── executions/      # Compiler, policy, transport, capture, normalization
+│       │   ├── history/         # Immutable execution history and receipts
+│       │   ├── collection-runner/ # Ordered bounded collection/folder runs
+│       │   ├── cli/             # Headless runner and CI-facing CLI
+│       │   ├── cookies/         # Profile-scoped cookie jar
+│       │   ├── examples/        # Saved response examples
+│       │   ├── mocks/           # Deterministic mock matching/routes
+│       │   ├── scripts/         # Sandboxed scripts and assertions
+│       │   ├── local-runtime/   # Explicit local/private target approvals
+│       │   ├── projects/        # Portable TracerProjectV1 model
+│       │   ├── git-native/      # Deterministic multi-file project layout
+│       │   ├── execution-intelligence/ # Passport, compare, minimize, capsules
 │       │   └── demo/            # Real local HTTP targets backed by MongoDB
-│       ├── scripts/seed.js      # Deterministic seeded baseline
+│       ├── scripts/             # Seed and repository utility scripts
 │       └── shared/              # Configuration, middleware, errors, utilities
 ├── frontend/
-│   ├── src/features/            # Product views: requests, collections, environments, history
+│   ├── src/features/            # Workspace, Runner, Flight Recorder, docs, mocks, cookies, etc.
 │   ├── src/shared/              # API client, reusable controls, formatting
 │   └── public/                  # Local static assets
-├── examples/ci/                  # Deterministic CI demo: target server, project, and script
+├── examples/ci/                 # Deterministic CLI/CI proof fixtures
+├── docs/                        # Product/design implementation notes
 ├── skills/validate/             # Acceptance validator
-└── transcript exports live in /transcripts at submission
+├── hackerrank.yml               # HackerRank install/run and packaging contract
+├── package.json                 # Bun workspace scripts
+├── setup.sh                     # Safe local setup/reset/start entry point
+└── transcripts/                 # Exported AI transcripts added at submission time
 ```
 
 Every backend domain keeps routes, controllers, services, repositories, and models separate. Controllers validate with Zod and map HTTP; services own the rules; repositories are the only code that queries MongoDB.
