@@ -68,6 +68,7 @@ describe("bounded failure minimization", () => {
 
 		expect(result.probesUsed).toBe(3);
 		expect(result.budgetExhausted).toBe(true);
+		expect(result.minimality).toBe("budget_limited");
 	});
 
 	test("rejects an unstable baseline before changing the request", async () => {
@@ -108,5 +109,78 @@ describe("bounded failure minimization", () => {
 		expect(matchesFailurePredicate(result, { type: "status", equals: 422 })).toBe(true);
 		expect(matchesFailurePredicate(result, { type: "assertion", assertionId: "assert-a" })).toBe(true);
 		expect(matchesFailurePredicate(result, { type: "assertion", assertionId: "assert-b" })).toBe(false);
+	});
+
+	test("eliminates removable groups before singletons and records the probe trace", async () => {
+		const extras = Array.from({ length: 8 }, (_, index) => row(`extra-${index}`));
+		const result = await minimizeFailure({
+			request: request({ query: [...extras, row("keep-query")], headers: [], body: { mode: "none" } }),
+			maxProbes: 12,
+			probe: async (candidate) => ({
+				outcome: "response",
+				response: { status: candidate.query.some((item) => item.key === "keep-query") ? 500 : 200 },
+				scriptResults: null,
+			}),
+			predicate: { type: "status", equals: 500 },
+		});
+
+		expect(result.minimality).toBe("one_minimal");
+		expect(result.remainingComponentCount).toBe(1);
+		expect(result.removed).toHaveLength(8);
+		expect(result.probesUsed).toBeLessThanOrEqual(7);
+		expect(result.probeTrace).toHaveLength(result.probesUsed);
+		expect(result.probeTrace[0]).toMatchObject({ phase: "baseline", removals: [], matched: true });
+		expect(result.probeTrace.some((entry) => entry.phase === "group" && entry.removals.length > 1)).toBe(true);
+		expect(result.probeTrace.at(-1)).toMatchObject({ phase: "verify", matched: true });
+	});
+
+	test("minimizes nested JSON bodies coarse to fine", async () => {
+		const result = await minimizeFailure({
+			request: request({
+				query: [],
+				headers: [],
+				body: { mode: "json", text: JSON.stringify({ drop: { deep: 1, deeper: [2] }, keep: { deep: 2 } }) },
+			}),
+			probe: async (candidate) => {
+				const json = JSON.parse(candidate.body.text);
+				return { outcome: "response", response: { status: json?.keep?.deep === 2 ? 500 : 200 }, scriptResults: null };
+			},
+			predicate: { type: "status", equals: 500 },
+		});
+
+		expect(result.minimality).toBe("one_minimal");
+		expect(JSON.parse(result.request.body.text)).toEqual({ keep: { deep: 2 } });
+		expect(result.removed.map((item) => item.key)).toEqual(["drop"]);
+		expect(result.remainingComponentCount).toBe(2);
+	});
+
+	test("removes duplicate-key rows individually by stable id", async () => {
+		const keepTag = row("tag", "keep");
+		const dropTag = row("tag", "drop");
+		const result = await minimizeFailure({
+			request: request({ query: [keepTag, dropTag], headers: [], body: { mode: "none" } }),
+			probe: async (candidate) => ({
+				outcome: "response",
+				response: { status: candidate.query.some((item) => item.value === "keep") ? 500 : 200 },
+				scriptResults: null,
+			}),
+			predicate: { type: "status", equals: 500 },
+		});
+
+		expect(result.request.query.map((item) => item.id)).toEqual([keepTag.id]);
+		expect(result.removed.map((item) => item.id)).toEqual([dropTag.id]);
+	});
+
+	test("reports inconclusive when the minimized request stops reproducing", async () => {
+		let calls = 0;
+		const result = await minimizeFailure({
+			request: request({ query: [row("maybe")], headers: [], body: { mode: "none" } }),
+			probe: async () => ({ outcome: "response", response: { status: (calls += 1) <= 2 ? 500 : 200 }, scriptResults: null }),
+			predicate: { type: "status", equals: 500 },
+		});
+
+		expect(result.minimality).toBe("inconclusive");
+		expect(result.budgetExhausted).toBe(false);
+		expect(result.probesUsed).toBeLessThan(12);
 	});
 });
