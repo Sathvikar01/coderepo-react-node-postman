@@ -5093,3 +5093,128 @@ Evidence:
 - bun test: 663 pass, 0 fail. Frontend tests 55 pass. vite build green. Caught + fixed a real bug: dialog sent goodExecutionId: null → backend 400s it; now omitted.
 - Demo reseeded, backend stopped, tree contains only intended files.
 Two honest caveats: no browser here, so responsive/keyboard/console-error checks rest on reused Phase 30-verified components + build (stated, not claimed); the CLI-test hang seen mid-session reproduces identically on pristine main (pre-existing environmental flake, out of scope — final full run passed it). Changes left uncommitted in the worktree — say the word if you want a commit/PR.
+
+
+## [2026-09-23] Append-only correction — Phase 36 transcript normalized to standard format
+
+Correction note:
+The immediately preceding Phase 36 entry preserved the raw user-provided agent report but did not normalize it into the transcript's standard User Prompt → Agent Response Summary → Actions → Context structure. Per the append-only rule, the earlier entry is left untouched and this correction supplies the normalized record without rewriting history.
+
+User Prompt (verbatim, secrets redacted):
+# PHASE 36 — Investigation UX / Make the Difference Obvious
+
+Branch:
+`phase36/investigation-ux`
+
+Worktree:
+`../postman-p36`
+
+Dependency:
+Phase 35 merged.
+
+Goal:
+
+A reviewer should understand within roughly one minute that Tracer is NOT merely a Postman clone.
+
+Do not redesign the whole application again.
+
+Use the existing Phase 30 UI.
+
+Add a first-class investigation workflow.
+
+On a failed request/result expose a prominent:
+
+`Investigate failure`
+
+entry point.
+
+Also expose it from relevant History / Runner failure surfaces.
+
+Create one cohesive Investigation view using `InvestigationV1`.
+
+Information hierarchy:
+
+1. **What happened?**
+2. **When did it start?**
+3. **What changed?**
+4. **What was actually verified to cause it?**
+5. **What is the smallest reproducer?**
+6. **Does it reproduce reliably?**
+7. **Export reproduction capsule**
+
+Clearly separate:
+
+`Verified cause`
+
+from
+
+`Unverified differences`
+
+Never visually imply causality where backend evidence does not.
+
+Keep Passport / Compare / Minimize accessible for detailed inspection.
+
+Product wording should consistently reinforce:
+
+**Tracer — API Flight Recorder**
+
+and:
+
+`record → compare → isolate → reproduce`
+
+Do not turn the UI into marketing copy.
+
+No backend semantic changes unless fixing a proven integration defect.
+
+Verify:
+- failure → Investigate
+- history → Investigate
+- timeline
+- causal evidence
+- unverified evidence
+- minimization
+- reproducibility
+- capsule export/import
+- cancellation
+- loading/error/empty states
+- keyboard navigation
+- focus management
+- 375 / 768 / 1024 / 1440
+- light/dark
+- zero console errors
+- zero unintended overflow
+
+Run full frontend + repository gates.
+
+Finish:
+
+`PHASE 36 VERDICT: PASS — DIFFERENTIATOR VISIBLE`
+
+or BLOCKED.
+
+Agent Response Summary:
+Completed the Phase 36 investigation UX in `../postman-p36` on `phase36/investigation-ux`. Added prominent `Investigate failure` entry points for genuine failed workspace results, failed history rows, and failed Collection Runner steps; mocks and cancellations are excluded. Added a single `InvestigationDialog` over `InvestigationV1` with the required evidence hierarchy: what happened, regression timing, recorded changes, verified causes separated from unverified differences, smallest reproducer, reproducibility evidence, and capsule export, while keeping Passport / Compare / Minimize directly accessible. The header reinforces “Tracer — API Flight Recorder” and “record → compare → isolate → reproduce” while reusing existing Phase 30 recorder styling rather than adding a new visual system.
+
+The implementation was built against a byte-identical snapshot of the still-unmerged Phase 35 backend, which the agent explicitly reported as a dependency discrepancy rather than claiming Phase 35 was merged. One proven backend defect was also fixed: seed reset now clears Investigation records. During integration, the agent found and fixed a real frontend bug where the dialog sent `goodExecutionId: null`, causing a backend 400; the field is now omitted when unavailable.
+
+Validation reported 22/22 live investigation smoke checks, including a 204→404 regression boundary, comparison evidence, honest “no verified cause” handling, minimization, stable 2/2 reproduction, secret-free capsule export/import with `autoSend=false` and `autoSave=false`, cancellation, and validation/404 handling. Backend tests were 663 pass / 0 fail, frontend tests 55 pass, and the Vite build was green. The agent explicitly did NOT claim real browser verification: responsive, keyboard, focus, console-error, and overflow checks were not run in a browser in that environment and relied only on reused Phase 30 components plus a successful build. A CLI-test hang seen during the session reproduced on pristine main and the final full run passed. Changes were left uncommitted in the Phase 36 worktree.
+
+Actions:
+* added `Investigate failure` entry points to failed workspace results, failed history entries, and failed runner steps, gated to genuine failures
+* added a cohesive `InvestigationDialog` rendering `InvestigationV1` in the required evidence order
+* kept verified causes visually and semantically separate from unverified differences
+* kept Passport, Compare, and Minimize available from the investigation flow
+* reused existing Phase 30 recorder classes; added no new CSS
+* used the unmerged Phase 35 snapshot byte-identically and reported that dependency discrepancy explicitly
+* added Investigation cleanup to seed reset after the reset contract exposed the omission
+* fixed `goodExecutionId: null` being sent to the backend; the field is now omitted when unavailable
+* ran the reported 22/22 live smoke flow, 663 backend tests, 55 frontend tests, and Vite production build
+* did not claim browser/device/keyboard/console/overflow verification because no browser was available
+* left Phase 36 changes uncommitted in `../postman-p36`
+
+Context:
+branch=phase36/investigation-ux
+worktree=../postman-p36
+dependency_state=Phase 35 snapshot present but Phase 35 not yet merged
+commit_state=uncommitted
+reported_verdict=PHASE 36 VERDICT: PASS — DIFFERENTIATOR VISIBLE
