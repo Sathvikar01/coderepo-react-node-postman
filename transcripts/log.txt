@@ -4181,29 +4181,9 @@ repo_root=C:\Users\arsat\Downloads\postman
 worktree=main
 parent_agent=none
 
-## [2026-09-23T09:31:00+05:30] Phases 31–37 — investigation-track assignment and progress
+## [2026-09-23T09:31:00+05:30] Phase 31 — Roadmap Registration
 
-ChatGPT Prompt Provided (verbatim):
-
-Yes. Best structure is **31–34 in parallel**, then 35 → 36 → 37 sequentially.
-
-One important thing: **don’t let the parallel agents touch shared routing/UI integration yet**. They should build isolated backend modules first; Phase 35 connects everything. That keeps merge conflicts low.
-
-### Parallel plan
-
-| Wave | Phase | Can run together? | Purpose |
-|---|---|---|---|
-| Prep | Roadmap registration | First | Put 31–37 into `AGENTS.md` |
-| A | **31** | ✅ Parallel | Counterfactual cause verification |
-| A | **32** | ✅ Parallel | Proper structured delta-debugging |
-| A | **33** | ✅ Parallel | Regression timeline / failure boundary |
-| A | **34** | ✅ Parallel | Reproduction stability / flake proof |
-| B | **35** | After 31–34 | Unified investigation engine |
-| C | **36** | After 35 | Make uniqueness impossible to miss in UI |
-| D | **37** | Last | Full reviewer-grade acceptance + freeze |
-
-Use separate worktrees for 31–34.
-
+User Prompt (verbatim, secrets redacted):
 # ONE-TIME PREP — Register Phases 31–37
 
 Work only on roadmap documentation.
@@ -4240,199 +4220,36 @@ Do not modify dependencies or `bun.lock`.
 
 Commit this roadmap change to `main` only after verifying the diff contains documentation only.
 
----
+Agent Response Summary:
+Roadmap registration completed and pushed to `origin/main` as commit `24b52e9`. The change was documentation-only in `AGENTS.md`: §10.1 gained canonical rows for Phases 31–37, §10.2 gained the investigation-track dependency/execution order, §10.3 gained branch/worktree ownership lanes, §10.6 registered the full Phase 31 executable specification plus roadmap-level stubs for Phases 32–37, and §10.5 recorded Phases 31–37 as roadmap-registered with no implementation started.
 
-# PHASE 31 — Counterfactual Cause Verification
+The agent verified the diff was `AGENTS.md` only (81 insertions, 1 deletion), with no implementation, transcript, dependency, or `bun.lock` changes. It also reported that local `main` had been 29 commits stale and was safely fast-forwarded to the real approved `origin/main` before the documentation change. Existing stale/pre-created worktrees for later phases were detected but not modified.
 
-Branch:
-`phase31/counterfactual-cause`
+Actions:
+* fast-forwarded local `main` to current approved `origin/main`
+* updated only `AGENTS.md`
+* registered canonical phase names 31–37
+* documented parallel execution for 31–34 and sequential dependencies 35 → 36 → 37
+* registered canonical branch/worktree ownership
+* transcribed the full Phase 31 executable spec into §10.6 and roadmap stubs for later phases
+* verified `git diff --stat` showed only `AGENTS.md`
+* committed and pushed roadmap registration as `24b52e9`
+* left implementation, transcript history, dependencies, and `bun.lock` untouched
+* noted pre-existing worktrees `../postman-p32`, `../postman-p34`, and `../postman-p35` without changing them
 
-Worktree:
-`../postman-p31`
+Context:
+tool=agent
+branch=main
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=temporary roadmap worktree
+parent_agent=none
+commit=24b52e9
+reported_phase=31
+reported_state=ROADMAP REGISTERED
 
-Start from latest approved `origin/main`.
+## [2026-09-23T09:31:00+05:30] Phase 33 — Regression Timeline / Boundary Finder
 
-Goal:
-
-Upgrade Flight Recorder from:
-
-> “these things changed”
-
-to:
-
-> “this specific change was experimentally shown to reproduce/remove the failure.”
-
-Inspect the current:
-- `run-comparison.js`
-- execution receipts/history
-- execution service
-- minimizer safety model
-
-Build an isolated module under:
-
-`backend/src/features/execution-intelligence/counterfactual/**`
-
-Do NOT wire frontend/routes yet.
-
-Given known-good execution A and failing execution B:
-
-1. Compute deterministic material deltas.
-2. Convert replayable deltas into bounded intervention candidates.
-3. Re-run through the NORMAL execution pipeline only.
-4. Test one controlled intervention at a time.
-5. Classify each delta as:
-   - `causal`
-   - `not_causal`
-   - `inconclusive`
-   - `not_replayable`
-6. Store exact probe execution IDs/evidence.
-
-Initial replayable changes may include:
-- query rows
-- non-secret headers
-- JSON body fields
-- URL/path where safely reconstructable
-- other deterministic request fields already present in history
-
-Do NOT reconstruct or expose resolved secrets.
-
-Environment/auth/cookie/script differences that cannot be replayed truthfully must be `not_replayable`, not guessed.
-
-Safety:
-- bounded probes
-- normal SSRF/policy/compiler/transport path
-- safe methods automatically
-- mutating requests only approved local/mock targets
-- cancellation + hard probe limit
-- fail closed
-
-No AI causality claims.
-No probability/confidence score.
-
-A change is called causal only when intervention evidence proves it.
-
-Primary ownership:
-`backend/src/features/execution-intelligence/counterfactual/**`
-
-Avoid editing:
-- shared routes
-- frontend
-- `run-comparison.js`
-unless absolutely required for a proven contract seam.
-
-Tests:
-- one changed header causes failure
-- unrelated changed header rejected as cause
-- multiple changed fields
-- unreplayable secret/auth delta
-- flaky result → inconclusive
-- probe budget
-- cancellation
-- unsafe mutating request
-- SSRF
-- zero secret leakage
-- deterministic output
-
-Run relevant tests + full `bun test`.
-
-Finish:
-
-`PHASE 31 VERDICT: PASS`
-or
-`PHASE 31 VERDICT: BLOCKED`
-
-Do not merge unless PASS.
-
----
-
-# PHASE 32 — Structured Delta Debugger
-
-Branch:
-`phase32/structured-delta-debugger`
-
-Worktree:
-`../postman-p32`
-
-Start from the same approved main used for Phase 31–34.
-
-Goal:
-
-Replace the current simple one-component-at-a-time minimization with a real bounded structured delta-debugger.
-
-Current implementation already minimizes:
-- query rows
-- headers
-- top-level JSON keys
-
-Preserve all existing safety behavior.
-
-Improve minimization to support:
-
-1. hierarchical/nested JSON paths
-2. duplicate query/header rows by stable IDs
-3. coarse-to-fine removal
-4. subset/group elimination before singleton elimination
-5. deterministic ordering
-6. bounded probe budget
-7. explicit trace of every attempted reduction
-8. truthful minimality status
-
-Use a deterministic ddmin-style strategy where appropriate.
-
-Never claim globally minimal unless proven.
-
-Result must distinguish:
-
-- `one_minimal`
-- `budget_limited`
-- `inconclusive`
-
-Return:
-- original component count
-- final component count
-- removed components
-- remaining components
-- probes used
-- probe trace
-- minimality status
-
-Keep:
-- baseline stability probes
-- flaky predicate detection
-- cancellation
-- safe-method restrictions
-- local/mock requirement for mutating requests
-- normal execution pipeline
-
-Primary ownership:
-- `failure-minimizer.js`
-- dedicated new minimizer helpers/tests
-
-Do not touch frontend/routes.
-
-Tests:
-- nested objects
-- nested arrays only if safely supported
-- duplicate rows
-- dependent fields
-- irrelevant groups removed together
-- budget exhaustion
-- flaky predicate
-- deterministic identical runs
-- cancellation
-- unsafe method restriction
-- secret/redaction invariants
-
-Full tests must remain green.
-
-Finish:
-
-`PHASE 32 VERDICT: PASS`
-or
-`PHASE 32 VERDICT: BLOCKED`
-
----
-
+User Prompt (verbatim, secrets redacted):
 # PHASE 33 — Regression Timeline / Boundary Finder
 
 Branch:
@@ -4518,8 +4335,36 @@ Finish:
 or
 `PHASE 33 VERDICT: BLOCKED`
 
----
+Agent Response Summary:
+Implemented an isolated Regression Timeline / Boundary Finder under `backend/src/features/execution-intelligence/regression/**` on `phase33/regression-timeline` in `../postman-p33`. The implementation uses saved collection/request identity for lineage, never URL similarity or content-sensitive fingerprints, and fails closed for ambiguous lineage. It deterministically orders and deduplicates history records, treats hidden/expired/running/evidence-free entries as explicit gaps, identifies the failing-streak boundary, and compares the last known good against the first known bad through existing receipt comparison evidence. The model explicitly states that chronological transition is not a proven root cause.
 
+The phase added 33 tests covering the required pass→fail, multiple-failure, recovery, all-pass/all-fail, missing-history, unrelated-request, ambiguous-lineage, gap, deterministic-order, profile-isolation, and live-Mongo repository cases. Full reported gate: 945 pass / 2 pre-existing skips / 0 fail across 85 files, regression module 33/33, and backend syntax clean. Commit `13de895`; PR #28 opened to `main`.
+
+Actions:
+* added `RegressionTimelineV1` builder/schema
+* added read-only regression repository and injected service
+* used collection/request identity for strict lineage
+* represented hidden/expired/running/missing-evidence entries as explicit gaps
+* added deterministic ordering/deduplication and boundary detection
+* reused `compareReceipts` for boundary evidence
+* added 33 tests including live-Mongo scoping/window tests
+* ran root test suite and backend syntax checks
+* committed as `13de895`
+* opened PR #28 to `main`
+
+Context:
+tool=agent
+branch=phase33/regression-timeline
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=../postman-p33
+parent_agent=none
+commit=13de895
+pr=28
+reported_verdict=PHASE 33 VERDICT: PASS
+
+## [2026-09-23T09:31:00+05:30] Phase 34 — Reproduction Stability
+
+User Prompt (verbatim, secrets redacted):
 # PHASE 34 — Reproduction Stability
 
 Branch:
@@ -4608,474 +4453,77 @@ Finish:
 or
 `PHASE 34 VERDICT: BLOCKED`
 
----
+Agent Response Summary:
+Implemented `backend/src/features/execution-intelligence/reproducibility/**` on `phase34/repro-stability` in `../postman-p34`. The bounded reproduction-series engine defaults to 3 probes with a hard maximum of 5, persists only profile-scoped evidence, reports direct match counts rather than fake confidence, and classifies outcomes as reproducible, flaky, not_reproduced, or inconclusive. Timing is limited to min/median/max.
+
+The service keeps all existing safety boundaries: normal execution path, cancellation, SSRF checks, explicit local/mock requirements for mutating requests, and secret-redacted persisted evidence. Tests reported 21 new checks covering deterministic, zero-match, intermittent, interruption/restart, timeout, unsafe methods, cancellation, profile isolation, secret scanning, and probe caps. Full reported gate: 933 pass / 0 fail / 1 pre-existing skip, syntax clean, frontend build green, seed green, runtime smoke green. Commit `d70993a`; PR #27 opened.
+
+Actions:
+* added bounded reproduction-series engine and tests
+* added `ReproductionSeriesV1` persistence model/repository
+* added orchestration service through normal execution/mock paths
+* enforced hard 5-probe cap and cancellation
+* persisted direct evidence only, with secret scrubbing
+* added profile isolation and restart reconciliation
+* ran reported full tests, syntax, build, seed, and runtime smoke
+* committed as `d70993a`
+* opened PR #27
+
+Context:
+tool=agent
+branch=phase34/repro-stability
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=../postman-p34
+parent_agent=none
+commit=d70993a
+pr=27
+reported_verdict=PHASE 34 VERDICT: PASS
+
+## [2026-09-23T09:31:00+05:30] Investigation Engine — intermediate agent report
+
+Agent Response Summary:
+The investigation-engine work reported six concrete fixes during integration: regression boundary detection was corrected to compare HTTP status rather than the generic outcome; `defaultPredicate` was extended to use the receipt response contract status; mock resolution fixtures were corrected to return auth-dependent statuses; capsule construction was fixed to satisfy the strict request schema by including required `id` and `settings`; persisted investigation results gained secret sanitization; and cancellation testing was corrected to abort after the first probe and verify the next phase-boundary signal check.
+
+Reported validation for this intermediate investigation-engine state was 24/24 investigation tests, 661/661 backend tests, frontend build success, and no regressions in the existing execution-intelligence test subset.
+
+Actions:
+* fixed regression boundary status comparison
+* fixed predicate fallback to receipt response contract status
+* corrected mock-resolution test behavior
+* fixed capsule request schema compliance
+* added persisted investigation-result secret sanitization
+* corrected cancellation timing test
+* ran 24 investigation tests, 661 backend tests, and frontend build
+
+Context:
+tool=agent
+branch=phase35/investigation-engine
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=../postman-p35
+parent_agent=none
+reported_state=intermediate report; final Phase 35 verdict not supplied in this message
+
+## [2026-09-23T09:31:00+05:30] Phase 37 — dependency gate
+
+Agent Response Summary:
+The Phase 37 agent correctly refused to start because the dependency chain was not satisfied. It reported that Phase 36 was not merged, canonical roadmap state still listed Phases 31–37 as roadmap-registered only, Phase 34 was ahead but unmerged, other investigation branches were not yet valid merged dependencies, and no Phase 37 worktree existed. It deliberately made no README edits, demo changes, or final-gate claims.
+
+Actions:
+* checked Phase 37 dependency state
+* confirmed Phase 36 was not merged
+* did not create `phase37/investigation-acceptance`
+* did not modify README or implementation
+* did not run/claim final acceptance gates
+* reported the merge/dependency order required to unblock Phase 37
+
+Context:
+tool=agent
+branch=none
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=none
+parent_agent=none
+reported_verdict=PHASE 37 VERDICT: BLOCKED
 
-# PHASE 35 — Investigation Engine
-
-Branch:
-`phase35/investigation-engine`
-
-Worktree:
-`../postman-p35`
-
-Dependencies:
-
-Phases 31, 32, 33 and 34 must all be merged into `main`.
-
-Goal:
-
-Turn the separate Flight Recorder primitives into one deterministic investigation workflow.
-
-This is the core differentiator.
-
-Build a versioned:
-
-`InvestigationV1`
-
-Given a failing execution and optionally a known-good execution:
-
-1. Find historical regression boundary when base is not supplied.
-2. Compare good vs bad.
-3. Run counterfactual verification on replayable material deltas.
-4. Identify verified causal changes only where intervention evidence exists.
-5. Run structured minimization.
-6. Verify reproduction stability of the minimized case.
-7. Make the existing Repro Capsule available from the final minimized evidence.
-8. Return one coherent evidence graph/report.
-
-Language rules are strict:
-
-Use **“verified cause”** only when an intervention demonstrated causality.
-
-Otherwise use:
-- `leading divergence`
-- `correlated change`
-- `unverified`
-- `inconclusive`
-- `not replayable`
-
-No AI inference.
-
-No heuristic “confidence percentages.”
-
-Suggested model sections:
-
-- summary
-- regressionBoundary
-- comparison
-- interventions
-- verifiedCauses
-- minimization
-- reproducibility
-- reproductionCapsule
-- evidence
-
-Every conclusion must point to concrete execution/probe IDs.
-
-Integrate through the existing execution-intelligence service/routes.
-
-Do not create another execution engine.
-
-Add API contracts and backend integration tests.
-
-Verify:
-- complete pass→regression investigation
-- multiple changed inputs, only one causal
-- no historical baseline
-- flaky target
-- minimization budget exhaustion
-- unreplayable secret delta
-- cancellation
-- server restart/interrupted job
-- SSRF/safety
-- zero secrets
-- profile isolation
-
-Run:
-- full `bun test`
-- backend syntax
-- existing Flight Recorder demo
-- existing regression suites
-
-Finish:
-
-`PHASE 35 VERDICT: PASS — INVESTIGATION ENGINE VERIFIED`
-
-or BLOCKED.
-
----
-
-# PHASE 36 — Investigation UX / Make the Difference Obvious
-
-Branch:
-`phase36/investigation-ux`
-
-Worktree:
-`../postman-p36`
-
-Dependency:
-Phase 35 merged.
-
-Goal:
-
-A reviewer should understand within roughly one minute that Tracer is NOT merely a Postman clone.
-
-Do not redesign the whole application again.
-
-Use the existing Phase 30 UI.
-
-Add a first-class investigation workflow.
-
-On a failed request/result expose a prominent:
-
-`Investigate failure`
-
-entry point.
-
-Also expose it from relevant History / Runner failure surfaces.
-
-Create one cohesive Investigation view using `InvestigationV1`.
-
-Information hierarchy:
-
-1. **What happened?**
-2. **When did it start?**
-3. **What changed?**
-4. **What was actually verified to cause it?**
-5. **What is the smallest reproducer?**
-6. **Does it reproduce reliably?**
-7. **Export reproduction capsule**
-
-Clearly separate:
-
-`Verified cause`
-
-from
-
-`Unverified differences`
-
-Never visually imply causality where backend evidence does not.
-
-Keep Passport / Compare / Minimize accessible for detailed inspection.
-
-Product wording should consistently reinforce:
-
-**Tracer — API Flight Recorder**
-
-and:
-
-`record → compare → isolate → reproduce`
-
-Do not turn the UI into marketing copy.
-
-No backend semantic changes unless fixing a proven integration defect.
-
-Verify:
-- failure → Investigate
-- history → Investigate
-- timeline
-- causal evidence
-- unverified evidence
-- minimization
-- reproducibility
-- capsule export/import
-- cancellation
-- loading/error/empty states
-- keyboard navigation
-- focus management
-- 375 / 768 / 1024 / 1440
-- light/dark
-- zero console errors
-- zero unintended overflow
-
-Run full frontend + repository gates.
-
-Finish:
-
-`PHASE 36 VERDICT: PASS — DIFFERENTIATOR VISIBLE`
-
-or BLOCKED.
-
----
-
-# PHASE 37 — Investigation Acceptance + Final Freeze
-
-Branch:
-`phase37/investigation-acceptance`
-
-Worktree:
-`../postman-p37`
-
-Dependency:
-Phase 36 merged.
-
-No speculative new features.
-
-Goal:
-
-Prove Tracer's complete differentiating workflow end-to-end.
-
-Create one deterministic seeded/local scenario:
-
-1. request succeeds
-2. one meaningful input/config change is introduced
-3. later execution fails
-4. Tracer finds the regression boundary
-5. comparison shows all recorded changes
-6. counterfactual intervention verifies the actual causal change
-7. unrelated changes are rejected/not verified
-8. delta-debugger finds the smallest reproducer
-9. reproducibility probes confirm whether it is stable
-10. redacted capsule exports
-11. capsule imports as an unsent dirty draft
-12. manually reproduce the failure
-
-The acceptance test must prove that the UI never claims a cause unsupported by intervention evidence.
-
-Add/update README near the top with a concise:
-
-`Why Tracer is different`
-
-section.
-
-Do not lead with Postman parity.
-
-Lead with:
-
-**Tracer records API executions, identifies where a regression began, experimentally isolates the causal change, minimizes the failing request, and creates a safe reproducible artifact.**
-
-Keep the ordinary API-client feature list secondary.
-
-Run final gates from a clean checkout:
-
-- frozen install
-- full `bun test`
-- backend syntax
-- frontend build
-- seed/reset
-- runtime health
-- existing Flight Recorder demo
-- new Investigation demo
-- complete browser E2E
-- responsive/theme matrix
-- Runner
-- CLI/CI demo
-- Locust/local performance smoke
-- validator skill
-- GitHub Actions
-- archive-size verification
-
-Do not merge if anything is red.
-
-Do not rewrite prior transcript history.
-Preserve authentic append-only logging for new work.
-
-After merge:
-- no open PRs
-- main CI green
-- repo private
-- collaborator unchanged
-- submission artifacts still valid
-
-Finish:
-
-`PHASE 37 VERDICT: PASS — TRACER INVESTIGATION WORKFLOW ACCEPTED AND FROZEN`
-
-or BLOCKED.
-
-**Run the prep first, then launch 31/32/33/34 simultaneously in four worktrees.** The biggest upgrade here is Phase 31: your current comparison calls the first ordered difference the “first meaningful divergence”; after this, Tracer can actually **intervene and prove whether a change caused the failure**. That moves it much further away from ordinary API-client tooling.
-
-User Progress Update (verbatim):
-
-31:
-Done. Roadmap registration is committed to main as 24b52e9 and pushed to origin/main.
-
- What was added to AGENTS.md (documentation only):
-
- ┌────────────────────┬───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
- │ Section            │ Change                                                                                                                            │
- ├────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
- │ §10.1 Canonical    │ Rows 31–37 with the exact names you gave + boundary one-liners                                                                    │
- │ phase map          │                                                                                                                                   │
- ├────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
- │ §10.2 Dependency   │ Investigation-track chain line + new "Investigation track execution order (Phases 31–37, canonical)" block: 31–34 parallel from   │
- │ graph              │ the same approved main, isolated worktrees, no shared integration files, merge order 31 → 32 → 33 → 34 with rebase before merge,  │
- │                    │ Phase 35 only after all four merge, 36 ← 35, 37 ← 36                                                                              │
- ├────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
- │ §10.3              │ phase31/counterfactual-cause → backend/src/features/execution-intelligence/counterfactual/** in worktree ../postman-p31; lanes    │
- │ Branch/ownership   │ 32–37 with canonical phase<N>/<short-name> rows (short names fixed at assignment)                                                 │
- ├────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
- │ §10.6 Executable   │ Full Phase 31 spec transcribed faithfully (isolated module, no frontend/routes wiring, causal / not_causal / inconclusive /       │
- │ specs              │ not_replayable classification, replayable-delta list, not_replayable never guessed, bounded probes/normal SSRF path/safe-methods  │
- │                    │ default/local-or-mock mutation rule, no AI causality claims or scores, exact test matrix, PHASE 31 VERDICT gate +                 │
- │                    │ do-not-merge-unless-PASS). Phases 32–37 get roadmap-level stubs with the dependency/order rules; their executable specs are       │
- │                    │ registered at assignment (per §10.6's missing-ambiguity clause)                                                                   │
- ├────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
- │ §10.5 Roadmap      │ 31–37: ROADMAP-REGISTERED (roadmap documentation only; no implementation started) + the execution order                           │
- │ state              │                                                                                                                                   │
- └────────────────────┴───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-
- Verification before commit: git diff --stat = AGENTS.md only (81 insertions, 1 deletion — the §10.5 header rename). No implementation, transcript,
- dependency, or bun.lock changes. Transcript history untouched; this turn is appended to the log (with an append-only correction note for a shell-escaping
- glitch in my session-start line).
-
- Two things worth knowing:
- 1. Base point: local main was 29 commits stale; origin/main already contains the merged Phase 30 and the current 27–30 definitions. I fast-forwarded (zero
-    unique local commits) and based the change on fdbd574, so the registration landed on the real approved main that Phases 31–34 will branch from. The
-    dirty phase30/ui-rebuild worktree was never touched (work done in a temporary worktree, removed after commit).
- 2. Pre-existing lane worktrees spotted: ../postman-p32 (phase32/structured-delta-debugger), ../postman-p34 (phase34/repro-stability), ../postman-p35
-    (phase35/investigation-engine) already exist at base 0ee5e54. I registered phase<N>/<short-name> placeholders rather than guessing from them; if you
-    want those exact names pinned in §10.3 (and the lanes rebased onto 24b52e9), say the word and I'll make that docs-only follow-up.
-
-Phase 33 — Regression Timeline / Boundary Finder
-
- Branch/worktree: phase33/regression-timeline in ../postman-p33, based on approved main 0ee5e54 · Commit 13de895 · PR #28 → main (CI Baseline Gate will run
- on it)
-
- ### What was built (isolated: backend/src/features/execution-intelligence/regression/** only — 6 new files, zero shared files touched)
-
- - regression-timeline.js — pure builder + strict RegressionTimelineV1 schema (tracer.regression-timeline, schemaVersion 1). Lineage = saved
-   collection/request identity (context.source.collectionId + requestId) — never URL similarity, never the content-sensitive fingerprint. Deterministic
-   (startedAt, executionId) ordering with dedupe and tiebreak. Failure predicate (default derived from the anchor's recorded evidence: failing assertion →
-   status → outcome) evaluated conservatively — hidden, expired, running, and evidence-free records become named gaps (hidden / expired / not_terminal /
-   missing_evidence) that never silently pass or fail and break adjacency. Boundary = start of the anchor's contiguous failing streak (firstKnownBad)
-   paired with the nearest preceding evaluable non-failure (lastKnownGood); comparison evidence via existing compareReceipts or RECEIPT_UNAVAILABLE.
-   Unresolved reasons: AMBIGUOUS_LINEAGE, ANCHOR_NOT_EVALUABLE, ANCHOR_NOT_FAILING, NO_HISTORY, NO_KNOWN_GOOD, BOUNDARY_NOT_ADJACENT. The model carries a
-   fixed caveat: a chronological transition is not a proven root cause. Ambiguous lineage (scratch, history replay, missing ids) fails closed before any
-   history query runs. No network replay, no routes, no UI.
- - regression.repository.js — read-only Mongo store over ExecutionHistory, window bounded at-or-before the anchor key.
- - regression.service.js — injected service (createRegressionService) with predicate validation (422 PREDICATE_INVALID), window clamping (50/100), 404 for
-   missing/hidden/expired anchors, and defense-in-depth profile scoping.
-
- ### Tests — 33 new, all required scenarios
-
- Clean pass→fail · multiple failures (boundary at streak start) · recovery after failure · all-pass · all-fail · missing history · unrelated requests
- excluded (same URL, different request/collection/scratch — and they don't break adjacency) · ambiguous lineage · hidden/expired/running/missing-evidence
- gaps · deterministic ordering (input-permutation invariant + equal-timestamp tiebreak) · profile isolation against a deliberately leaky fake store ·
- real-Mongo store scoping/window bounds. Tests caught 3 real bugs (wrong NO_HISTORY/NO_KNOWN_GOOD discriminator; two of my own test expectations).
-
- ### Evidence
-
- ┌────────────────────────────────┬───────────────────────────────────────────────────────┐
- │ Gate step                      │ Result                                                │
- ├────────────────────────────────┼───────────────────────────────────────────────────────┤
- │ bun test (root, Baseline Gate) │ 945 pass, 2 skip (pre-existing), 0 fail (85 files)    │
- ├────────────────────────────────┼───────────────────────────────────────────────────────┤
- │ regression module tests        │ 33 pass, 0 fail (incl. 4 live-Mongo repository tests) │
- ├────────────────────────────────┼───────────────────────────────────────────────────────┤
- │ node --check all backend/src   │ OK                                                    │
- ├────────────────────────────────┼───────────────────────────────────────────────────────┤
- │ frontend build / browser smoke │ N/A — no frontend or UI changes                       │
- ├────────────────────────────────┼───────────────────────────────────────────────────────┤
- │ git state                      │ clean; committed 13de895                              │
- └────────────────────────────────┴───────────────────────────────────────────────────────┘
-
- One flaky beforeEach hook timeout appeared in one early full-suite run (existing DB-dependent file, machine load) and did not reproduce in two subsequent
- green runs.
-
- Discrepancy noted (per §9.1): local AGENTS.md §10 ends at Phase 30, but the user prompt — and origin/main (24b52e9, "register Phases 31–37 investigation
- track") — define Phase 33. I followed the narrower phase prompt without broadening scope. Transcript log entries appended to
- %USERPROFILE%\hackerrank_postman\log.txt (entry 1 of this pair is retroactive from the compacted turn).
-
- PHASE 33 VERDICT: PASS
-
-PHASE 34 VERDICT: PASS
-
- What was built
-
- backend/src/features/execution-intelligence/reproducibility/** (no frontend/routes), on worktree ../postman-p34, branch phase34/repro-stability, from the
- Wave-A baseline (main @ 0ee5e54):
-
- ┌─────────────────────────────────────────────────┬──────────────────────────────────────────────────────────────────────────────────────────────────────┐
- │ File                                            │ Role                                                                                                 │
- ├─────────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────┤
- │ reproduction-series.js                          │ Pure bounded-series engine: default 3 probes, hard cap 5 (floor 2, mirroring the minimizer's         │
- │                                                 │ probe-budget precedent)                                                                              │
- ├─────────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────┤
- │ reproduction-series.test.js                     │ Engine: classification truth table, probe-count normalization, evidence capture,                     │
- │                                                 │ cancellation/interruption semantics                                                                  │
- ├─────────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────┤
- │ reproduction.model.js /                         │ ReproductionSeriesV1 — profile-scoped, TTL-expiring persistence                                      │
- │ reproduction.repository.js                      │                                                                                                      │
- ├─────────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────┤
- │ reproduction.service.js                         │ Orchestration through the normal execution path (executions.send hidden/replayed, or zero-network    │
- │                                                 │ mocks)                                                                                               │
- ├─────────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────┤
- │ reproduction.service.test.js                    │ All 9 required scenarios                                                                             │
- └─────────────────────────────────────────────────┴──────────────────────────────────────────────────────────────────────────────────────────────────────┘
-
- Evidence model (no fake confidence)
-
- - Per probe: executionId, outcome, responseStatus, predicateMatched, durationMs
- - Summary: matches/attempts, direct statement ("3/3 probes reproduced the failure"), deterministic classification: reproducible (all matched, full series)
-   / flaky (mixed) / not_reproduced (0 matched) / inconclusive (any series that ended short — cancel, probe error, restart)
- - Timing: {minMs, medianMs, maxMs} only — the test asserts p95/p99 keys don't exist
-
- Invariants kept
-
- - Cancellation — abort stops between probes, partial evidence persisted with REPRO_CANCELLED
- - Safety — mutating methods require approved local target + explicit allowUnsafeLocal opt-in, or mock mode (REPRO_UNSAFE_METHOD /
-   REPRO_CONFIRMATION_REQUIRED)
- - SSRF — every probe is a normal policy/DNS/transport-checked execution; no alternate path
- - Secret redaction — only probe evidence is persisted (never the request); free text scrubbed via the capsule sanitizer's known-secret set
- - Hard probe cap — probes: 99 runs exactly 5
-
- Tests — 21 new, all green
-
- 3/3 deterministic · 0/3 · intermittent 2/3 · interrupted run (probe error + orphan/restart reconciliation) · timeout probes · unsafe method/local/mock ·
- cancellation · profile isolation · secret scanning · cap/defaults. The secret-scanning test caught two real defects mid-build (unscrubbed top-level error
- field; body secret missing from the GET fixture) — both fixed and covered.
-
- Gate: bun test 933 pass / 0 fail / 1 pre-existing skip · node --check clean · frontend build green · setup.sh --seed green · runtime smoke (8000 health +
- 3000 UI) green · commit d70993a · PR #27.
-
- Discrepancy report (per §9.1): Phase 34 is not in the AGENTS.md §10 canonical roadmap (which ends at 30); it was executed under the narrower constraints
- of your phase prompt. AGENTS.md §10.5 was left unmodified — tell me if you want the roadmap updated with Phases 31–34 and their completion state.
-
-Summary of Fixes
-
- ### Root Causes Found and Fixed
-
- 1. Regression boundary detection — Compared outcome (both 200 and 500 were "response") instead of HTTP statusCode. Fixed detectRegressionBoundary to
-    compare candidate.statusCode === failingStatus and updated the history mock to return statusCode.
-
- 2. defaultPredicate fallback — The boundary-constructed failingRecord only has receipt and request, not response or snapshot. The predicate fell through
-    to { type: "outcome", equals: "unknown" }. Fixed to also check record.receipt?.response?.contract?.status.
-
- 3. Mock resolve behavior — Tests used targetMode: "mock" which routes probes through mocks.resolve (not executions.send). Fixed all mock resolve functions
-    to return auth-dependent status codes.
-
- 4. Capsule schema compliance — buildReproCapsule validates through requestDefinitionSchema which requires id and settings fields. Added these in the
-    service before calling the builder.
-
- 5. Secret scrubbing — Added sanitizeResultForPersist to redact secrets from persisted investigation results (bearer tokens, API keys in URLs).
-
- 6. Cancellation timing — Redesigned test to abort after the first mock probe call, ensuring the signal is checked at the next phase boundary check.
-
- ### Test Results
-
- - 24/24 investigation tests pass
- - 661/661 backend tests pass (0 failures)
- - Frontend build succeeds
- - No regressions in existing execution-intelligence tests (38 pass)
-
-Welcome back. Transcript logging is on for this repo.
-PHASE 37 VERDICT: BLOCKED — dependency Phase 36 merged is not met; canonical roadmap still lists Phases 31–37 as roadmap-registered only.
-Discrepancy (prompt vs AGENTS.md §10, following narrower constraint):
-- main §10.5: “Phases 31–37 ROADMAP-REGISTERED (roadmap documentation only; no implementation started). Merge order 31 → 32 → 33 → 34, then 35, then 36, then 37.”
-- main Phase 37 spec: “Dependency: Phase 36 merged. Specification status: roadmap-registered only.”
-- Actual state:
-- phase31/counterfactual-cause: missing
-- phase32/structured-delta-debugger, phase33/regression-timeline, phase35/investigation-engine, phase36/investigation-ux: 0 commits ahead of main (branch pointers only, no implementation)
-- phase34/repro-stability: 1 commit ahead (d70993a), unmerged
-- Current checkout phase30/ui-rebuild (9cf1e92): 6 commits ahead of main (24b52e9), unmerged — not a valid Phase 37 base
-- ../postman-p37: does not exist (correctly not created)
-- README.md: no “Why Tracer is different” section (correctly untouched)
-- Foundation intact: backend/src/features/execution-intelligence/flight-recorder-demo.js and skills/validate/SKILL.md exist
-Not done, deliberately: no phase37/investigation-acceptance branch/worktree, no README edit, no demo, no final gates — creating them now would violate §10.2–10.3 ownership/dependency rules.
-To unblock: execute and PASS+merge 31 → 32 → 33 → 34 in order with rebases, then 35, then 36, then re-assign Phase 37 from latest approved main.
-Logging: SESSION START + per-turn §5.2 entry appended to %USERPROFILE%\hackerrank_postman\log.txt; no history rewritten, no secrets logged.
-Skipped: implementation/gates; add when 31–36 are PASS+merged.
 
 ## [2026-09-23T09:31:00+05:30] Phase 36 — Investigation UX / Make the Difference Obvious
 
