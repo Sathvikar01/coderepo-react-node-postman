@@ -4247,6 +4247,132 @@ commit=24b52e9
 reported_phase=31
 reported_state=ROADMAP REGISTERED
 
+## [2026-09-23T11:12:00+05:30] Phase 32 — Structured Delta Debugger
+
+User Prompt (verbatim, secrets redacted):
+# PHASE 32 — Structured Delta Debugger
+
+Branch:
+`phase32/structured-delta-debugger`
+
+Worktree:
+`../postman-p32`
+
+Start from the same approved main used for Phase 31–34.
+
+Goal:
+
+Replace the current simple one-component-at-a-time minimization with a real bounded structured delta-debugger.
+
+Current implementation already minimizes:
+- query rows
+- headers
+- top-level JSON keys
+
+Preserve all existing safety behavior.
+
+Improve minimization to support:
+
+1. hierarchical/nested JSON paths
+2. duplicate query/header rows by stable IDs
+3. coarse-to-fine removal
+4. subset/group elimination before singleton elimination
+5. deterministic ordering
+6. bounded probe budget
+7. explicit trace of every attempted reduction
+8. truthful minimality status
+
+Use a deterministic ddmin-style strategy where appropriate.
+
+Never claim globally minimal unless proven.
+
+Result must distinguish:
+
+- `one_minimal`
+- `budget_limited`
+- `inconclusive`
+
+Return:
+- original component count
+- final component count
+- removed components
+- remaining components
+- probes used
+- probe trace
+- minimality status
+
+Keep:
+- baseline stability probes
+- flaky predicate detection
+- cancellation
+- safe-method restrictions
+- local/mock requirement for mutating requests
+- normal execution pipeline
+
+Primary ownership:
+- `failure-minimizer.js`
+- dedicated new minimizer helpers/tests
+
+Do not touch frontend/routes.
+
+Tests:
+- nested objects
+- nested arrays only if safely supported
+- duplicate rows
+- dependent fields
+- irrelevant groups removed together
+- budget exhaustion
+- flaky predicate
+- deterministic identical runs
+- cancellation
+- unsafe method restriction
+- secret/redaction invariants
+
+Full tests must remain green.
+
+Finish:
+
+`PHASE 32 VERDICT: PASS`
+or
+`PHASE 32 VERDICT: BLOCKED`
+
+Agent Response Summary:
+Completed the Structured Delta Debugger on `phase32/structured-delta-debugger` in `postman-p32`, based on `0ee5e54`. Added `structured-delta.js` for stable-ID query/header rows, nested JSON paths with subtree subsumption, and deterministic chunk construction. Reworked `minimizeFailure` from simple one-at-a-time removal into a bounded coarse-to-fine delta-debugging flow that performs group elimination before singleton elimination, records an explicit probe trace, and reports truthful minimality as `one_minimal`, `budget_limited`, or `inconclusive`.
+
+Existing safety and correctness invariants were preserved: flaky-baseline detection, cancellation, normal execution-path safety/SSRF behavior, and no frontend, routes, service, dependency, or lockfile changes. The agent reported `bun test` at 921 pass / 0 fail, syntax checks across 189 files, a successful frontend build, and green PR CI for the Baseline Gate and CLI workflow. Local live demo was skipped because of a Bun↔Mongo hang on that machine; the agent reported CI seed/smoke coverage instead and did not claim a local demo pass.
+
+GitHub cross-check confirms commit `e92595514bdc03cd44ab3ffa12a39410618db7c1` on PR #29, with changes limited to:
+- `backend/src/features/execution-intelligence/failure-minimizer.js`
+- `backend/src/features/execution-intelligence/failure-minimizer.test.js`
+- `backend/src/features/execution-intelligence/structured-delta.js`
+- `backend/src/features/execution-intelligence/structured-delta.test.js`
+
+The PR is open and currently mergeable. Merge is intentionally held for the investigation-wave order `31 → 32 → 33 → 34`, with Phase 32 to rebase after Phase 31 lands.
+
+Actions:
+* added deterministic structured-delta decomposition for stable-ID rows and nested JSON paths
+* added subtree subsumption and deterministic chunk/group construction
+* rewrote minimization to coarse-to-fine group elimination before singleton elimination
+* added explicit probe tracing and truthful minimality state
+* preserved flaky detection, cancellation, probe budgets, and SSRF/safety invariants
+* kept frontend, routes, services, dependencies, and lockfile unchanged
+* ran the reported 921-test suite, syntax checks, and frontend build
+* opened PR #29 from commit `e925955`
+* held merge pending wave order and rebase after Phase 31
+
+Context:
+tool=agent
+branch=phase32/structured-delta-debugger
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=../postman-p32
+parent_agent=none
+base=0ee5e54
+commit=e92595514bdc03cd44ab3ffa12a39410618db7c1
+pr=29
+merge_state=open/mergeable; held for wave order
+local_demo=skipped due reported Bun↔Mongo hang; CI seed/smoke used instead
+reported_verdict=PHASE 32 VERDICT: PASS — Structured Delta Debugger done.
+
 ## [2026-09-23T09:31:00+05:30] Phase 33 — Regression Timeline / Boundary Finder
 
 User Prompt (verbatim, secrets redacted):
