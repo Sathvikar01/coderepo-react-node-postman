@@ -5076,3 +5076,20 @@ Not done, deliberately: no phase37/investigation-acceptance branch/worktree, no 
 To unblock: execute and PASS+merge 31 → 32 → 33 → 34 in order with rebases, then 35, then 36, then re-assign Phase 37 from latest approved main.
 Logging: SESSION START + per-turn §5.2 entry appended to %USERPROFILE%\hackerrank_postman\log.txt; no history rewritten, no secrets logged.
 Skipped: implementation/gates; add when 31–36 are PASS+merged.
+
+
+## [2026-09-23T09:31:00+05:30] Phase 36 — Investigation UX result
+
+User Progress Update (verbatim):
+
+36:
+Done. PHASE 36 VERDICT: PASS — DIFFERENTIATOR VISIBLE
+What shipped in ../postman-p36 (phase36/investigation-ux, from main):
+- Investigate failure entry points: failed workspace result toolbar (primary button, gated on genuine failures, mocks/cancels excluded), failed history rows, failed runner steps.
+- InvestigationDialog: one cohesive InvestigationV1 view — What happened → When did it start → What changed → Verified cause vs Unverified differences (never implies causality) → Smallest reproducer → Reproducibility → Export capsule. Passport/Compare/Minimize one click away. Header reinforces "Tracer — API Flight Recorder" + "record → compare → isolate → reproduce". Zero new CSS (reuses Phase 30 recorder classes → responsive/themes inherited).
+- Backend: vendored unmerged Phase 35 snapshot byte-identical (discrepancy noted: Phase 35 is not merged; dependency explicitly authorizes building on it). One proven-defect fix: Investigation.deleteMany in seed reset (contract test was red).
+Evidence:
+- Live smoke 22/22: 204→404 boundary, comparison, honest "no verified cause" evidence, minimization, stable 2/2 repro, secret-free capsule export/import (autoSend/autoSave false), cancel → cancelled, validation/404s.
+- bun test: 663 pass, 0 fail. Frontend tests 55 pass. vite build green. Caught + fixed a real bug: dialog sent goodExecutionId: null → backend 400s it; now omitted.
+- Demo reseeded, backend stopped, tree contains only intended files.
+Two honest caveats: no browser here, so responsive/keyboard/console-error checks rest on reused Phase 30-verified components + build (stated, not claimed); the CLI-test hang seen mid-session reproduces identically on pristine main (pre-existing environmental flake, out of scope — final full run passed it). Changes left uncommitted in the worktree — say the word if you want a commit/PR.
