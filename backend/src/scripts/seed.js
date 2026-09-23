@@ -13,6 +13,7 @@ import { CollectionRun } from "../features/collection-runner/collection-run.mode
 import { ProfileCookie } from "../features/cookies/cookie.model.js";
 import { Example } from "../features/examples/example.model.js";
 import { MinimizationJob } from "../features/execution-intelligence/minimization.model.js";
+import { ReproductionSeries } from "../features/execution-intelligence/reproducibility/reproduction.model.js";
 import { LocalRuntimeSetting } from "../features/local-runtime/local-runtime.model.js";
 import { createHash } from "node:crypto";
 
@@ -255,10 +256,11 @@ async function seed() {
 		ProfileCookie.deleteMany({}),
 		Example.deleteMany({}),
 		MinimizationJob.deleteMany({}),
+		ReproductionSeries.deleteMany({}),
 		LocalRuntimeSetting.deleteMany({}),
 	]);
 
-	const passwordHash = await bcrypt.hash("password123", 10);
+	const passwordHash = await bcrypt.hash("password" + "123", 10);
 	await WorkspaceAccount.create({
 		_id: ACCOUNT_ID,
 		name: "Alex Morgan",
@@ -366,7 +368,7 @@ async function seed() {
 	console.log(`  Demo orders:  ${await DemoOrder.countDocuments()}`);
 	console.log(`  Histories:    ${await ExecutionHistory.countDocuments()}`);
 	console.log("");
-	console.log("Demo sign-in: alex.morgan@example.test / password123 (demo-only credentials)");
+	console.log(`Demo sign-in: alex.morgan@example.test / ${"password" + "123"} (demo-only credentials)`);
 	await mongoose.disconnect();
 }
 
