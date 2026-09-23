@@ -4247,6 +4247,184 @@ commit=24b52e9
 reported_phase=31
 reported_state=ROADMAP REGISTERED
 
+## [2026-09-23T13:07:00+05:30] Phase 31 — Counterfactual Cause Verification Implementation
+
+User Prompt (verbatim, secrets redacted):
+# PHASE 31 — Counterfactual Cause Verification — IMPLEMENTATION
+
+Roadmap registration is already complete on `main`.
+
+Now implement the actual Phase 31 capability.
+
+Branch:
+`phase31/counterfactual-cause`
+
+Worktree:
+`../postman-p31`
+
+Start from latest `origin/main`.
+
+First read:
+- `AGENTS.md`
+- Phase 31 spec
+- `backend/src/features/execution-intelligence/run-comparison.js`
+- execution receipts/history
+- execution service
+- current minimizer safety model
+
+Goal:
+
+Upgrade Tracer from:
+
+“these executions differ”
+
+to:
+
+“this specific change was experimentally shown to reproduce/remove the failure.”
+
+Build only under:
+
+`backend/src/features/execution-intelligence/counterfactual/**`
+
+Do NOT wire frontend/routes yet.
+Do NOT touch Phase 32/33/34 branches.
+Do NOT broaden scope.
+
+Given known-good execution A and failing execution B:
+
+1. Compute deterministic material deltas.
+2. Convert safely replayable deltas into intervention candidates.
+3. Re-run through the NORMAL execution pipeline only.
+4. Change exactly one controlled factor per intervention.
+5. Classify each candidate:
+   - `causal`
+   - `not_causal`
+   - `inconclusive`
+   - `not_replayable`
+6. Preserve exact probe execution IDs and evidence.
+
+Support replay where truthfully reconstructable:
+- query rows
+- non-secret headers
+- nested/body JSON fields where safe
+- URL/path fields where safe
+- other deterministic request fields already preserved in history
+
+Never reconstruct resolved secrets.
+
+Environment/auth/cookie/script changes that cannot be faithfully replayed must be `not_replayable`.
+
+A delta may be labelled `causal` ONLY when intervention evidence proves that applying/removing that delta changes whether the selected failure predicate occurs.
+
+No AI inference.
+No confidence percentages.
+No “likely root cause” guessing.
+
+Safety:
+- bounded hard probe budget
+- cancellation
+- normal compiler → policy → DNS → transport → capture → normalize → history path
+- normal SSRF protections
+- safe methods automatically
+- mutating methods only against approved local/mock targets with existing confirmation rules
+- fail closed
+
+Version the result model.
+
+Each intervention result should expose enough evidence to audit:
+- delta identity/path
+- before/after representation, secret-safe
+- classification
+- probe execution IDs
+- predicate result
+- reason when inconclusive/not replayable
+
+Tests must cover:
+- one changed header genuinely causes failure
+- unrelated changed header → `not_causal`
+- multiple changes, exactly one causal
+- nested JSON causal field
+- duplicate rows/stable identity where applicable
+- auth/secret delta → `not_replayable`
+- unstable/flaky probes → `inconclusive`
+- budget exhaustion
+- cancellation
+- unsafe mutating request
+- SSRF rejection
+- zero resolved-secret leakage
+- deterministic output/order
+- profile isolation
+
+Primary ownership:
+`backend/src/features/execution-intelligence/counterfactual/**`
+
+Avoid shared files unless an absolutely necessary narrow contract seam is proven.
+
+Do NOT merge automatically.
+
+Run:
+- Phase 31 focused tests
+- full `bun test`
+- backend syntax checks
+- frontend build as regression gate
+- existing Flight Recorder tests/demo where environment supports it
+
+If a local environmental problem prevents a gate, report it honestly and use CI only where CI actually ran that gate.
+
+Commit and open a PR to `main`.
+
+Return:
+- exact files changed
+- exact causal model/semantics
+- tests/gates
+- commit
+- PR
+- blockers/caveats
+
+Finish exactly:
+
+`PHASE 31 VERDICT: PASS — COUNTERFACTUAL CAUSALITY VERIFIED`
+
+or
+
+`PHASE 31 VERDICT: BLOCKED`
+
+Agent Response Summary:
+Completed the actual Phase 31 Counterfactual Cause Verification implementation on `phase31/counterfactual-cause` in `C:\Users\arsat\Downloads\postman-p31`, based on `origin/main` at `98533c5`. The work is entirely additive under `backend/src/features/execution-intelligence/counterfactual/**`.
+
+The implementation adds a versioned counterfactual evidence model with a hard probe ceiling of 24, deterministic canonical JSON, secret-safety primitives, and the existing safe-method policy. Material deltas are compiled in deterministic order and can represent reversible changes for method, URL, query/header/urlencoded rows, nested JSON, text body, settings, auth, scripts, assertions, environment/collection context, and compiled request fingerprint. Replayable factors are applied/reverted through a pure counterfactual engine with baseline stability checks, both-direction single-factor interventions, cancellation and budget handling, and fail-closed classification.
+
+The causality rule is deliberately strict: a delta is classified `causal` only when applying it to the known-good request reproduces the selected failure AND reverting it from the failing request removes that failure. Unsupported or secret-bearing/context changes are never reconstructed; they become `not_replayable` with redacted evidence. No AI inference or confidence scoring is used.
+
+The service probes through the normal `executions.send` path or zero-network mock resolution, with safe methods automatic and approved-local explicit opt-in for mutating requests. The agent reported Phase 31 focused tests at 31 pass / 0 fail; full `bun test` at 670 pass / 1 skip / 0 fail; `node --check` across 195 backend JS files passing; frontend build passing; Baseline Gate CI green across install/tests/syntax/build/seed/runtime smoke; and headless collection-runner CI green.
+
+GitHub cross-check confirms commit `9edfd95f53d4b634c64e04ca750b8888b542001f` on PR #30, open and mergeable. All changed files are confined to `backend/src/features/execution-intelligence/counterfactual/**`.
+
+Actions:
+* added `counterfactual-model.js` with versioned result/intervention kinds, hard probe ceiling, safe-method set, canonical JSON, and secret-safety helpers
+* added `counterfactual-deltas.js` with deterministic material-delta compilation and reversible apply/revert operations
+* added pure counterfactual engine with baseline stability checks, both-direction interventions, classification, cancellation, and probe budget enforcement
+* added profile-scoped service probing through normal execution or zero-network mocks
+* enforced the strict two-direction causality rule
+* kept secret/auth/context changes fail-closed and redacted when not replayable
+* added focused tests covering causal/non-causal, multiple deltas, nested JSON, stable row identity, secret/auth non-replayability, flaky/inconclusive, budget, cancellation, unsafe methods, SSRF, zero secret leakage, determinism, and profile isolation
+* ran the reported focused tests, full test suite, backend syntax, frontend build, Baseline Gate CI, and headless runner CI
+* committed as `9edfd95`
+* opened PR #30 to `main`
+* did not merge automatically
+
+Context:
+tool=agent
+branch=phase31/counterfactual-cause
+repo_root=C:\Users\arsat\Downloads\postman
+worktree=C:\Users\arsat\Downloads\postman-p31
+parent_agent=none
+base=98533c5
+commit=9edfd95f53d4b634c64e04ca750b8888b542001f
+pr=30
+merge_state=open/mergeable
+reported_verdict=PHASE 31 VERDICT: PASS — COUNTERFACTUAL CAUSALITY VERIFIED
+
 ## [2026-09-23T11:12:00+05:30] Phase 32 — Structured Delta Debugger
 
 User Prompt (verbatim, secrets redacted):
