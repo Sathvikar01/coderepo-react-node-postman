@@ -14,6 +14,7 @@
 		"dev:backend": "cd backend && bun run dev",
 		"seed": "cd backend && bun run seed",
 		"demo:flight-recorder": "cd backend && bun src/features/execution-intelligence/flight-recorder-demo.js",
+		"demo:investigation": "cd backend && bun src/features/execution-intelligence/investigation-demo.js",
 		"tracer": "cd backend && bun src/features/cli/main.js",
 		"test": "cd backend && bun test"
 	},

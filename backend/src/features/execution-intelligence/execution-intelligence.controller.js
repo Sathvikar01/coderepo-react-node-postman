@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { executionIntelligenceService } from "./execution-intelligence.service.js";
 import { minimizationService } from "./minimization.service.js";
+import { investigationService } from "./investigation/investigation.service.js";
+import { parseInvestigationInput } from "./investigation/investigation-model.js";
 
 const executionIdSchema = z.uuid("Provide a valid execution identifier.");
 const comparisonSchema = z
@@ -105,6 +107,46 @@ export async function cancelMinimization(request, response, next) {
 	try {
 		const jobId = executionIdSchema.parse(request.params.jobId);
 		response.json({ data: await minimizationService.cancel(request.profileId, jobId) });
+	} catch (error) {
+		next(error);
+	}
+}
+
+/* -------------------------------------------------------------------------- */
+/* Phase 35 — Investigation Engine (Workflow 5)                                */
+/* -------------------------------------------------------------------------- */
+
+export async function startInvestigation(request, response, next) {
+	try {
+		const input = parseInvestigationInput(request.body);
+		response.status(202).json({ data: await investigationService.start(request.profileId, input) });
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function getInvestigation(request, response, next) {
+	try {
+		const investigationId = executionIdSchema.parse(request.params.investigationId);
+		response.json({ data: await investigationService.status(request.profileId, investigationId) });
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function cancelInvestigation(request, response, next) {
+	try {
+		const investigationId = executionIdSchema.parse(request.params.investigationId);
+		response.json({ data: await investigationService.cancel(request.profileId, investigationId) });
+	} catch (error) {
+		next(error);
+	}
+}
+
+export async function exportInvestigationCapsule(request, response, next) {
+	try {
+		const investigationId = executionIdSchema.parse(request.params.investigationId);
+		response.json({ data: await investigationService.exportCapsule(request.profileId, investigationId) });
 	} catch (error) {
 		next(error);
 	}

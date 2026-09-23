@@ -1,11 +1,15 @@
 import { Router } from "express";
 import {
-	compareExecutionRuns,
+	cancelInvestigation,
 	cancelMinimization,
+	compareExecutionRuns,
+	exportInvestigationCapsule,
 	exportReproCapsule,
+	getInvestigation,
 	getMinimization,
 	getExecutionReceipt,
 	importReproCapsule,
+	startInvestigation,
 	startMinimization,
 } from "./execution-intelligence.controller.js";
 
@@ -17,3 +21,7 @@ executionIntelligenceRouter.post("/capsules/import", importReproCapsule);
 executionIntelligenceRouter.post("/minimizations", startMinimization);
 executionIntelligenceRouter.get("/minimizations/:jobId", getMinimization);
 executionIntelligenceRouter.post("/minimizations/:jobId/cancel", cancelMinimization);
+executionIntelligenceRouter.post("/investigations", startInvestigation);
+executionIntelligenceRouter.get("/investigations/:investigationId", getInvestigation);
+executionIntelligenceRouter.post("/investigations/:investigationId/cancel", cancelInvestigation);
+executionIntelligenceRouter.get("/investigations/:investigationId/capsule", exportInvestigationCapsule);
