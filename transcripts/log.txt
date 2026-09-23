@@ -5028,3 +5028,174 @@ worktree=main
 parent_agent=none
 commit=9c2ef6e
 pr=https://github.com/Sathvikar01/coderepo-react-node-postman/pull/31
+
+## [2026-09-23] Phase 38 — Workspace Snapshots Core
+
+User Prompt (verbatim, secrets redacted):
+You are implementing a new isolated backend/core feature in the existing Tracer repository while Phase 36 is running in parallel.
+
+First read:
+- `AGENTS.md`
+- architecture/guideline docs
+- existing collection/request/environment persistence
+- existing history / Flight Recorder code
+- existing tests and repository patterns
+
+Do not rebuild or refactor unrelated systems.
+
+## Git isolation
+
+Create a separate worktree/branch:
+
+`phase38/workspace-snapshots-core`
+
+This work must remain merge-safe with Phase 36.
+
+Do NOT modify:
+- frontend pages/components
+- `App.jsx`
+- navigation/routes
+- global CSS/theme
+- Phase 36-owned files
+- CI/root configuration
+- existing Flight Recorder contracts
+- unrelated frozen functionality
+
+If implementing this cleanly requires modifying any of those, stop and report the dependency instead of making the change.
+
+## Goal
+
+Add the backend/domain foundation for **immutable workspace/collection snapshots**.
+
+A snapshot represents the exact saved API workspace state at a point in time so future features can reliably compare, replay, verify, and promote known-good configurations.
+
+This phase is CORE ONLY. No UI.
+
+## Required behavior
+
+Implement:
+
+1. Create snapshot
+   - snapshot a collection/workspace and its relevant persisted configuration
+   - include requests and their meaningful request configuration
+   - include applicable collection-level configuration/references
+   - preserve references needed to reconstruct what was snapshotted
+
+2. Immutable storage
+   - once created, snapshot contents cannot be edited
+   - normal collection/request edits must not mutate historical snapshots
+
+3. Deterministic canonical representation
+   - semantically identical state must serialize consistently
+   - exclude volatile fields that should not change snapshot identity
+
+4. Fingerprint
+   - compute a deterministic fingerprint/hash from canonical snapshot content
+   - same meaningful state => same fingerprint
+
+5. Version lineage
+   - snapshot has stable ID
+   - source collection/workspace ID
+   - version number or ordered sequence
+   - optional parent snapshot reference
+   - created timestamp / actor using existing project conventions
+
+6. Duplicate/idempotent behavior
+   - accidental duplicate creation for unchanged state must have explicitly defined behavior
+   - prefer existing repository conventions rather than inventing global mechanisms
+
+7. Snapshot diff service
+   Return structured differences between two snapshots, including at minimum:
+   - request added
+   - request removed
+   - request modified
+   - method/URL changes
+   - header changes
+   - auth configuration changes
+   - body/configuration changes
+   - relevant variable/reference changes where available
+
+Do not build presentation-specific diff strings into the core.
+
+## Correctness requirements
+
+Test explicitly:
+
+- snapshot A remains unchanged after source data is edited
+- identical source state produces identical canonical content/fingerprint
+- meaningful change changes the fingerprint
+- ordering noise does not create false differences where order is semantically irrelevant
+- added/removed/modified requests are distinguished correctly
+- snapshot lineage/version ordering is correct
+- invalid/nonexistent source cannot create a partial snapshot
+- malformed stored snapshots fail safely
+- concurrent/duplicate snapshot attempts do not create inconsistent version numbering
+- existing collection/request behavior remains unchanged
+
+Use transactional/atomic behavior where the existing persistence layer supports it.
+
+Do not silently repair invalid snapshot data.
+
+## Architecture
+
+Keep this feature behind a clear domain/service boundary so later phases can consume it for:
+
+`Snapshot → Diff → Impact Analysis → Environment Verification`
+
+Do not implement those later phases now.
+
+Do not make the snapshot layer depend on UI code.
+
+Prefer existing dependencies and patterns. Add no dependency unless absolutely required.
+
+## Verification
+
+Run:
+- focused new tests
+- affected existing tests
+- full backend/unit test suite
+- existing required validation commands from `AGENTS.md`
+
+Also inspect the final diff for accidental Phase-36 overlap.
+
+## Deliverable
+
+At the end report only:
+
+1. files changed
+2. snapshot model/schema
+3. canonicalization/fingerprint rules
+4. diff capabilities
+5. concurrency/idempotency handling
+6. tests added
+7. exact test results
+8. any dependency intentionally deferred to the post-Phase-36 UI phase
+9. confirmation that no Phase-36-owned frontend/shared files were modified
+
+Do not begin the UI integration or environment-drift work in this branch.
+
+Agent Response Summary:
+Implemented the Phase 38 workspace-snapshots core on branch phase38/workspace-snapshots-core as a self-contained backend domain with no routes, controller, or UI. Added canonical snapshot capture, append-only immutable persistence, deterministic HMAC-SHA256 content fingerprints, parent/root lineage with fail-closed validation, bounded CAS-style sequence allocation and idempotent duplicate handling, plus a structured deterministic snapshot-diff service. The feature is factory-injectable for later Snapshot → Diff → Impact Analysis → Environment Verification phases. Only the new backend/src/features/workspace-snapshots/ feature directory and the seed-reset integration were changed; no Phase-36 frontend/shared files, CI/root configuration, lockfile, or Flight Recorder contracts were touched.
+
+Actions:
+* Created backend/src/features/workspace-snapshots/{snapshot-canonical.js,snapshot-schema.js,snapshot.model.js,snapshot.repository.js,snapshot.service.js,snapshot-diff.js,snapshot-fixtures.js}
+* Added append-only immutability guards returning 409 SNAPSHOT_IMMUTABLE and unique owner/snapshot, owner/collection/sequence, and owner/collection/fingerprint indexes
+* Canonicalized snapshot payloads by stripping persistence metadata, sorting object keys and semantically unordered scopes while preserving meaningful request/folder/row/assertion order; secret refs persist aliases only
+* Added fingerprint key ID plus deterministic contentFingerprint using the repository's existing fingerprintOf/HMAC-SHA256 mechanism
+* Added parentSnapshotId, parentSequence, rootSnapshotId and fail-closed lineage validation for cycles, missing parents, cross-collection parents, and explicit-parent mismatches
+* Added idempotent capture by content fingerprint and bounded 6-attempt CAS-style sequence retry handling for concurrent captures
+* Added deterministic structured snapshot diffs covering collection/variables/folders/requests/environments, request field/body/auth/script/assertion changes, row reorders, and malformed-snapshot fail-closed behavior
+* Added 40 focused tests across canonicalization, diffing, in-memory service behavior, real Mongo persistence, concurrency, profile isolation, malformed records, immutability, unique indexes, and secret-ref safety
+* Edited backend/src/scripts/seed.js only to import WorkspaceSnapshot and include deleteMany({}) in the existing seed/reset contract
+* Ran node --check on all new backend files — clean
+* Ran bun test src/features/workspace-snapshots — 40 pass / 0 fail
+* Ran full bun test — 805 pass / 2 skip / 0 fail (74 files)
+* Ran bun install --frozen-lockfile — no lockfile change
+* Verified final diff contains no frontend, App.jsx, navigation, CSS/theme, Phase-36-owned files, CI/root config, or Flight Recorder contract changes
+
+Context:
+branch=phase38/workspace-snapshots-core
+repo_root=C:/Users/arsat/Downloads/postman-p38
+worktree=C:/Users/arsat/Downloads/postman-p38
+base=bf00d8f
+
