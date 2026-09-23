@@ -4997,3 +4997,34 @@ phase34_initial_rebased_head=c813cd6226f1e1f6853ce98e1da71dac146acf00
 phase34_fix_head=5825cb3662526fb9a1aad0593d173c1f43979a68
 phase34_merge=8f2f60beb01c26a1f2621e65fa27111920ff0a64
 final_state=Phases 31–34 merged in canonical order; ready for Phase 35 dependency gate
+
+## [2026-09-23T16:17:24+05:30] Phase 35 Investigation Engine — build, verify, PR
+
+User Prompt (verbatim, secrets redacted):
+Execute Phase 35 — Investigation Engine: build a deterministic InvestigationV1 workflow (when did it start failing → what changed → experimentally verified cause → smallest reproducer → reliability → safe reproduction capsule) orchestrating the merged Phases 31–34 with no second execution engine and no AI inference; strict truthfulness labels (verified_cause, leading_divergence, correlated_change, unverified, not_replayable, inconclusive); verifiedCauses may only contain deltas with successful Phase 31 intervention evidence; zero resolved-secret leakage; deterministic output; run the full gate matrix incl. the investigation demo ending with the exact requested reproduction; commit, open a PR without merging, log the session, end with the Phase 35 verdict line. (Assignment preserved in the session compaction summary.)
+
+Agent Response Summary:
+Reconciled the stale phase35 worktree onto origin/main at 608cc00 (discarded stale untracked investigation files after backing them up to /tmp, then removed their leftovers from the worktree when they polluted the full test run). Built the investigation module on top of the merged Phase 31-34 engines: InvestigationV1 model/assembler with the strict verified-cause evidence rule (builder rejects unproven causes with 422 and never publishes them), a background investigation service composing regression timeline -> comparison -> counterfactual verification -> minimization -> reproducibility -> redacted ReproCapsuleV1 through the Phase 7 import boundary, plus cancel/status/capsule API endpoints, an Investigation model cleared by the seed reset, a deterministic live-API demo, and 32 tests covering the full verify matrix. Found and fixed genuine defects including broken imports, interruptedAt never clearing on success, wrong counterfactual error codes, missing COUNTERFACTUAL_BUDGET/INPUT mapping, non-forwarded cancellation signal, and a shared ACTIVE registry. All gates green: bun test 765 pass/2 skip/0 fail, node --check clean, frontend build clean, seed reset clean, runtime smoke ok, demo:investigation 14/14 ending with failing request -> proven cause -> smallest reproducer -> 3/3 reproduction -> safe capsule, demo:flight-recorder 47/47, CLI 99/99. Committed 9c2ef6e and opened PR #31 to main without merging.
+
+Actions:
+* reset stale phase35 worktree to origin/main 608cc00 after backing up 5 untracked investigation files to /tmp/p35-stale-backup
+* repaired the corrupted global bun shim; verified bun 1.3.9 and frozen-lockfile install
+* created backend/src/features/execution-intelligence/investigation/{investigation-model.js,investigation.js,investigation.model.js,investigation.repository.js,investigation.service.js,investigation.test.js,investigation.service.test.js}
+* added investigation API endpoints to execution-intelligence.controller.js and execution-intelligence.routes.js
+* added Investigation cleanup to backend/src/scripts/seed.js
+* added backend/src/features/execution-intelligence/investigation-demo.js and the root demo:investigation script
+* fixed genuine engine defects: interruptedAt lifecycle, counterfactual error-code mapping, cancellation-code handling, probe signal forwarding, per-instance run registry
+* removed stale top-level investigation* leftovers that polluted bun test discovery
+* ran gates: bun test 765 pass/2 skip/0 fail; node --check ALL_OK; frontend build clean; setup.sh --seed clean; runtime smoke ok; demo:investigation 14/14; demo:flight-recorder 47/47; bun test src/features/cli 99/99
+* wrote docs/phase35/investigation-report.md
+* committed 9c2ef6e on phase35/investigation-engine and opened PR #31 to main without merging
+* appended this entry to the shared transcript logs
+
+Context:
+tool=pi coding agent
+branch=phase35/investigation-engine
+repo_root=C:/Users/arsat/Downloads/postman-p35
+worktree=main
+parent_agent=none
+commit=9c2ef6e
+pr=https://github.com/Sathvikar01/coderepo-react-node-postman/pull/31

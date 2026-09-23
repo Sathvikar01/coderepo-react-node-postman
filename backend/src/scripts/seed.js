@@ -14,6 +14,7 @@ import { ProfileCookie } from "../features/cookies/cookie.model.js";
 import { Example } from "../features/examples/example.model.js";
 import { MinimizationJob } from "../features/execution-intelligence/minimization.model.js";
 import { ReproductionSeries } from "../features/execution-intelligence/reproducibility/reproduction.model.js";
+import { Investigation } from "../features/execution-intelligence/investigation/investigation.model.js";
 import { LocalRuntimeSetting } from "../features/local-runtime/local-runtime.model.js";
 import { createHash } from "node:crypto";
 
@@ -257,6 +258,7 @@ async function seed() {
 		Example.deleteMany({}),
 		MinimizationJob.deleteMany({}),
 		ReproductionSeries.deleteMany({}),
+		Investigation.deleteMany({}),
 		LocalRuntimeSetting.deleteMany({}),
 	]);
 
