@@ -74,13 +74,11 @@ The projection derives a state, never invents one, and always reports **why**:
 
 | Precedence | Basis | State |
 | --- | --- | --- |
-| 1 | `linked_verification` — a linked persisted verification artifact | its own recorded state |
-| 2 | `target_policy` — `receipt.policy.decision === "blocked"` | `BLOCKED` |
-| 3 | `recorded_assertions` — failed/error > 0 | `NEEDS_REHEARSAL` |
-| 3 | `recorded_assertions` — passed > 0, failed+error = 0, outcome `response` | `VERIFIED` |
-| 4 | `none` | `UNKNOWN` |
+| 1 | `linked_verification` — a Phase 41 result linked by proven identity (carried by a supplied Phase 47 proof) | its own recorded state |
+| — | recorded target-policy decision / recorded assertions (observations) | never set the state; reported as `observation_only` reasons |
+| — | `none` | `UNKNOWN` |
 
-`linked_verification` is a documented extension point: no persisted verification artifact is linked today, so the ladder falls through to recorded policy and recorded assertions. Every response carries `stateBasis` plus `WHY_CAVEAT` so the reader knows which rung answered.
+Only a linked Phase 41 result is authoritative (`authoritative: true`, envelope `schemaVersion: 2`). The recorded policy decision and per-execution assertion counts are returned as observations that cannot change the state, so the inspector can never contradict Phase 41. Every response carries `stateBasis` plus `WHY_CAVEAT` so the reader knows which rung answered.
 
 ---
 

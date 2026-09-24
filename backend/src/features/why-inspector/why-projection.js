@@ -1,24 +1,36 @@
-// Phase 49 — Effective Configuration / "Why?" Inspector: pure projection.
+// Phase 49B — Effective Configuration / "Why?" Inspector: pure projection.
 //
 // `buildWhyExplanation` is deterministic and side-effect free: identical inputs
 // always produce an identical envelope. It reads only evidence that was already
-// recorded and already redacted at write time:
+// recorded, already redacted at write time, and already interpreted by the phase
+// that owns it:
 //
 //   * the persisted execution history record (including its execution receipt),
 //   * the compile trace produced by the request compiler,
 //   * profile-scoped collection / environment summaries,
-//   * persisted investigations linked to the execution.
+//   * persisted investigations linked to the execution,
+//   * the Phase 49B evidence links (`related.links`): the persisted Phase 46B
+//     rehearsal run that produced this execution, and an optional supplied Phase
+//     47 verification proof carrying the Phase 39/40/41/43 results.
 //
 // It never resolves a variable value, never reads a credential, never re-runs a
-// policy decision, and never upgrades a verification state. Where evidence is
-// missing it fails closed with an explicit reason code instead of a blank.
+// policy decision, and — the Phase 49B correction — never *decides* a verification
+// state. The only state it can report is one Phase 41 already reached and Phase 47
+// signed. Where evidence is missing it fails closed with an explicit reason code
+// instead of a blank.
 import {
 	EXECUTION_STAGES,
+	LINK_SOURCE,
+	LINK_STATUS,
+	LINK_STATUS_VALUES,
 	SECTION_STATES,
 	VARIABLE_SCOPE_LABEL,
 	VARIABLE_SCOPE_ORDER,
+	VERIFICATION_BASIS_LABEL,
 	VERIFICATION_STATE_BASIS,
+	VERIFICATION_STATES,
 	WHY_CAVEAT,
+	WHY_CHAIN,
 	WHY_EXPLANATION_KIND,
 	WHY_EXPLANATION_SCHEMA_VERSION,
 	WHY_LIMITS,
@@ -64,6 +76,40 @@ function scopeIndex(scope) {
 
 function scopeLabel(scope) {
 	return VARIABLE_SCOPE_LABEL[scope] ?? (scope ? `Unknown scope (${scope})` : "Unknown scope");
+}
+
+/* -------------------------------------------------------------------------- */
+/* Evidence links                                                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The link envelope is produced by `why-evidence.js`. This accessor only
+ * normalizes absent entries into explicit `not_recorded` links so a section can
+ * never render an ambiguous blank.
+ */
+function linksOf(related) {
+	return related?.links ?? {};
+}
+
+function absentLink(source, reasonCode, reason) {
+	return {
+		status: LINK_STATUS.NOT_RECORDED,
+		source,
+		identity: [],
+		reasonCode,
+		reason,
+		observedAt: null,
+		fingerprint: null,
+	};
+}
+
+function linkOrAbsent(value, source, reasonCode, reason) {
+	if (value && value.link) return value;
+	return { link: absentLink(source, reasonCode, reason), detail: null };
+}
+
+function linkStatusTone(status) {
+	return LINK_STATUS_VALUES.includes(status) ? status : LINK_STATUS.UNKNOWN;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -335,25 +381,20 @@ function executionSection({ record, receipt }) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Change                                                                     */
+/* Change — Phase 39 impact + Phase 40 drift + persisted investigations        */
 /* -------------------------------------------------------------------------- */
 
 function changeSection({ related }) {
+	const links = linksOf(related);
+	const impact = linkOrAbsent(links.impact, LINK_SOURCE.PHASE39_IMPACT, WHY_REASON.IMPACT_NOT_RECORDED, "No Phase 39 change-impact evidence is linked to this execution.");
+	const drift = linkOrAbsent(links.drift, LINK_SOURCE.PHASE40_DRIFT, WHY_REASON.DRIFT_NOT_RECORDED, "No Phase 40 environment-drift evidence is linked to this execution.");
+
 	const investigations = Array.isArray(related.investigations) ? related.investigations : [];
 	const completed = investigations.filter((entry) => entry?.result);
 
-	if (completed.length === 0) {
-		return {
-			state: "not_recorded",
-			recorded: false,
-			reasonCode: WHY_REASON.NO_CHANGE_EVIDENCE,
-			reason:
-				"No persisted change analysis references this execution. Run Investigate on this execution to record what changed and which change was verified as causal.",
-			hint: "Open the Flight Recorder and choose Investigate, or use Investigate failure on a history entry.",
-			comparisons: [],
-			truncated: false,
-		};
-	}
+	const impactRecorded = impact.detail?.present === true && impact.link.status === LINK_STATUS.RECORDED;
+	const driftRecorded = drift.detail?.present === true && drift.link.status === LINK_STATUS.RECORDED;
+	const comparisonRecorded = completed.length > 0;
 
 	const comparisons = completed.map((entry) => {
 		const result = entry.result ?? {};
@@ -409,12 +450,30 @@ function changeSection({ related }) {
 	});
 	const boundedComparisons = bounded(comparisons, WHY_LIMITS.maxChangeComparisons);
 
+	const missing = [];
+	if (!impactRecorded) missing.push("Phase 39 change impact");
+	if (!driftRecorded) missing.push("Phase 40 environment drift");
+	if (!comparisonRecorded) missing.push("a persisted change analysis");
+
+	const recordedCount = [impactRecorded, driftRecorded, comparisonRecorded].filter(Boolean).length;
+	const reasonCode = recordedCount === 0 ? WHY_REASON.NO_CHANGE_EVIDENCE : WHY_REASON.CHANGE_EVIDENCE_RECORDED;
+
 	return {
-		state: "recorded",
-		recorded: true,
-		reasonCode: WHY_REASON.CHANGE_EVIDENCE_RECORDED,
-		reason: "Persisted change analysis referencing this execution was found.",
-		hint: null,
+		state: recordedCount === 0 ? "not_recorded" : recordedCount === 3 ? "recorded" : "partial",
+		recorded: recordedCount > 0,
+		reasonCode,
+		reason:
+			recordedCount === 0
+				? "No change evidence is linked to this execution. Tracer does not infer what changed from the request alone."
+				: recordedCount === 3
+					? "Phase 39 impact, Phase 40 drift, and a persisted change analysis all reference this execution."
+					: `Linked change evidence is incomplete. Not recorded: ${missing.join(", ")}.`,
+		hint:
+			recordedCount === 3
+				? null
+				: "Change evidence is only ever composed from recorded analyses that name this execution. Link a verification proof on the Evidence section to surface the Phase 39/40 results recorded with it, or run Investigate on this execution.",
+		impact,
+		drift,
 		comparisons: boundedComparisons.items,
 		truncated: boundedComparisons.truncated,
 	};
@@ -425,94 +484,63 @@ function changeSection({ related }) {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Restate the verification state Tracer already reached for this execution.
+ * Restate the verification state Phase 41 already reached for this execution.
  *
- * This is a read-model mapping over recorded facts, in a fixed precedence order.
- * It never runs a verifier and never upgrades a state:
+ * Phase 49B narrowed this decisively. The only authoritative source is a linked
+ * Phase 41 result — carried by a supplied Phase 47 proof, or implied by a Phase 47
+ * proof's absence meaning no result exists. Everything else is UNKNOWN with an
+ * explicit reason, and the recorded assertions / target-policy decision are
+ * returned as *observations* that cannot change the state.
  *
- *   1. a linked persisted verification artifact, if one exists;
- *   2. the backend's own recorded target-policy decision (`blocked`);
- *   3. the execution's own recorded assertion results;
- *   4. otherwise `UNKNOWN` with the specific missing evidence listed.
+ * This function never runs a verifier, never inspects a response, and never
+ * upgrades a state.
  */
 export function deriveVerificationState({ receipt, related }) {
-	const linked = related?.verification ?? null;
-	if (linked && typeof linked.state === "string") {
+	const links = linksOf(related);
+	const verification = links.verification ?? null;
+	const state =
+		verification && verification.authoritative === true && VERIFICATION_STATES.includes(verification.state)
+			? verification.state
+			: null;
+	const link = verification?.link ?? absentLink(LINK_SOURCE.PHASE41_VERIFICATION, WHY_REASON.VERIFICATION_NOT_RECORDED, "No Phase 41 verification result is linked to this execution, so no verification state can be reported.");
+
+	if (state) {
 		return {
-			state: linked.state,
+			state,
 			stateBasis: "linked_verification",
-			reasonCode: WHY_REASON.LINKED_VERIFICATION_STATE,
-			reasons: [
-				{
-					code: WHY_REASON.LINKED_VERIFICATION_STATE,
-					text: `A persisted verification artifact reports ${linked.state}${linked.source ? ` (source: ${linked.source})` : ""}.`,
-				},
-			],
+			reasonCode: link.reasonCode,
+			reasons: [{ code: link.reasonCode, text: link.reason }],
+			link,
 		};
 	}
 
+	const reasons = [{ code: link.reasonCode, text: link.reason }];
 	const decision = receipt?.policy?.decision ?? null;
-	if (decision === "blocked") {
-		return {
-			state: "BLOCKED",
-			stateBasis: "target_policy",
-			reasonCode: WHY_REASON.TARGET_POLICY_BLOCKED,
-			reasons: [
-				{
-					code: WHY_REASON.TARGET_POLICY_BLOCKED,
-					text: "The recorded target-policy decision blocked this execution, so it was never dispatched.",
-				},
-			],
-		};
-	}
-
 	const counts = receipt?.tests?.counts ?? null;
 	const passed = numberOrNull(counts?.passed) ?? 0;
 	const failed = numberOrNull(counts?.failed) ?? 0;
 	const errored = numberOrNull(counts?.error) ?? 0;
 	const total = passed + failed + errored;
 
-	if (total > 0 && failed + errored > 0) {
-		return {
-			state: "NEEDS_REHEARSAL",
-			stateBasis: "recorded_assertions",
-			reasonCode: WHY_REASON.RECORDED_ASSERTIONS_FAILED,
-			reasons: [
-				{
-					code: WHY_REASON.RECORDED_ASSERTIONS_FAILED,
-					text: `${failed + errored} of ${total} recorded assertion${total === 1 ? "" : "s"} did not pass, so the request is not verified against its own tests.`,
-				},
-			],
-		};
+	if (!receipt) {
+		reasons.push({ code: WHY_REASON.CONFIGURATION_NOT_RECORDED, text: "No execution receipt was recorded." });
+	}
+	if (decision) {
+		reasons.push({
+			code: WHY_REASON.OBSERVATION_ONLY,
+			text: `The recorded target-policy decision was "${decision}". A policy decision is not a Phase 41 verification result and does not set the state.`,
+		});
+	}
+	if (total > 0) {
+		reasons.push({
+			code: WHY_REASON.OBSERVATION_ONLY,
+			text: `This execution recorded ${total} request assertion${total === 1 ? "" : "s"} (${passed} passed, ${failed} failed, ${errored} errored). Per-execution assertion results are observations and are not a Phase 41 cross-environment verification result.`,
+		});
+	} else if (receipt) {
+		reasons.push({ code: WHY_REASON.OBSERVATION_ONLY, text: "This request defines no assertions or test script, so it recorded no test results." });
 	}
 
-	if (total > 0 && passed > 0 && receipt?.outcome === "response") {
-		return {
-			state: "VERIFIED",
-			stateBasis: "recorded_assertions",
-			reasonCode: WHY_REASON.RECORDED_ASSERTIONS_PASSED,
-			reasons: [
-				{
-					code: WHY_REASON.RECORDED_ASSERTIONS_PASSED,
-					text: `All ${total} recorded assertion${total === 1 ? "" : "s"} passed against the captured response.`,
-				},
-			],
-		};
-	}
-
-	const reasons = [
-		{
-			code: WHY_REASON.NO_VERIFICATION_EVIDENCE,
-			text: "No persisted verification artifact references this execution and no request assertions were recorded, so Tracer cannot state a verification result.",
-		},
-	];
-	if (!receipt) reasons.push({ code: WHY_REASON.CONFIGURATION_NOT_RECORDED, text: "No execution receipt was recorded." });
-	if (receipt && total === 0)
-		reasons.push({ code: WHY_REASON.NO_VERIFICATION_EVIDENCE, text: "This request defines no assertions or test script." });
-	if (receipt && decision && decision !== "blocked")
-		reasons.push({ code: WHY_REASON.NO_VERIFICATION_EVIDENCE, text: `The target policy recorded "${decision}", which is not a verification result.` });
-
-	return { state: "UNKNOWN", stateBasis: "none", reasonCode: WHY_REASON.NO_VERIFICATION_EVIDENCE, reasons };
+	return { state: "UNKNOWN", stateBasis: "none", reasonCode: link.reasonCode, reasons, link };
 }
 
 function verificationSection({ record, receipt, related, derived }) {
@@ -521,22 +549,72 @@ function verificationSection({ record, receipt, related, derived }) {
 	const investigations = Array.isArray(related.investigations) ? related.investigations : [];
 	const completed = investigations.filter((entry) => entry?.result);
 	const totalVerifiedCauses = completed.reduce((sum, entry) => sum + (entry.result?.verifiedCauses?.length ?? 0), 0);
+	const detail = derived.link ?? null;
+	const linkedDetail = linksOf(related).verification?.detail ?? null;
+
+	const passed = numberOrNull(counts?.passed) ?? 0;
+	const failed = numberOrNull(counts?.failed) ?? 0;
+	const errored = numberOrNull(counts?.error) ?? 0;
+
+	const observations = [
+		{
+			id: "recorded_assertions",
+			label: "Recorded request assertions",
+			status: counts ? "recorded" : "not_recorded",
+			authoritative: false,
+			value: counts ? { passed, failed, errored, total: passed + failed + errored } : null,
+			note: "Per-execution assertion results are recorded facts about this one response. They are not a Phase 41 verification result and cannot set the verification state.",
+		},
+		{
+			id: "target_policy",
+			label: "Target policy decision",
+			status: receipt?.policy?.decision ? "recorded" : "not_recorded",
+			authoritative: false,
+			value: receipt?.policy?.decision ?? null,
+			note: "The policy gate decides whether a target may be contacted. BLOCKED is not the same statement as a Phase 41 BLOCKED verification result.",
+		},
+		{
+			id: "response_outcome",
+			label: "Execution outcome",
+			status: record?.outcome ? "recorded" : "not_recorded",
+			authoritative: false,
+			value: record?.outcome ?? null,
+			note: "The transport outcome is an observation about one dispatch, not a verification result.",
+		},
+	];
 
 	const reasons = bounded(derived.reasons, WHY_LIMITS.maxReasons);
 
 	return {
 		state: derived.state,
 		stateBasis: derived.stateBasis,
+		basisLabel: VERIFICATION_BASIS_LABEL[derived.stateBasis] ?? derived.stateBasis,
 		reasonCode: derived.reasonCode,
-		stateIsValid: VERIFICATION_STATE_BASIS.includes(derived.stateBasis),
+		stateIsValid: VERIFICATION_STATE_BASIS.includes(derived.stateBasis) && VERIFICATION_STATES.includes(derived.state),
+		authoritative: derived.stateBasis === "linked_verification",
 		reasons: reasons.items,
 		reasonsTruncated: reasons.truncated,
 		caveat: WHY_CAVEAT,
+		link: detail,
+		linked: linkedDetail
+			? {
+					state: linkedDetail.state,
+					fingerprint: linkedDetail.fingerprint,
+					verifiedRequestIds: linkedDetail.verifiedRequestIds,
+					affectedRequestIds: linkedDetail.affectedRequestIds,
+					requiredRehearsalRequestIds: linkedDetail.requiredRehearsalRequestIds,
+					blockers: linkedDetail.blockers,
+					warnings: linkedDetail.warnings,
+					summary: linkedDetail.summary,
+					requestVerified: linkedDetail.requestVerified,
+				}
+			: null,
+		observations,
 		assertions: {
 			recorded: Boolean(counts),
-			passed: numberOrNull(counts?.passed) ?? 0,
-			failed: numberOrNull(counts?.failed) ?? 0,
-			error: numberOrNull(counts?.error) ?? 0,
+			passed,
+			failed,
+			error: errored,
 			failureFingerprint: receipt?.tests?.failureFingerprint ?? null,
 		},
 		policy: { decision: receipt?.policy?.decision ?? null, local: receipt?.policy?.local === true },
@@ -566,33 +644,95 @@ function verificationSection({ record, receipt, related, derived }) {
 /* -------------------------------------------------------------------------- */
 
 function evidenceSection({ record, receipt, related, verification }) {
-	const chain = [];
-	let order = 0;
-	const add = (kind, ref, label, detail, available = Boolean(ref)) => {
-		order += 1;
-		chain.push({ order, kind, ref: ref ?? null, label, detail: text(detail ?? null, 400), available });
-	};
+	const links = linksOf(related);
+	const rehearsal = linkOrAbsent(links.rehearsal, LINK_SOURCE.PHASE46B_RUN, WHY_REASON.REHEARSAL_NOT_RECORDED, "No persisted rehearsal run records this execution.");
+	const contract = linkOrAbsent(links.contract, LINK_SOURCE.PHASE43_CONTRACT, WHY_REASON.CONTRACT_NOT_RECORDED, "No Phase 43 contract comparison is linked to this execution.");
+	const proof = linkOrAbsent(links.proof, LINK_SOURCE.PHASE47_PROOF, WHY_REASON.PROOF_NOT_RECORDED, "No verification proof is linked to this execution.");
+	const impact = linkOrAbsent(links.impact, LINK_SOURCE.PHASE39_IMPACT, WHY_REASON.IMPACT_NOT_RECORDED, "No Phase 39 change-impact evidence is linked to this execution.");
+	const drift = linkOrAbsent(links.drift, LINK_SOURCE.PHASE40_DRIFT, WHY_REASON.DRIFT_NOT_RECORDED, "No Phase 40 environment-drift evidence is linked to this execution.");
 
 	const source = receipt?.source ?? {};
-	if (source.collectionId || source.environmentId) {
-		const parts = [];
-		if (source.collectionId) parts.push(`collection ${source.collectionId}@${source.collectionRevision ?? "?"}`);
-		if (source.environmentId) parts.push(`environment ${source.environmentId}@${source.environmentRevision ?? "?"}`);
-		add("configuration", source.collectionId ?? source.environmentId, "Configuration source", parts.join(", "));
-	} else {
-		add("configuration", null, "Configuration source", "Scratch request with no persisted source.", false);
-	}
-	add("execution-receipt", receipt?.fingerprint, "Execution receipt", `Key ${receipt?.fingerprintKeyId ?? "unknown"} · outcome ${record?.outcome ?? "—"}`);
-	add("compiled-request", receipt?.request?.compiledFingerprint, "Compiled request", receipt?.request?.executedUrl ?? null);
-	add("response-body", receipt?.response?.bodyFingerprint, "Captured response body", receipt?.response ? `status ${receipt.response.contract?.status ?? "—"}` : "No response captured");
-	for (const entry of Array.isArray(related.investigations) ? related.investigations : []) {
-		if (!entry?.result) continue;
-		add("change-analysis", idOf(entry.investigationId), "Change analysis", entry.result?.summary?.text ?? null);
-	}
-	add("verification", verification.stateBasis, "Verification state", `${verification.state} (${verification.stateBasis})`, verification.state !== "UNKNOWN");
+	const investigations = Array.isArray(related.investigations) ? related.investigations.filter((entry) => entry?.result) : [];
+
+	const refsByChainId = {
+		configuration: source.collectionId ?? source.environmentId ?? null,
+		execution: receipt?.fingerprint ?? null,
+		impact: impact.link.fingerprint,
+		drift: drift.link.fingerprint,
+		rehearsal: rehearsal.link.fingerprint ?? rehearsal.run?.runId ?? null,
+		contract: contract.link.fingerprint,
+		verification: verification.link?.fingerprint ?? null,
+		proof: proof.link.fingerprint,
+	};
+	const detailByChainId = {
+		configuration:
+			source.collectionId || source.environmentId
+				? `collection ${source.collectionId ?? "—"}@${source.collectionRevision ?? "?"}, environment ${source.environmentId ?? "—"}@${source.environmentRevision ?? "?"}`
+				: "Scratch request with no persisted source.",
+		execution: `Key ${receipt?.fingerprintKeyId ?? "unknown"} · outcome ${record?.outcome ?? "—"}`,
+		impact: impact.link.reason,
+		drift: drift.link.reason,
+		rehearsal: rehearsal.link.reason,
+		contract: contract.link.reason,
+		verification: `${verification.state} (${verification.stateBasis}) — ${verification.link?.reason ?? "no reason recorded"}`,
+		proof: proof.link.reason,
+	};
+	const statusByChainId = {
+		configuration: source.collectionId || source.environmentId ? LINK_STATUS.RECORDED : LINK_STATUS.NOT_RECORDED,
+		execution: receipt?.fingerprint ? LINK_STATUS.RECORDED : LINK_STATUS.NOT_RECORDED,
+		impact: impact.link.status,
+		drift: drift.link.status,
+		rehearsal: rehearsal.link.status,
+		contract: contract.link.status,
+		verification: verification.link?.status ?? LINK_STATUS.NOT_RECORDED,
+		proof: proof.link.status,
+	};
+
+	const chain = WHY_CHAIN.map((node, index) => {
+		const ref = refsByChainId[node.id] ?? null;
+		const status = linkStatusTone(statusByChainId[node.id]);
+		return {
+			order: index + 1,
+			id: node.id,
+			kind: node.id,
+			label: node.label,
+			owner: node.owner,
+			section: node.section,
+			status,
+			ref,
+			detail: text(detailByChainId[node.id] ?? null, 400),
+			available: status === LINK_STATUS.RECORDED || status === LINK_STATUS.PARTIAL,
+		};
+	});
 
 	const boundedChain = bounded(chain, WHY_LIMITS.maxEvidence);
-	return { chain: boundedChain.items, truncated: boundedChain.truncated };
+
+	return {
+		state: boundedChain.items.some((node) => node.status === LINK_STATUS.RECORDED)
+			? boundedChain.items.every((node) => node.status === LINK_STATUS.RECORDED)
+				? "recorded"
+				: "partial"
+			: "not_recorded",
+		chain: boundedChain.items,
+		truncated: boundedChain.truncated,
+		rehearsal: {
+			link: rehearsal.link,
+			run: rehearsal.run,
+			step: rehearsal.step,
+			runsTruncated: Boolean(rehearsal.runsTruncated ?? rehearsal.truncated),
+		},
+		contract: { link: contract.link, detail: contract.detail },
+		verification: { link: verification.link, state: verification.state, stateBasis: verification.stateBasis },
+		proof: {
+			link: proof.link,
+			detail: proof.detail,
+			parseError: proof.parseError ?? null,
+		},
+		investigations: investigations.map((entry) => ({
+			investigationId: idOf(entry.investigationId),
+			summary: text(entry.result?.summary?.text ?? null, 600),
+		})),
+	};
 }
 
 /* -------------------------------------------------------------------------- */
@@ -613,6 +753,41 @@ function emptySection() {
 		effectCertainty: null,
 		precedence: { order: [...VARIABLE_SCOPE_ORDER], labels: [], appliedScopes: [], note: null },
 		gaps: [{ code: WHY_REASON.EXECUTION_NOT_RECORDED, detail: "No execution record exists for this identifier in this profile." }],
+		// Phase 49B section keys, present so every consumer sees one stable shape.
+		recorded: false,
+		reasonCode: WHY_REASON.EXECUTION_NOT_RECORDED,
+		reason: "No execution record exists for this identifier in this profile.",
+		hint: null,
+		impact: { link: absentLink(LINK_SOURCE.PHASE39_IMPACT, WHY_REASON.IMPACT_NOT_RECORDED, "No execution record exists, so no impact evidence can be linked."), detail: null },
+		drift: { link: absentLink(LINK_SOURCE.PHASE40_DRIFT, WHY_REASON.DRIFT_NOT_RECORDED, "No execution record exists, so no drift evidence can be linked."), detail: null },
+		comparisons: [],
+		chain: [],
+		rehearsal: { link: absentLink(LINK_SOURCE.PHASE46B_RUN, WHY_REASON.REHEARSAL_NOT_RECORDED, "No execution record exists, so no rehearsal can be linked."), run: null, step: null, runsTruncated: false },
+		contract: { link: absentLink(LINK_SOURCE.PHASE43_CONTRACT, WHY_REASON.CONTRACT_NOT_RECORDED, "No execution record exists, so no contract comparison can be linked."), detail: null },
+		proof: { link: absentLink(LINK_SOURCE.PHASE47_PROOF, WHY_REASON.PROOF_NOT_RECORDED, "No execution record exists, so no proof can be linked."), detail: null, parseError: null },
+		investigations: [],
+	};
+}
+
+function emptyVerification(derived) {
+	return {
+		state: derived.state,
+		stateBasis: derived.stateBasis,
+		basisLabel: VERIFICATION_BASIS_LABEL[derived.stateBasis] ?? derived.stateBasis,
+		reasonCode: derived.reasonCode,
+		stateIsValid: false,
+		authoritative: false,
+		reasons: derived.reasons,
+		reasonsTruncated: false,
+		caveat: WHY_CAVEAT,
+		link: derived.link ?? null,
+		linked: null,
+		observations: [],
+		assertions: { recorded: false, passed: 0, failed: 0, error: 0, failureFingerprint: null },
+		policy: { decision: null, local: false },
+		contract: null,
+		outcome: null,
+		linkedInvestigation: null,
 	};
 }
 
@@ -622,23 +797,11 @@ export function buildWhyExplanation({ record = null, related = {} } = {}) {
 
 	const configuration = recorded ? configurationSection({ record, receipt, related }) : emptySection();
 	const dependencies = recorded ? dependencySection({ record, receipt, related }) : emptySection();
-	const execution = recorded ? executionSection({ record, receipt }) : emptySection();	const change = changeSection({ related });
+	const execution = recorded ? executionSection({ record, receipt }) : emptySection();
+	const change = changeSection({ related });
 	const derived = deriveVerificationState({ receipt, related });
-	const verification = recorded ? verificationSection({ record, receipt, related, derived }) : {
-		state: derived.state,
-		stateBasis: derived.stateBasis,
-		reasonCode: derived.reasonCode,
-		stateIsValid: VERIFICATION_STATE_BASIS.includes(derived.stateBasis),
-		reasons: derived.reasons,
-		reasonsTruncated: false,
-		caveat: WHY_CAVEAT,
-		assertions: { recorded: false, passed: 0, failed: 0, error: 0, failureFingerprint: null },
-		policy: { decision: null, local: false },
-		contract: null,
-		outcome: null,
-		linkedInvestigation: null,
-	};
-	const evidence = recorded ? evidenceSection({ record, receipt, related, verification }) : { chain: [], truncated: false };
+	const verification = recorded ? verificationSection({ record, receipt, related, derived }) : emptyVerification(derived);
+	const evidence = evidenceSection({ record, receipt, related, verification });
 
 	const availability = {
 		configuration: { state: configuration.state, note: configuration.gaps?.[0]?.detail ?? null },
@@ -646,9 +809,10 @@ export function buildWhyExplanation({ record = null, related = {} } = {}) {
 		execution: { state: execution.state, note: execution.gaps?.[0]?.detail ?? null },
 		change: { state: change.state, note: change.reason ?? null },
 		verification: { state: verification.state === "UNKNOWN" ? "not_recorded" : "recorded", note: verification.reasons?.[0]?.text ?? null },
-		evidence: { state: evidence.chain.length > 0 ? "recorded" : "not_recorded", note: null },
+		evidence: { state: evidence.state ?? (evidence.chain.length > 0 ? "recorded" : "not_recorded"), note: null },
 	};
 	for (const section of WHY_SECTIONS) {
+		if (!availability[section]) availability[section] = { state: "not_recorded", note: null };
 		if (!SECTION_STATES.includes(availability[section].state)) availability[section].state = "not_recorded";
 	}
 
@@ -662,6 +826,7 @@ export function buildWhyExplanation({ record = null, related = {} } = {}) {
 		reasonCode: recorded ? null : WHY_REASON.EXECUTION_NOT_RECORDED,
 		reason: recorded ? null : "No execution record exists for this identifier in this profile.",
 		sections: [...WHY_SECTIONS],
+		chain: WHY_CHAIN.map((node) => ({ ...node })),
 		availability,
 		configuration,
 		dependencies,
