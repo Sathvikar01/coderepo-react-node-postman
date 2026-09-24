@@ -6,6 +6,31 @@
 
 Tracer is a full-stack React and Express application. Requests execute through the Express API on the server and results are persisted in MongoDB, so a signed-in profile can build a real HTTP request, send it, inspect the response, save it into a collection, switch environments, and reopen it from history.
 
+## Why Tracer is different
+
+Most HTTP clients help you send a request and read a response. Tracer helps you answer the harder question that follows: **a request worked, then it stopped working — what actually caused that?**
+
+The investigation workflow is the heart of the product:
+
+```text
+work → break → investigate → verify a cause → minimize → reproduce
+```
+
+1. **Work.** A saved request succeeds, recorded as an immutable, secret-redacted Execution Passport.
+2. **Break.** An unrelated change lands, a replayable change lands, and a later execution fails.
+3. **Investigate.** Tracer resolves a trustworthy regression boundary — the last passing run and the first failing run — and states it as a window, with an explicit caveat that the boundary itself is chronological evidence, not proof of cause.
+4. **Verify a cause.** Tracer runs interventions, not guesses. A change is labelled a **Verified cause** only when a probe shows that *applying* it reproduces the failure **and** a probe shows that *reverting* it removes the failure. Chronology, ordering, correlation, and first-divergence are reported as *leading divergence* and *correlated change*, and can never be promoted into a cause on their own.
+5. **Minimize.** Bounded, cancellable probes reduce the failing request to the smallest still-failing reproducer, and report honestly when the budget was reached instead of overstating minimality.
+6. **Reproduce.** A redacted `ReproCapsuleV1` carries the minimal request with placeholders instead of secrets. Importing it opens an **unsent, unsaved dirty draft** that you send yourself.
+
+The result is a plain-language, eight-question investigation — *What happened? When did it start? What changed? What was experimentally verified to cause it? What remains unverified? What is the smallest reproducer? Does it reproduce reliably? Export Repro Capsule* — where every conclusion cites concrete execution and probe ids, and nothing is claimed that was not demonstrated by a probe.
+
+A deterministic end-to-end demo of the whole investigation runs against the seeded app:
+
+```bash
+bun run demo:investigation
+```
+
 ## API Flight Recorder
 
 When a request works today and fails tomorrow, Tracer answers three questions: *what changed*, *what is the smallest cause*, and *how do I reproduce it safely*. The core flow is:
