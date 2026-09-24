@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { MaterialIcon } from "../../shared/components/MaterialIcon.jsx";
 import { OUTCOME_LABELS, relativeTime } from "../../shared/utils/format.js";
+import { canInvestigateHistoryItem } from "../execution-intelligence/investigation-model.js";
 import { historyApi } from "./history.api.js";
 
 const OUTCOME_STYLE = {
@@ -14,7 +15,7 @@ const OUTCOME_STYLE = {
 	decode_error: "error",
 };
 
-export function HistoryPanel({ compareBaseId, onAnalyze, onCompare, onDelete, onOpen, onResend, onSaveAs, onClear, refreshToken }) {
+export function HistoryPanel({ compareBaseId, onAnalyze, onCompare, onDelete, onInvestigate, onOpen, onResend, onSaveAs, onClear, refreshToken }) {
 	const [items, setItems] = useState([]);
 	const [cursor, setCursor] = useState(null);
 	const [query, setQuery] = useState("");
@@ -147,6 +148,11 @@ export function HistoryPanel({ compareBaseId, onAnalyze, onCompare, onDelete, on
 								<button className="text-button" type="button" onClick={() => onCompare(item.executionId)}>
 									{compareBaseId === item.executionId ? "Selected" : "Compare"}
 								</button>
+								{onInvestigate && canInvestigateHistoryItem(item) && (
+									<button className="text-button" type="button" onClick={() => onInvestigate(item.executionId)}>
+										Investigate failure
+									</button>
+								)}
 								<button className="text-button" type="button" onClick={() => onOpen(item.executionId)}>
 									Inspect
 								</button>
