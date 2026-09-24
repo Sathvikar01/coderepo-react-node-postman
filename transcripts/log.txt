@@ -5965,3 +5965,41 @@ phase=49
 pr=50 MERGED
 final_head=5f670d084b3d2ba1a183e4c7a89a214fbaeff3e1
 merge_commit=9f643476aa099ade7d2b9d6299656913208bb2f7
+
+
+## [2026-09-24T23:26:00+05:30] Phase 49B — WHY Inspector Verification-Evidence Integration
+
+User Prompt (normalized, secrets redacted):
+Complete the WHY Inspector evidence chain by linking authoritative Phase 39 Impact, Phase 40 Drift, Phase 46 Rehearsal, Phase 43 Contract, Phase 41 Verification, and Phase 47 Proof evidence without creating new truth. Phase 41 must remain the only authority for VERIFIED/BLOCKED/NEEDS_REHEARSAL/UNKNOWN; when no linked Phase 41 result exists, the inspector must report UNKNOWN. Preserve secret minimization, fail-closed identity linking, bounded output, and the existing WHY UX.
+
+Agent Response Summary:
+Phase 49B upgraded the WHY read-model to schemaVersion 2 and narrowed verification authority correctly: the inspector now restates a linked Phase 41 result only when its identity can be proven; otherwise verification is UNKNOWN. Assertions and target-policy outcomes remain observations and cannot set the authoritative state. The backend read-model composes existing Phase 39/40/43/46/47 evidence, including proof integrity/currentness, while creating no new verification, impact, drift, contract, rehearsal, or proof semantics.
+
+An initial backend-only completion exposed two integration defects during review: the frontend accepted only schemaVersion 1, and the new authoritative evidence chain was reachable only through the POST explanation route with a supplied Phase 47 proof while the frontend still called GET only. These were fixed on the same PR. The frontend now supports v2 only and fails closed on v1/future versions; stale self-derived basis labels were removed; chain/link statuses are rendered explicitly; and the WHY dialog can attach/remove an optional read-scoped proof artifact in component state. POST is used when proof text is supplied, otherwise GET remains the fail-closed fallback. The proof is never persisted or validated in React; the Phase 47B backend importer remains authoritative.
+
+Real browser Phase 49B acceptance reported 29/29 using live-minted proofs and a seeded Phase 46B run. Coverage included UNKNOWN/none, linked VERIFIED chain, POST secrecy, CURRENT, STALE remaining warning/non-green, INVALID, identity mismatch, malformed refusal, read-only behavior, cleanup, cross-links, keyboard/Escape, 375/768/1024/1440 × dark/light, and zero overflow/console errors. Backend tests reported 1518 pass / 2 skip / 0 fail; frontend tests 394 pass / 0 fail; build and frozen-lockfile checks were clean; Phase 47C 23/23, Phase 36 30/30, and Phase 37 18/18 regressions passed. The local seed was run with Node because Bun 1.3.9 crashed on seed.js; this was reported as an infrastructure note rather than hidden.
+
+GitHub verification confirmed PR #51 was clean and mergeable on final head 9f6cd6d41ff267a6ebd6a0cd8a2be56f4667d017. Baseline Gate, Phase 30 E2E + Load, and Tracer CLI all completed successfully. ChatGPT merged PR #51 into main as e100d62e337714718f3bdc5d120486a07e3e0a7d.
+
+Actions:
+* upgraded WHY explanation envelope to v2
+* linked existing Phase 39/40/43/46/41/47 evidence without creating new truth
+* made Phase 41 the sole authority for verification state
+* changed no-Phase-41 fallback to UNKNOWN
+* preserved target policy/assertions as observations only
+* updated frontend to accept v2 only and fail closed on unsupported versions
+* added read-scoped proof attachment through POST with GET fallback
+* kept proof validation/persistence out of React
+* exposed link-status and evidence-chain states in the existing WHY UI
+* ran Phase 49B browser E2E 29/29 and all reported regression/full-suite gates successfully
+* verified all GitHub workflows green
+* merged PR #51 into main as e100d62e337714718f3bdc5d120486a07e3e0a7d
+
+Context:
+tool=local coding agent + ChatGPT GitHub verification
+phase=49B
+branch=phase49/why-verification-integration
+head=9f6cd6d41ff267a6ebd6a0cd8a2be56f4667d017
+pr=51 MERGED
+merge_commit=e100d62e337714718f3bdc5d120486a07e3e0a7d
+reported_verdict=PHASE 49B VERDICT: PASS — WHY EVIDENCE CHAIN COMPLETE
