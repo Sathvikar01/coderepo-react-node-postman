@@ -12,6 +12,7 @@ export function WorkspaceHeader({
 	onOpenEnvironments,
 	onOpenImport,
 	onOpenLocalRuntime,
+	onOpenProof,
 	onLogout,
 	onToggleSidebar,
 	onToggleTheme,
@@ -71,6 +72,16 @@ export function WorkspaceHeader({
 			</nav>
 			<div className="app-header-spacer" />
 			<div className="app-header-actions rail-secondary">
+				<button
+					aria-label="View Verification Proof"
+					className="button rail-command"
+					title="View Verification Proof"
+					type="button"
+					onClick={onOpenProof}
+				>
+					<MaterialIcon size={19}>check</MaterialIcon>
+					<span className="rail-command-label">Proof</span>
+				</button>
 				<SelectMenu
 					ariaLabel="Active environment"
 					className="environment-picker"

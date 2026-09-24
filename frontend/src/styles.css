@@ -3189,3 +3189,167 @@ dialog::backdrop {
 .recorder-timeline-item.active .recorder-timeline-dot {
 	border-color: var(--blue);
 }
+
+/* Phase 47C — Verification Proof dialog.
+   Reuses the Flight Recorder dialog shell, cards, and evidence rows. Adds only
+   the states the proof needs: a truthful headline, count grids, and an evidence
+   table. STALE and INVALID never render with the success tone. */
+.verification-proof-modal {
+	width: min(960px, 95vw);
+	max-width: min(960px, 95vw);
+}
+.verification-proof-dialog {
+	width: min(960px, 95vw);
+	min-height: min(680px, 88vh);
+}
+.verification-proof-dialog footer {
+	flex-wrap: wrap;
+	gap: 8px;
+}
+.proof-headline {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	padding: 12px 14px;
+	border: 1px solid var(--border);
+	border-left: 3px solid var(--border-strong);
+	border-radius: 12px;
+	background: var(--field);
+}
+.proof-headline strong {
+	display: block;
+	font-size: 13.5px;
+}
+.proof-headline p {
+	margin: 4px 0 0;
+	color: var(--muted);
+	font-size: 12.5px;
+	line-height: 1.45;
+}
+.proof-headline.success {
+	border-left-color: var(--success);
+	background: color-mix(in srgb, var(--success-container) 55%, var(--field));
+}
+.proof-headline.success strong {
+	color: var(--success);
+}
+.proof-headline.warning {
+	border-left-color: var(--warning);
+	background: color-mix(in srgb, var(--warning-container) 55%, var(--field));
+}
+.proof-headline.warning strong {
+	color: var(--warning);
+}
+.proof-headline.danger {
+	border-left-color: var(--danger);
+	background: color-mix(in srgb, var(--danger-container) 55%, var(--field));
+}
+.proof-headline.danger strong {
+	color: var(--danger);
+}
+.proof-headline.unknown {
+	border-left-color: var(--border-strong);
+}
+.proof-count-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+	gap: 8px;
+}
+.proof-count {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 8px 10px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: var(--field);
+}
+.proof-count span {
+	color: var(--muted);
+	font-size: 10.5px;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+.proof-count strong {
+	color: var(--ink-strong);
+	font-size: 16px;
+	font-variant-numeric: tabular-nums;
+}
+.proof-count.warning {
+	border-color: color-mix(in srgb, var(--warning) 46%, var(--border));
+}
+.proof-count.warning strong {
+	color: var(--warning);
+}
+.proof-reasons {
+	margin-top: 10px;
+	padding-top: 8px;
+	border-top: 1px solid var(--divider);
+}
+.proof-reasons p {
+	margin: 4px 0 0;
+	color: var(--muted);
+	font-size: 12px;
+}
+.proof-card-danger {
+	border-color: color-mix(in srgb, var(--danger) 42%, var(--border));
+}
+.proof-notice {
+	margin: 0;
+}
+.proof-warning-text {
+	color: var(--warning);
+}
+.proof-evidence-table {
+	display: flex;
+	flex-direction: column;
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	overflow: hidden;
+}
+.proof-evidence-head,
+.proof-evidence-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 0.9fr) minmax(0, 0.9fr) minmax(0, 1.4fr);
+	gap: 8px;
+	align-items: center;
+	padding: 8px 12px;
+	font-size: 12px;
+}
+.proof-evidence-head {
+	background: var(--field-active);
+	color: var(--muted);
+	font-size: 10.5px;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+.proof-evidence-row {
+	border-top: 1px solid var(--divider);
+}
+.proof-evidence-row > span {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.proof-request-id {
+	font-family: var(--font-mono);
+	font-size: 11.5px;
+}
+.proof-raw summary {
+	cursor: pointer;
+	color: var(--muted);
+	font-size: 12.5px;
+}
+.proof-raw textarea {
+	margin-top: 8px;
+}
+@media (max-width: 720px) {
+	.proof-evidence-head {
+		display: none;
+	}
+	.proof-evidence-row {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 4px;
+	}
+}
