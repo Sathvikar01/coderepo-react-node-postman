@@ -5799,3 +5799,44 @@ head=bc6604b35b82e437ab1b06229dff95407009f032
 pr=46 MERGED
 merge_commit=ca219aed44be6cc858f3a8f2412f2ca51bbd02e1
 reported_verdict=PHASE 47B VERDICT: PASS
+
+
+## [2026-09-24T19:41:00+05:30] Phase 47C — Verification Proof UX
+
+User Prompt (normalized, secrets redacted):
+Expose Tracer's completed Verification Proof chain in the frontend without duplicating backend truth logic. Provide a visible proof entry point, truthful VALID/CURRENT/STALE/MISMATCH/UNKNOWN/INVALID states, deterministic export, inspection-only import and verify, integrity/provenance details, responsive/accessibility behavior, and real browser verification while preserving frozen navigation invariants and existing Investigation/Flight Recorder behavior.
+
+Agent Response Summary:
+Implemented the Phase 47C Verification Proof UX as a frontend-only integration over the Phase 47B API. The UI exposes a View Verification Proof action and a four-tab dialog for Proof, Evidence, Integrity, and Import & Verify. It preserves backend authority for proof construction, integrity, staleness, and verification semantics; STALE never renders as current green verification, and imported proof artifacts remain inspection-only.
+
+The first PR head exposed a real Phase 30 mobile-navigation regression: adding Proof as a fifth .rail-primary command violated the frozen four-command mobile rail contract. The fix moved the same Proof action into .rail-secondary, preserving the original assertion and navigation structure while keeping Proof reachable on desktop and mobile.
+
+Two additional browser-test defects were found and fixed. A committed signed fixture could never verify under CI because the CI process uses a random HMAC key; the Phase 47C E2E now mints a proof live through build → export against the active backend key. The import-success assertion also incorrectly waited for an Import result after the successful flow moved to the Proof tab; the assertion was corrected and inspection-only flags were explicitly checked.
+
+Real browser verification then passed: Phase 30 E2E 14/14 and Phase 47C E2E 23/23. The Phase 47C matrix covered opening Proof, all four tabs, VALID/CURRENT, STALE with reason, MISMATCH, UNKNOWN, INVALID/tampered input, deterministic export, export→import→verify roundtrip, keyboard/Escape behavior, 375/768/1024/1440 responsive checks, dark/light where supported, and zero console errors. Focused tests reported 85 pass / 0 fail; full bun test 1437 pass / 0 fail; frontend build and frozen-lockfile checks passed.
+
+GitHub verification confirmed updated PR #47 was clean and mergeable on head d0d10ccce5335ab61fe6a1d59a1d1d29e6efd64f, with Baseline Gate, Phase 30 E2E + Load, and Tracer CLI all green. ChatGPT merged PR #47 into main as 9ef8518d0f8068e1ec87a9ceb64b904816216b98.
+
+Actions:
+* implemented frontend-only Verification Proof UX over Phase 47B
+* preserved truthful VALID/CURRENT/STALE/MISMATCH/UNKNOWN/INVALID semantics
+* moved Proof from the primary mobile rail to the secondary rail to preserve the frozen Phase 30 four-command contract
+* replaced the dead signed E2E fixture with live proof build/export under the active backend HMAC key
+* corrected import-success browser assertions and verified inspection-only import flags
+* ran Phase 30 browser E2E: 14/14
+* ran Phase 47C browser E2E: 23/23
+* ran focused tests: 85 pass / 0 fail
+* ran full bun test: 1437 pass / 0 fail
+* ran frontend build and frozen-lockfile checks successfully
+* pushed fix commit d0d10ccce5335ab61fe6a1d59a1d1d29e6efd64f
+* verified all three GitHub workflows green
+* merged PR #47 into main as 9ef8518d0f8068e1ec87a9ceb64b904816216b98
+
+Context:
+tool=local coding agent + ChatGPT GitHub verification
+phase=47C
+branch=phase47/verification-proof-ux
+head=d0d10ccce5335ab61fe6a1d59a1d1d29e6efd64f
+pr=47 MERGED
+merge_commit=9ef8518d0f8068e1ec87a9ceb64b904816216b98
+reported_verdict=PHASE 47C VERDICT: PASS — VERIFICATION PROOF VISIBLE
