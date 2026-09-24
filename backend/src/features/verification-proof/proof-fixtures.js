@@ -17,6 +17,11 @@ export const ENV_FP = "env-fingerprint-47";
 export const POLICY_IDENTITY = "policy-identity-47";
 export const VERIFIED_AT = "2026-09-24T10:00:00.000Z";
 
+// The proof core is deliberately database-free, so fixtures name a synthetic owner
+// instead of a Mongo ObjectId. The Phase 47B route harness resolves that sentinel to
+// the authenticated test profile; the core never reads it.
+export const EVIDENCE_OWNER_PROFILE_ID = "__verification-proof-synthetic-e2e__";
+
 export function impactResult({ direct = ["r1"], indirect = [] } = {}) {
 	const row = (requestId) => ({ requestId, nodeKind: "request", collectionId: "col-1" });
 	return {
@@ -117,7 +122,7 @@ export function executionEvidence(overrides = {}) {
 		environmentName: "staging",
 		outcome: "response",
 		complete: true,
-		ownerProfileId: "profile-47",
+		ownerProfileId: EVIDENCE_OWNER_PROFILE_ID,
 		startedAt: "2026-09-24T09:59:00.000Z",
 		finishedAt: "2026-09-24T09:59:01.000Z",
 		...overrides,
@@ -188,8 +193,8 @@ export function contractResult({ requestId = "r1", status = 200, executionId = "
 			state: "PUBLISHED",
 			contentFingerprint: "contract-content-fingerprint-47",
 			fingerprintKeyId: "key-47",
+			ownerProfileId: EVIDENCE_OWNER_PROFILE_ID,
 			requestId,
-			ownerProfileId: "profile-47",
 		},
 		observed: { status, identity: { executionId, label: null } },
 		findings: [
