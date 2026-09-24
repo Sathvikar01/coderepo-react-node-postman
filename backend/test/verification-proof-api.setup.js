@@ -55,18 +55,25 @@ __setSyntheticEvidenceOwnerForTests(true);
 
 const authModule = await import("../src/features/auth/auth.service.js");
 const authPatched = Object.create(authModule.authService);
+// The stub only intercepts this suite's synthetic token. Every other token falls
+// through to the real implementation. `bun test` evaluates every suite in one
+// process against one shared module registry, so an unconditional replacement
+// would silently break real-JWT suites that are evaluated after this one.
+const realAuthenticate = authModule.authService.authenticate;
 authPatched.authenticate = async (token) => {
-	if (String(token) !== TEST_TOKEN) {
-		const { AppError } = await import("../src/shared/errors/app-error.js");
-		throw new AppError(401, "AUTH_INVALID_TOKEN", "The session token is not valid.");
-	}
+	if (String(token) !== TEST_TOKEN) return realAuthenticate.call(authModule.authService, token);
 	return { account, payload: { sub: String(accountId), type: "profile", profileId: String(profileId) } };
 };
 authModule.authService.authenticate = authPatched.authenticate;
 
 const profileModule = await import("../src/features/profiles/profile.service.js");
 const profilePatched = Object.create(profileModule.profileService);
-profilePatched.findProfileById = async (id) => (String(id) === String(profileId) ? profile : null);
+// Same rule: answer only for the synthetic profile, delegate everything else.
+const realFindProfileById = profileModule.profileService.findProfileById;
+profilePatched.findProfileById = async (id) => {
+	if (String(id) === String(profileId)) return profile;
+	return realFindProfileById.call(profileModule.profileService, id);
+};
 profileModule.profileService.findProfileById = profilePatched.findProfileById;
 
 export { profile, SYNTHETIC_EVIDENCE_OWNER };

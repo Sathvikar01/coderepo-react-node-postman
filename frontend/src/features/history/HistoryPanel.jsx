@@ -15,7 +15,7 @@ const OUTCOME_STYLE = {
 	decode_error: "error",
 };
 
-export function HistoryPanel({ compareBaseId, onAnalyze, onCompare, onDelete, onInvestigate, onOpen, onResend, onSaveAs, onClear, refreshToken }) {
+export function HistoryPanel({ compareBaseId, onAnalyze, onCompare, onDelete, onInvestigate, onOpen, onResend, onSaveAs, onWhy, onClear, refreshToken }) {
 	const [items, setItems] = useState([]);
 	const [cursor, setCursor] = useState(null);
 	const [query, setQuery] = useState("");
@@ -145,6 +145,11 @@ export function HistoryPanel({ compareBaseId, onAnalyze, onCompare, onDelete, on
 								<button className="text-button" type="button" onClick={() => onAnalyze(item.executionId)}>
 									Passport
 								</button>
+								{onWhy && (
+									<button className="text-button" type="button" onClick={() => onWhy(item.executionId)}>
+										Why?
+									</button>
+								)}
 								<button className="text-button" type="button" onClick={() => onCompare(item.executionId)}>
 									{compareBaseId === item.executionId ? "Selected" : "Compare"}
 								</button>

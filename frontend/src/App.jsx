@@ -26,6 +26,7 @@ import { executionApi } from "./features/executions/execution.api.js";
 import { FlightRecorderDialog } from "./features/execution-intelligence/FlightRecorderDialog.jsx";
 import { InvestigationDialog } from "./features/execution-intelligence/InvestigationDialog.jsx";
 import { VerificationProofDialog } from "./features/verification-proof/VerificationProofDialog.jsx";
+import { WhyInspectorDialog } from "./features/why-inspector/WhyInspectorDialog.jsx";
 import { capsuleDraftTab } from "./features/execution-intelligence/flight-recorder-model.js";
 import { exampleApi } from "./features/examples/example.api.js";
 import { ExampleActions } from "./features/examples/ExampleActions.jsx";
@@ -110,6 +111,7 @@ export default function App() {
 	const [proofOpen, setProofOpen] = useState(false);
 	const [productSurface, setProductSurface] = useState(null);
 	const [investigation, setInvestigation] = useState(null);
+	const [whyInspector, setWhyInspector] = useState(null);
 	const [runner, setRunner] = useState(null);
 	const [comparisonBaseId, setComparisonBaseId] = useState(null);
 	const [examplesVersion, setExamplesVersion] = useState(0);
@@ -905,6 +907,13 @@ export default function App() {
 		setSidebarOpen(false);
 	};
 
+	// Phase 49 — "Why?" Inspector. A read-model view only: it opens a dialog that
+	// asks the backend to explain one execution. It never sends, saves, or mutates.
+	const openWhyInspector = (executionId) => {
+		setWhyInspector({ executionId });
+		setSidebarOpen(false);
+	};
+
 	const compareHistoryEntry = (executionId) => {
 		if (!comparisonBaseId) {
 			setComparisonBaseId(executionId);
@@ -945,7 +954,7 @@ export default function App() {
 	};
 
 	const shortcutHandlers = useRef({ send: null, saveDraft: null, dialogOpen: false });
-	shortcutHandlers.current = { send, saveDraft, dialogOpen: Boolean(dialog || flightRecorder || investigation || runner || proofOpen || productSurface) };
+	shortcutHandlers.current = { send, saveDraft, dialogOpen: Boolean(dialog || flightRecorder || investigation || whyInspector || runner || proofOpen || productSurface) };
 
 	useEffect(() => {
 		const onKeyDown = (event) => {
@@ -1136,6 +1145,10 @@ export default function App() {
 			executionId={flightRecorder.executionId}
 			onClose={() => setFlightRecorder(null)}
 			onOpenDraft={openCapsuleDraft}
+			onWhy={(executionId) => {
+				setFlightRecorder(null);
+				openWhyInspector(executionId);
+			}}
 		/>
 	) : null;
 
@@ -1170,6 +1183,25 @@ export default function App() {
 			}}
 			onOpenDraft={openCapsuleDraft}
 			onOpenPassport={(executionId) => setFlightRecorder({ executionId, comparisonIds: null })}
+			onWhy={(executionId) => {
+				setInvestigation(null);
+				openWhyInspector(executionId);
+			}}
+		/>
+	) : null;
+
+	const whyInspectorNode = whyInspector ? (
+		<WhyInspectorDialog
+			executionId={whyInspector.executionId}
+			onClose={() => setWhyInspector(null)}
+			onInvestigate={(executionId) => {
+				setWhyInspector(null);
+				openInvestigation(executionId);
+			}}
+			onOpenPassport={(executionId) => {
+				setWhyInspector(null);
+				setFlightRecorder({ executionId, comparisonIds: null });
+			}}
 		/>
 	) : null;
 
@@ -1181,6 +1213,7 @@ export default function App() {
 			{flightRecorderNode}
 			{runnerNode}
 			{investigationNode}
+			{whyInspectorNode}
 			<WorkspaceHeader
 				account={account}
 				activeEnvironmentId={state.activeEnvironmentId}
@@ -1340,6 +1373,7 @@ export default function App() {
 							onCompare={compareHistoryEntry}
 							onDelete={deleteHistoryEntry}
 							onInvestigate={(executionId) => openInvestigation(executionId)}
+							onWhy={openWhyInspector}
 							onOpen={openHistoryEntry}
 							onResend={resendHistoryEntry}
 							onSaveAs={(executionId) =>

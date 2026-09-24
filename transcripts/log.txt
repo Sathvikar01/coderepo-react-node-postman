@@ -5916,3 +5916,39 @@ head=1da7f1f49440b9d77abba42b3d6735f93e7e1976
 pr=49 MERGED
 merge_commit=de88e7f52e03fe972c1ff6e87928bf6f5ffb583d
 reported_verdict=PHASE 48B VERDICT: PASS — TRACER PRODUCTION ACCEPTANCE COMPLETE AND FROZEN
+
+
+## [2026-09-24T21:58:00+05:30] Phase 49 — Effective Configuration / "Why?" Inspector
+
+User Prompt (normalized, secrets redacted):
+Build PHASE 49 — EFFECTIVE CONFIGURATION / "WHY?" INSPECTOR on branch phase49/why-inspector from base b573a54. Answer "why did this request execute this way, and why did Tracer reach this verification result?" as a read-only projection over already-recorded evidence: configuration → dependency → execution → change → verification → evidence. Do not create new execution, verification, impact, drift, contract, or proof semantics. Backend owns precedence and derivation; the frontend infers nothing. Fail closed on missing data with explicit states. Never resolve or expose secrets. Bound all output. Verify with real tests and a real browser at 375/768/1024/1440 in both themes. Commit, push, open a PR to main, do not merge, and report a 16-point result with a verdict.
+
+Agent Response Summary:
+Phase 49 delivered a "Why?" Inspector as a projection, not an engine. The backend feature backend/src/features/why-inspector/ turns one execution record into a deterministic tracer.why-explanation v1 envelope with six sections, served read-only by GET /api/v1/why/executions/:executionId behind workspace auth and profile resolution. The projection derives the canonical variable precedence ladder, records the seven-stage execution pipeline, composes the only persisted execution-linked change evidence (completed Investigation records), derives a verification state from recorded facts with an explicit basis, and emits an ordered evidence chain. It never resolves a secret, reports not_recorded/partial states with stable reason codes instead of blanks, and bounds every list and text field.
+
+The frontend feature frontend/src/features/why-inspector/ renders that envelope in a keyboard-accessible dialog with roving tabs, and "Why?" actions were added to history rows, the Flight Recorder passport, and the Investigation dialog. Because impact, drift, cross-environment verification, and proofs are generated on demand and never persisted, the inspector honestly reports "not recorded" for change evidence until a persisted investigation exists; this was treated as the correct fail-closed behaviour rather than papered over with inference.
+
+Two real defects were found and fixed. The dialog footer was clipped below the viewport at 375px, fixed by capping the dialog to the viewport and making the section body a flex scroll region. A pre-existing test-isolation hazard was also repaired: backend/test/verification-proof-api.setup.js replaced shared auth/profile singletons unconditionally, and under bun test's single shared module registry that stub leaked into the new real-JWT route suite; the setup now delegates for every non-synthetic token and id.
+
+Evidence: feature tests 43 pass / 0 fail (23 projection unit, 9 real-Mongo route, 11 frontend presentation model); repo-wide bun test 1865 pass / 2 skip / 0 fail, 6606 expect() calls, 119 files; backend node --check clean on every changed backend file; frontend production build clean (113 modules); bun install --frozen-lockfile unchanged; seed/reset deterministic; demo:flight-recorder 47/47 and demo:investigation 14/14; real-browser frontend/scripts/phase49-why-inspector-e2e.mjs PHASE49_E2E_PASS 20/20 including the 375/768/1024/1440 × dark/light matrix, keyboard navigation, secret-exclusion, typed 400/404 fail-closed, read-only surface, and zero browser exceptions.
+
+Actions:
+* added backend/src/features/why-inspector (schema, pure projection, repository, service, controller, routes, barrel)
+* mounted the read-only router at /api/v1/why in backend/src/app.js
+* added frontend/src/features/why-inspector (api, presentation model, dialog, stylesheet)
+* wired "Why?" into HistoryPanel, FlightRecorderDialog, InvestigationDialog, and App.jsx
+* added 23 projection tests, 9 real-Mongo route tests, and 11 frontend model tests
+* fixed the 375px dialog footer clipping defect with a viewport-capped flex scroll layout
+* fixed the shared-test-singleton leak in backend/test/verification-proof-api.setup.js
+* wrote frontend/scripts/phase49-why-inspector-e2e.mjs and reached PHASE49_E2E_PASS 20/20
+* ran bun install --frozen-lockfile, repo-wide bun test, backend syntax, frontend build, seed/reset, and both demos
+* wrote docs/phase49/why-inspector.md
+* pushed branch phase49/why-inspector and opened a PR to main without merging
+
+Context:
+tool=pi (local coding agent)
+phase=49
+branch=phase49/why-inspector
+head=9f1bc494a58b80019f6bb1964fa6170358f08bd0
+pr=OPEN
+reported_verdict=PHASE 49 VERDICT: PASS — WHY INSPECTOR READY

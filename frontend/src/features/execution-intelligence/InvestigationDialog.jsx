@@ -251,7 +251,7 @@ function ResultSections({ result, onOpenComparison, onOpenPassport, onOpenDraft,
 	);
 }
 
-export function InvestigationDialog({ failingExecutionId, goodExecutionId, onClose, onOpenComparison, onOpenDraft, onOpenPassport }) {
+export function InvestigationDialog({ failingExecutionId, goodExecutionId, onClose, onOpenComparison, onOpenDraft, onOpenPassport, onWhy }) {
 	const [probeTarget, setProbeTarget] = useState("execution");
 	const [receipt, setReceipt] = useState(null);
 	const [job, setJob] = useState(null);
@@ -377,9 +377,16 @@ export function InvestigationDialog({ failingExecutionId, goodExecutionId, onClo
 						<p className="eyebrow">Execution intelligence</p>
 						<h2>Investigate failure</h2>
 					</div>
-					<button aria-label="Close investigation" className="icon-button" type="button" onClick={onClose}>
-						<MaterialIcon>close</MaterialIcon>
-					</button>
+					<div className="proof-header-actions">
+						{onWhy && (
+							<button className="text-button" type="button" onClick={() => onWhy(failingExecutionId)}>
+								Why?
+							</button>
+						)}
+						<button aria-label="Close investigation" className="icon-button" type="button" onClick={onClose}>
+							<MaterialIcon>close</MaterialIcon>
+						</button>
+					</div>
 				</header>
 				{error ? (
 					<div className="status-banner danger" role="alert" data-testid="investigation-error">
