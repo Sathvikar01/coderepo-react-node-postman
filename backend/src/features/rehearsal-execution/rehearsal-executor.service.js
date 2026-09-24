@@ -335,6 +335,35 @@ export function createRehearsalExecutor({
 		let abort = null;
 		let terminal = false;
 
+		// A step left IN_PROGRESS by a previous worker means a remote request was
+		// dispatched and its outcome was never recorded. Whether the side effect
+		// landed is unknowable, so the run fails closed rather than blindly replaying
+		// a possibly-mutating request.
+		const inDoubtStepIds = current.stepStates.filter((entry) => entry.state === STEP_STATES.IN_PROGRESS).map((entry) => entry.stepId);
+		if (inDoubtStepIds.length > 0) {
+			recorder.addReasonCode(EXECUTOR_ERROR_CODES.EXECUTION_FAILED);
+			current = await checkpoints.failRun(profileId, runId, {
+				generation,
+				owner,
+				reasonCode: CHECKPOINT_REASON_CODES.STEP_IN_DOUBT,
+				reason: "STEP_IN_DOUBT",
+			});
+			return buildReport({
+				binding,
+				run: current,
+				runId,
+				terminated: true,
+				stopReason: EXECUTOR_STOP_REASONS.EXECUTION_ERROR,
+				executedStepIds,
+				skippedStepIds,
+				abort: null,
+				evidence: recorder.projection(),
+				verification: null,
+				stepOutcomes: recorder.stepOutcomes(),
+				reasonCodes: recorder.reasonCodes(),
+			});
+		}
+
 		const pending = resumed.pendingStepIds;
 		const budget = input.maxSteps ?? pending.length;
 
@@ -362,6 +391,31 @@ export function createRehearsalExecutor({
 					owner,
 					reasonCode: CHECKPOINT_REASON_CODES.PLAN_INCOMPLETE,
 					reason: "STEP_NOT_IN_PLAN",
+				});
+				stopReason = EXECUTOR_STOP_REASONS.EXECUTION_ERROR;
+				terminal = true;
+				break;
+			}
+
+			// Mark the step in-flight before dispatching. If this process dies between
+			// the remote request and the checkpoint, the persisted IN_PROGRESS state tells
+			// a later resume that the side effect is ambiguous, instead of replaying it.
+			try {
+				current = (
+					await checkpoints.beginStep(profileId, runId, {
+						generation,
+						owner,
+						stepId,
+						identity: binding.identity,
+					})
+				).run;
+			} catch (error) {
+				recorder.addReasonCode(EXECUTOR_ERROR_CODES.EXECUTION_FAILED);
+				current = await checkpoints.failRun(profileId, runId, {
+					generation,
+					owner,
+					reasonCode: CHECKPOINT_REASON_CODES.INTERNAL_ERROR,
+					reason: typeof error?.code === "string" ? error.code.slice(0, 120) : null,
 				});
 				stopReason = EXECUTOR_STOP_REASONS.EXECUTION_ERROR;
 				terminal = true;
@@ -399,10 +453,24 @@ export function createRehearsalExecutor({
 
 			const { result, executionId } = dispatched;
 
-			// Cancellation is not a completed step. Pausing leaves the step PENDING so a
-			// resume re-runs it, and no checkpoint is written for work that did not
-			// finish.
+			// Cancellation is not a completed step. The dispatch was aborted, so no remote
+			// side effect completed: release the in-flight claim so a resume can safely
+			// re-run the step. If the release itself fails, the claim stays in place and a
+			// later resume fails closed rather than replaying an ambiguous side effect.
 			if (result?.outcome === "cancelled" || input.signal?.aborted) {
+				try {
+					current = (
+						await checkpoints.releaseStep(profileId, runId, {
+							generation,
+							owner,
+							stepId,
+							identity: binding.identity,
+						})
+					).run;
+				} catch {
+					// Deliberately swallowed: the checkpoint run stays non-terminal and a later
+					// resume will detect the IN_PROGRESS step and fail closed.
+				}
 				stopReason = EXECUTOR_STOP_REASONS.CANCELLED;
 				break;
 			}

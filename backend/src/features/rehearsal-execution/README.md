@@ -119,27 +119,36 @@ Report:
 4. **One run per plan.** The run id is deterministic from the plan fingerprint, so
    a retried invocation resumes the same run.
 5. **Generation is claimed.** The executor resumes (never "starts") the run, so a
-   stale worker cannot checkpoint. `checkpointStep` does not advance the
-   generation, so the claimed generation is reused for every write in one pass.
+   stale worker cannot checkpoint. `beginStep`/`checkpointStep`/`releaseStep` do not
+   advance the generation, so the claimed generation is reused for every write in
+   one pass.
 6. **Completed steps never re-execute.** Phase 46B returns only pending work, and
    a terminal run is returned as-is (`stopReason: TERMINAL`) without dispatch.
-7. **Abort stops immediately.** Phase 45A is evaluated after every result; on
+7. **In-flight steps are never blindly replayed.** Before dispatching a step the
+   executor calls `beginStep`, which durably marks it `IN_PROGRESS`. A crash
+   between the remote request and the checkpoint leaves that marker behind, so a
+   later resume fails closed with `STEP_IN_DOUBT` rather than replaying a request
+   whose side effect is unknowable. A dispatch that is cancelled or times out is
+   `releaseStep`d back to `PENDING`, because an aborted request has no side effect
+   to protect against.
+8. **Abort stops immediately.** Phase 45A is evaluated after every result; on
    `ABORT` the run is aborted and no further step is dispatched.
-8. **Bounded, redacted evidence.** Checkpoints carry only flat scalar metadata;
+9. **Bounded, redacted evidence.** Checkpoints carry only flat scalar metadata;
    evidence carries no bodies, credentials, cookies, or tokens. Overflow is
    reported (`EVIDENCE_LIMIT`) rather than silently truncated.
-9. **Missing evidence is never VERIFIED.** A contract that is absent, or that
-   cannot be compared (draft, identity mismatch, malformed), produces **no**
-   assertion record — absence, not a fabricated pass.
+10. **Missing evidence is never VERIFIED.** A contract that is absent, or that
+    cannot be compared (draft, identity mismatch, malformed), produces **no**
+    assertion record — absence, not a fabricated pass.
 
 ## Step semantics
 
 | Execution result | Checkpoint | Run |
 | --- | --- | --- |
 | any known terminal outcome | step `COMPLETED` (HTTP outcome in metadata/evidence) | continues unless abort |
-| `cancelled`, or signal aborted | step stays `PENDING` | `PAUSED` (`CANCELLED`) |
-| deadline reached | step stays `PENDING` | `PAUSED` (`DEADLINE_EXCEEDED`) |
-| step budget reached | step stays `PENDING` | `PAUSED` (`STEP_BUDGET`) |
+| `cancelled`, or signal aborted | step `releaseStep`d back to `PENDING` | `PAUSED` (`CANCELLED`) |
+| deadline reached | step stays `PENDING` (not yet claimed) | `PAUSED` (`DEADLINE_EXCEEDED`) |
+| step budget reached | step stays `PENDING` (not yet claimed) | `PAUSED` (`STEP_BUDGET`) |
+| previous worker left a step `IN_PROGRESS` | no dispatch; step stays `IN_PROGRESS` | `FAILED` (`STEP_IN_DOUBT`) |
 | unknown outcome | — | `FAILED` (`STEP_OUTCOME_MISSING`) |
 | execution throws / step unresolved | — | `FAILED` (`PLAN_INCOMPLETE` / `INTERNAL_ERROR`) |
 | 45A abort | — | `ABORTED` (mapped 46B reason code) |

@@ -263,6 +263,16 @@ export const checkpointStepInputSchema = z
 	})
 	.strict();
 
+export const stepClaimInputSchema = z
+	.object({
+		generation: z.number().int().min(1),
+		owner: identifier("Worker identities"),
+		stepId: identifier("Step identifiers"),
+		// Optional identity assertion, checked exactly like a checkpoint write.
+		identity: runIdentitySchema.nullish(),
+	})
+	.strict();
+
 export const abortInputSchema = z
 	.object({
 		generation: z.number().int().min(1),
@@ -332,6 +342,10 @@ export function parseClaimInput(value) {
 
 export function parseCheckpointStepInput(value) {
 	return parseWith(value, checkpointStepInputSchema, "REHEARSAL_CHECKPOINT_MALFORMED_INPUT", "The step checkpoint is not valid.");
+}
+
+export function parseStepClaimInput(value) {
+	return parseWith(value, stepClaimInputSchema, "REHEARSAL_CHECKPOINT_MALFORMED_INPUT", "The step claim request is not valid.");
 }
 
 export function parseAbortInput(value) {

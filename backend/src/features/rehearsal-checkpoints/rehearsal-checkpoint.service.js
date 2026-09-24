@@ -9,6 +9,7 @@ import {
 	parsePlan,
 	parseClaimInput,
 	parseCheckpointStepInput,
+	parseStepClaimInput,
 	parseAbortInput,
 	parseFailInput,
 	parseResumeInput,
@@ -469,6 +470,96 @@ export function createRehearsalCheckpointService({ repository = checkpointReposi
 	}
 
 	// -----------------------------------------------------------------------
+	// Step claim / release
+	// -----------------------------------------------------------------------
+	//
+	// These are the in-flight markers a rehearsal executor uses around a dispatch.
+	// `beginStep` records "a worker is about to send this request" before the send;
+	// `releaseStep` clears it when the worker aborts the send (cancel/deadline) so no
+	// ambiguous side effect is implied. A step left IN_PROGRESS by a crashed worker
+	// is detectable on resume, which is what stops a mutating request from being
+	// blindly replayed.
+	async function beginStep(ownerProfileId, runId, input) {
+		const profileId = assertProfileId(ownerProfileId);
+		const parsed = parseStepClaimInput(input);
+		const current = await requireRun(profileId, runId);
+
+		assertGeneration(current, parsed.generation, runId);
+		assertOwned(current, parsed.owner, runId);
+		if (isTerminalRunState(current.runState))
+			throw specError(409, CODES.TERMINAL_STATE, `A ${current.runState} run cannot accept step claims.`, {
+				runId,
+				runState: current.runState,
+			});
+		assertIdentityBinding(current, parsed.identity);
+
+		const step = current.stepStates.find((entry) => entry.stepId === parsed.stepId);
+		if (!step) throw specError(404, CODES.STEP_NOT_FOUND, `Step "${parsed.stepId}" is not part of this run's plan.`, { runId, stepId: parsed.stepId });
+
+		// Idempotent re-claim by the same owner/generation (e.g. a retried call inside
+		// one generation) is a no-op; any other non-PENDING state is a hard conflict.
+		if (step.state === STEP_STATES.IN_PROGRESS && step.attempt.ownerGeneration === parsed.generation) {
+			return { run: current, idempotent: true, stepId: parsed.stepId };
+		}
+		if (step.state !== STEP_STATES.PENDING)
+			throw specError(409, CODES.STEP_NOT_PENDING, `Step "${parsed.stepId}" is ${step.state} and cannot be claimed.`, {
+				runId,
+				stepId: parsed.stepId,
+				storedState: step.state,
+			});
+
+		const updated = await repository.beginStep(profileId, runId, {
+			generation: parsed.generation,
+			owner: parsed.owner,
+			stepId: parsed.stepId,
+			fromStepStates: [STEP_STATES.PENDING],
+		});
+		if (!updated)
+			throw specError(409, CODES.STEP_NOT_PENDING, `Step "${parsed.stepId}" is no longer claimable.`, { runId, stepId: parsed.stepId });
+
+		return { run: normalizeRun(updated), idempotent: false, stepId: parsed.stepId };
+	}
+
+	async function releaseStep(ownerProfileId, runId, input) {
+		const profileId = assertProfileId(ownerProfileId);
+		const parsed = parseStepClaimInput(input);
+		const current = await requireRun(profileId, runId);
+
+		assertGeneration(current, parsed.generation, runId);
+		assertOwned(current, parsed.owner, runId);
+		if (isTerminalRunState(current.runState))
+			throw specError(409, CODES.TERMINAL_STATE, `A ${current.runState} run cannot accept step releases.`, {
+				runId,
+				runState: current.runState,
+			});
+		assertIdentityBinding(current, parsed.identity);
+
+		const step = current.stepStates.find((entry) => entry.stepId === parsed.stepId);
+		if (!step) throw specError(404, CODES.STEP_NOT_FOUND, `Step "${parsed.stepId}" is not part of this run's plan.`, { runId, stepId: parsed.stepId });
+
+		// Releasing an already-PENDING step is an idempotent no-op; releasing a
+		// terminal step is a conflict (its outcome is already recorded).
+		if (step.state === STEP_STATES.PENDING) return { run: current, idempotent: true, stepId: parsed.stepId };
+		if (step.state !== STEP_STATES.IN_PROGRESS)
+			throw specError(409, CODES.STEP_NOT_PENDING, `Step "${parsed.stepId}" is ${step.state} and cannot be released.`, {
+				runId,
+				stepId: parsed.stepId,
+				storedState: step.state,
+			});
+
+		const updated = await repository.releaseStep(profileId, runId, {
+			generation: parsed.generation,
+			owner: parsed.owner,
+			stepId: parsed.stepId,
+			fromStepStates: [STEP_STATES.IN_PROGRESS],
+		});
+		if (!updated)
+			throw specError(409, CODES.STEP_NOT_PENDING, `Step "${parsed.stepId}" is no longer in progress.`, { runId, stepId: parsed.stepId });
+
+		return { run: normalizeRun(updated), idempotent: false, stepId: parsed.stepId };
+	}
+
+	// -----------------------------------------------------------------------
 	// Pause
 	// -----------------------------------------------------------------------
 	async function pauseRun(ownerProfileId, runId, input) {
@@ -735,6 +826,8 @@ export function createRehearsalCheckpointService({ repository = checkpointReposi
 		listResumable,
 		claimRun,
 		startRun,
+		beginStep,
+		releaseStep,
 		checkpointStep,
 		pauseRun,
 		resumeRun,
