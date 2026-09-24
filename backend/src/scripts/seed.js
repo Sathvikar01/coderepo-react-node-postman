@@ -16,6 +16,7 @@ import { MinimizationJob } from "../features/execution-intelligence/minimization
 import { ReproductionSeries } from "../features/execution-intelligence/reproducibility/reproduction.model.js";
 import { Investigation } from "../features/execution-intelligence/investigation/investigation.model.js";
 import { LocalRuntimeSetting } from "../features/local-runtime/local-runtime.model.js";
+import { ContractCounter, ContractVersion } from "../features/contract-registry/contract.model.js";
 import { createHash } from "node:crypto";
 
 dotenv.config({ quiet: true });
@@ -260,6 +261,8 @@ async function seed() {
 		ReproductionSeries.deleteMany({}),
 		Investigation.deleteMany({}),
 		LocalRuntimeSetting.deleteMany({}),
+		ContractVersion.deleteMany({}),
+		ContractCounter.deleteMany({}),
 	]);
 
 	const passwordHash = await bcrypt.hash("password" + "123", 10);
