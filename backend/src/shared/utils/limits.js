@@ -22,6 +22,11 @@ export const LIMITS = {
 	openTabs: 10,
 	jsonBodyCollection: 3 * 1024 * 1024,
 	jsonBodyExecution: 1 * 1024 * 1024,
+	// A portable verification-proof artifact wraps a proof that is itself capped at
+	// 2 MB, plus wrapper metadata and canonical whitespace. The route body limit must
+	// exceed the artifact ceiling so the artifact parser — not Express — produces the
+	// typed TOO_LARGE refusal with its byte accounting.
+	jsonBodyProofArtifact: 3 * 1024 * 1024,
 	jsonBodyEnvironment: 256 * 1024,
 	jsonBodyDefault: 100 * 1024,
 	responseHeaderBytes: 32 * 1024,

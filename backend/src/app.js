@@ -16,6 +16,7 @@ import { historyRouter } from "./features/history/history.routes.js";
 import { localRuntimeRouter } from "./features/local-runtime/local-runtime.routes.js";
 import { mockRouteRouter, mockRouter } from "./features/mocks/mock.routes.js";
 import { preferenceRouter, profileRouter } from "./features/profiles/profile.routes.js";
+import { verificationProofRouter } from "./features/verification-proof-api/verification-proof.routes.js";
 import { errorHandler, notFoundHandler } from "./shared/middleware/error-handler.js";
 import { requireWorkspaceAuth } from "./shared/middleware/auth.js";
 import { resolveProfileContext } from "./shared/middleware/profile-context.js";
@@ -124,6 +125,14 @@ export function createApp() {
 		resolveProfileContext,
 		exampleRouter,
 	);
+	app.use(
+		"/api/v1/verification-proofs",
+		express.json({ limit: LIMITS.jsonBodyProofArtifact }),
+		requireWorkspaceAuth,
+		resolveProfileContext,
+		verificationProofRouter,
+	);
+
 	// Capability-token mock routes stay unauthenticated by design and never reach the execution pipeline.
 	app.use("/api/v1/mocks", express.json({ limit: LIMITS.jsonBodyDefault }), mockRouteRouter);
 	app.use("/api/v1/mocks", express.json({ limit: LIMITS.jsonBodyExecution }), requireWorkspaceAuth, resolveProfileContext, mockRouter);
