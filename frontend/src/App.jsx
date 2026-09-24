@@ -24,7 +24,6 @@ import { EnvironmentsDrawer } from "./features/environments/EnvironmentsDrawer.j
 import { environmentApi } from "./features/environments/environment.api.js";
 import { executionApi } from "./features/executions/execution.api.js";
 import { FlightRecorderDialog } from "./features/execution-intelligence/FlightRecorderDialog.jsx";
-import { InvestigationDialog } from "./features/execution-intelligence/InvestigationDialog.jsx";
 import { capsuleDraftTab } from "./features/execution-intelligence/flight-recorder-model.js";
 import { exampleApi } from "./features/examples/example.api.js";
 import { ExampleActions } from "./features/examples/ExampleActions.jsx";
@@ -104,7 +103,6 @@ export default function App() {
 	const [toasts, setToasts] = useState([]);
 	const [historyRefresh, setHistoryRefresh] = useState(0);
 	const [flightRecorder, setFlightRecorder] = useState(null);
-	const [investigation, setInvestigation] = useState(null);
 	const [runner, setRunner] = useState(null);
 	const [comparisonBaseId, setComparisonBaseId] = useState(null);
 	const [examplesVersion, setExamplesVersion] = useState(0);
@@ -527,7 +525,7 @@ export default function App() {
 
 	const responsePanel = (result) =>
 		result ? (
-			<ResponseViewer onCopyUrl={copyResolvedUrl} onInvestigate={(executionId) => openInvestigation(executionId)} result={result} />
+			<ResponseViewer onCopyUrl={copyResolvedUrl} result={result} />
 		) : (
 			<section aria-label="Response" className="response-area">
 				<div className="response-placeholder">
@@ -895,11 +893,6 @@ export default function App() {
 		setSidebarOpen(false);
 	};
 
-	const openInvestigation = (failingExecutionId, goodExecutionId = null) => {
-		setInvestigation({ failingExecutionId, goodExecutionId });
-		setSidebarOpen(false);
-	};
-
 	const compareHistoryEntry = (executionId) => {
 		if (!comparisonBaseId) {
 			setComparisonBaseId(executionId);
@@ -920,27 +913,18 @@ export default function App() {
 	};
 
 	const openCapsuleDraft = (imported) => {
-		let tab = null;
-		try {
-			// Malformed or unsupported capsules fail closed here: nothing opens,
-			// nothing sends, nothing saves.
-			tab = capsuleDraftTab(imported);
-		} catch {
-			tab = null;
-		}
+		const tab = capsuleDraftTab(imported);
 		if (!tab) {
 			toast("This capsule preview cannot be opened safely.", "error");
-			return false;
+			return;
 		}
-		if (!openDraftTab(tab)) return false;
+		if (!openDraftTab(tab)) return;
 		setFlightRecorder(null);
-		setInvestigation(null);
 		toast("Opened an unsent, unsaved reproduction draft.");
-		return true;
 	};
 
 	const shortcutHandlers = useRef({ send: null, saveDraft: null, dialogOpen: false });
-	shortcutHandlers.current = { send, saveDraft, dialogOpen: Boolean(dialog || flightRecorder || investigation || runner) };
+	shortcutHandlers.current = { send, saveDraft, dialogOpen: Boolean(dialog || flightRecorder || runner) };
 
 	useEffect(() => {
 		const onKeyDown = (event) => {
@@ -1144,20 +1128,6 @@ export default function App() {
 			onCompare={(baseExecutionId, candidateExecutionId) => {
 				setFlightRecorder({ executionId: candidateExecutionId, comparisonIds: { baseExecutionId, candidateExecutionId } });
 			}}
-			onInvestigate={(executionId) => openInvestigation(executionId)}
-			onOpenPassport={(executionId) => setFlightRecorder({ executionId, comparisonIds: null })}
-		/>
-	) : null;
-
-	const investigationNode = investigation ? (
-		<InvestigationDialog
-			failingExecutionId={investigation.failingExecutionId}
-			goodExecutionId={investigation.goodExecutionId}
-			onClose={() => setInvestigation(null)}
-			onOpenComparison={(baseExecutionId, candidateExecutionId) => {
-				setFlightRecorder({ executionId: candidateExecutionId, comparisonIds: { baseExecutionId, candidateExecutionId } });
-			}}
-			onOpenDraft={openCapsuleDraft}
 			onOpenPassport={(executionId) => setFlightRecorder({ executionId, comparisonIds: null })}
 		/>
 	) : null;
@@ -1167,7 +1137,6 @@ export default function App() {
 			{exampleDialogNode}
 			{flightRecorderNode}
 			{runnerNode}
-			{investigationNode}
 			<WorkspaceHeader
 				account={account}
 				activeEnvironmentId={state.activeEnvironmentId}
@@ -1324,7 +1293,6 @@ export default function App() {
 							onClear={clearHistory}
 							onCompare={compareHistoryEntry}
 							onDelete={deleteHistoryEntry}
-							onInvestigate={(executionId) => openInvestigation(executionId)}
 							onOpen={openHistoryEntry}
 							onResend={resendHistoryEntry}
 							onSaveAs={(executionId) =>
