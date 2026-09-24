@@ -5683,3 +5683,41 @@ head=cd0ab2aea8aee7986a05ff4bfc3a142cbb89f9e7
 pr=43 MERGED
 merge_commit=e0fe38e51e9cc5806328443ca4317c4be7d3393c
 reported_verdict=PHASE 46B VERDICT: PASS — READY FOR REHEARSAL INTEGRATION
+
+
+## [2026-09-24T16:14:00+05:30] Phase 46C — Rehearsal Executor Integration Core
+
+User Prompt (normalized, secrets redacted):
+Integrate the completed rehearsal planning and checkpoint/resume cores with Tracer's existing authoritative execution path. Reuse the existing runner/execution pipeline rather than building a second runner; execute only eligible planned steps; checkpoint each completed step; preserve resume dedupe and stale-worker protections; evaluate blast-radius abort conditions; record bounded contract-compatibility and cross-environment verification evidence; fail closed on ambiguity; add no frontend or Verification Proof.
+
+Agent Response Summary:
+Completed the Phase 46C rehearsal execution integration in backend/src/features/rehearsal-execution/. The worktree initially contained seven implementation files with no tests, so the missing focused suite was added and used to validate the executor end-to-end at the orchestration boundary.
+
+The final implementation remained purely additive: eight new files, 2,077 insertions, zero deletions, with no lockfile or dependency changes. The focused suite contains 26 tests covering strict input validation, run binding, execution outcome mapping, evidence recording, happy-path rehearsal execution, resume deduplication, abort behavior, cancellation, unknown outcomes, scratch request resolution, and request/failure budget handling.
+
+Testing exposed and fixed two harness defects: terminal checkpoint test doubles must return the run object directly, and an explicitly supplied resolveRequest:null must be treated as supplied rather than silently replaced. No unrelated product behavior was changed.
+
+Verification reported full bun test at 1310 pass / 0 fail, backend syntax/build green, frontend production build green, and no lockfile changes. GitHub Actions Baseline Gate and Tracer CLI both passed on head 27bc4e6c5a3b5468526250b43d00cd32d3b50587.
+
+GitHub verification confirmed PR #44 was clean and mergeable. ChatGPT then merged PR #44 into main as ce51f0d7fea2a6a6f43a67cdc97cdfb6e0b9fbdf.
+
+Actions:
+* added rehearsal-executor.test.js with 26 focused tests
+* verified strict input/run-binding/outcome/evidence semantics
+* verified happy path, resume dedupe, abort, cancel, unknown outcome, scratch resolution, and budget flows
+* fixed two test-harness defects exposed by the new suite
+* ran the full repository suite successfully: 1310 pass / 0 fail
+* ran backend syntax/build and frontend build successfully
+* confirmed no dependency or lockfile changes
+* pushed commit 27bc4e6c5a3b5468526250b43d00cd32d3b50587
+* opened PR #44 and verified both CI workflows green
+* merged PR #44 into main as ce51f0d7fea2a6a6f43a67cdc97cdfb6e0b9fbdf
+
+Context:
+tool=local coding agent + ChatGPT GitHub verification
+phase=46C
+branch=phase46/rehearsal-executor-integration
+head=27bc4e6c5a3b5468526250b43d00cd32d3b50587
+pr=44 MERGED
+merge_commit=ce51f0d7fea2a6a6f43a67cdc97cdfb6e0b9fbdf
+reported_verdict=PHASE 46C VERDICT: PASS — READY FOR REHEARSAL INTEGRATION
