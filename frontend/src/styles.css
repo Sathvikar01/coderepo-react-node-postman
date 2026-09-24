@@ -3206,6 +3206,19 @@ dialog::backdrop {
 	flex-wrap: wrap;
 	gap: 8px;
 }
+.proof-header-actions {
+	display: flex;
+	flex: none;
+	align-items: center;
+	gap: 6px;
+}
+.proof-header-actions .text-button {
+	min-height: 34px;
+}
+.proof-headline-hint {
+	max-width: 62ch;
+	margin-top: 6px;
+}
 .proof-headline {
 	display: flex;
 	align-items: flex-start;

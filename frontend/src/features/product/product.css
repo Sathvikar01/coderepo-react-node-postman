@@ -1,0 +1,430 @@
+/* Phase 48A — Product identity surfaces (Getting Started, About, Security,
+   Data Handling, Responsible Use).
+
+   Presentation only. These rules use the existing design tokens so the surfaces
+   inherit the Graphite / Mint / Bone identity and both themes without adding any
+   new color, font, or dependency. */
+
+.product-modal {
+	width: fit-content;
+	max-width: min(780px, 95vw);
+}
+.product-modal::backdrop {
+	background: rgb(0 0 0 / 55%);
+}
+.product-dialog {
+	width: min(780px, 95vw);
+	gap: 14px;
+}
+.product-header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 16px;
+}
+.product-header-brand {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+}
+.product-header h2,
+.product-header p {
+	margin: 0;
+}
+.product-header .eyebrow {
+	margin-bottom: 2px;
+	color: var(--brand);
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+}
+
+.product-tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	padding: 3px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	background: var(--field);
+}
+.product-tab {
+	display: inline-flex;
+	min-height: 34px;
+	flex: 1 1 auto;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	padding: 0 12px;
+	border: 0;
+	border-radius: 999px;
+	background: transparent;
+	color: var(--muted);
+	font-size: 12.5px;
+	font-weight: 500;
+	white-space: nowrap;
+}
+.product-tab:hover {
+	background: var(--hover);
+	color: var(--ink-strong);
+}
+.product-tab[aria-selected="true"] {
+	background: var(--accent-container);
+	color: var(--accent-container-ink);
+}
+
+.product-content {
+	display: flex;
+	flex-direction: column;
+	gap: 18px;
+	max-height: min(62vh, 620px);
+	overflow-y: auto;
+	padding: 2px;
+}
+
+.product-section {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+.product-section h3 {
+	margin: 0;
+	color: var(--ink-strong);
+	font-size: 13px;
+	font-weight: 600;
+	letter-spacing: 0.01em;
+	text-transform: uppercase;
+}
+.product-section h4 {
+	margin: 0;
+	color: var(--ink-strong);
+	font-size: 13px;
+	font-weight: 600;
+}
+.product-section p {
+	margin: 0;
+}
+
+.product-lead {
+	color: var(--ink);
+	font-size: 13.5px;
+	line-height: 1.6;
+}
+.product-note {
+	color: var(--muted);
+	font-size: 12.5px;
+	line-height: 1.6;
+}
+.product-note-strong {
+	padding: 12px 14px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: var(--field);
+	color: var(--ink);
+}
+.product-flow {
+	padding: 10px 12px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: var(--field);
+	color: var(--ink-strong);
+	font-family: var(--font-mono);
+	font-size: 12.5px;
+	overflow-wrap: anywhere;
+}
+
+/* Quick-start and workflow steps */
+.product-steps {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.product-steps li {
+	display: flex;
+	gap: 10px;
+	align-items: flex-start;
+}
+.product-steps strong {
+	display: block;
+	color: var(--ink-strong);
+	font-size: 13px;
+	font-weight: 600;
+}
+.product-steps p {
+	margin-top: 2px;
+	color: var(--muted);
+	font-size: 12.5px;
+	line-height: 1.55;
+}
+.product-step-index {
+	display: inline-flex;
+	flex: none;
+	width: 22px;
+	height: 22px;
+	align-items: center;
+	justify-content: center;
+	border: 1px solid var(--border-strong);
+	border-radius: 999px;
+	color: var(--muted);
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+}
+
+/* Core-model grid */
+.product-model-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 10px;
+}
+.product-model-card {
+	min-width: 0;
+	padding: 12px 14px;
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	background: var(--field);
+}
+.product-model-card h4 {
+	color: var(--brand);
+}
+.product-model-card p {
+	margin-top: 4px;
+	color: var(--muted);
+	font-size: 12.5px;
+	line-height: 1.55;
+}
+.product-model-card .product-model-detail {
+	color: var(--ink);
+}
+.product-chip-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin: 10px 0 0;
+	padding: 0;
+	list-style: none;
+}
+.product-chip {
+	padding: 2px 8px;
+	border: 1px solid var(--border-strong);
+	border-radius: 999px;
+	color: var(--muted);
+	font-size: 11px;
+	white-space: nowrap;
+}
+
+/* Concept and category definition lists */
+.product-concept-list {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	margin: 0;
+}
+.product-concept {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	padding-left: 12px;
+	border-left: 2px solid var(--border-strong);
+}
+.product-concept dt {
+	color: var(--ink-strong);
+	font-size: 12.5px;
+	font-weight: 600;
+}
+.product-concept dd {
+	margin: 0;
+	color: var(--muted);
+	font-size: 12.5px;
+	line-height: 1.6;
+}
+
+/* Fact lists (security, usage) */
+.product-fact-list {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.product-fact-list li {
+	padding: 12px 14px;
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	background: var(--field);
+}
+.product-fact-list strong {
+	display: block;
+	color: var(--ink-strong);
+	font-size: 13px;
+	font-weight: 600;
+}
+.product-fact-list p {
+	margin-top: 4px;
+	color: var(--muted);
+	font-size: 12.5px;
+	line-height: 1.6;
+}
+
+.product-bullet-list {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.product-bullet-list li {
+	display: flex;
+	gap: 8px;
+	align-items: flex-start;
+	color: var(--ink);
+	font-size: 12.5px;
+	line-height: 1.55;
+}
+.product-bullet-list svg {
+	flex: none;
+	margin-top: 2px;
+	color: var(--brand);
+}
+
+.product-link-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+.product-link-row .text-button {
+	display: inline-flex;
+	min-height: 34px;
+	align-items: center;
+	gap: 6px;
+}
+
+/* About header and split */
+.product-about-head {
+	flex-direction: row;
+	align-items: center;
+	gap: 14px;
+}
+.product-about-head h3 {
+	font-size: 18px;
+	text-transform: none;
+}
+.product-about-mark {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: 52px;
+	height: 52px;
+	border: 1px solid var(--border-strong);
+	border-radius: 14px;
+	background: var(--accent-container);
+}
+.product-split {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 10px;
+}
+.product-split article {
+	padding: 12px 14px;
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	background: var(--field);
+}
+.product-split p {
+	margin-top: 4px;
+	color: var(--muted);
+	font-size: 12.5px;
+	line-height: 1.6;
+}
+
+/* Workflow progression strip (shared with the workspace) */
+.workflow-progression {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+.workflow-steps {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px 4px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.workflow-step {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 3px 10px 3px 6px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	background: var(--field);
+	color: var(--muted);
+	font-size: 11.5px;
+	white-space: nowrap;
+}
+.workflow-step.past {
+	color: var(--ink);
+}
+.workflow-step.current {
+	border-color: var(--brand);
+	background: var(--accent-container);
+	color: var(--accent-container-ink);
+}
+.workflow-dot {
+	display: inline-flex;
+	width: 18px;
+	height: 18px;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	border-radius: 999px;
+	background: var(--surface-raised);
+	color: var(--muted);
+	font-size: 10px;
+	font-variant-numeric: tabular-nums;
+}
+.workflow-step.current .workflow-dot {
+	background: var(--brand);
+	color: var(--brand-ink);
+}
+.workflow-step.past .workflow-dot {
+	background: var(--success-container);
+	color: var(--brand);
+}
+.workflow-current-hint {
+	margin: 0;
+	color: var(--muted);
+	font-size: 12px;
+	line-height: 1.5;
+}
+.workflow-current-hint strong {
+	color: var(--ink-strong);
+}
+.workflow-progression.compact .workflow-step {
+	padding-right: 8px;
+}
+
+@media (max-width: 640px) {
+	.product-model-grid,
+	.product-split {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.product-tab {
+		flex: 1 1 46%;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.product-tab,
+	.product-link-row .text-button {
+		transition-duration: 0.001ms !important;
+	}
+}

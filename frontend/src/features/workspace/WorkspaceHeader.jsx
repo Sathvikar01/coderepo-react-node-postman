@@ -1,6 +1,8 @@
 import { MaterialIcon } from "../../shared/components/MaterialIcon.jsx";
+import { Menu } from "../../shared/components/Menu.jsx";
 import { SelectMenu } from "../../shared/components/SelectMenu.jsx";
 import { TracerSymbol } from "../../shared/components/TracerBrand.jsx";
+import { PRODUCT_SURFACES } from "../product/product-content.js";
 import { ProfileAvatar } from "../profiles/ProfileAvatar.jsx";
 
 export function WorkspaceHeader({
@@ -13,6 +15,7 @@ export function WorkspaceHeader({
 	onOpenImport,
 	onOpenLocalRuntime,
 	onOpenProof,
+	onOpenProduct,
 	onLogout,
 	onToggleSidebar,
 	onToggleTheme,
@@ -36,7 +39,7 @@ export function WorkspaceHeader({
 				<div>
 					<strong>Tracer</strong>
 					<br />
-					<small>Flight recorder</small>
+					<small>Execute · investigate · verify</small>
 				</div>
 			</div>
 			<nav aria-label="Workspace commands" className="app-header-actions rail-primary">
@@ -99,6 +102,16 @@ export function WorkspaceHeader({
 					<MaterialIcon size={19}>{theme === "dark" ? "light_mode" : "dark_mode"}</MaterialIcon>
 					<span className="rail-command-label">Theme</span>
 				</button>
+				<Menu
+					label="Help and product information"
+					trigger="info"
+					triggerClassName="icon-button rail-command"
+					items={PRODUCT_SURFACES.map((surface) => ({
+						label: surface.label,
+						icon: surface.icon,
+						onSelect: () => onOpenProduct(surface.id),
+					}))}
+				/>
 				<button className="profile-chip" type="button" onClick={onLogout} title="Switch profile">
 					<ProfileAvatar profile={profile} size="small" />
 					<span className="profile-chip-text">

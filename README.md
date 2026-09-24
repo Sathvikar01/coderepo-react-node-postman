@@ -1,26 +1,42 @@
 <h1 align="center">Tracer — API Flight Recorder</h1>
 
 <p align="center">
-  A keyboard-first HTTP workspace for composing, sending, organizing, and analyzing API requests — with a built-in API flight recorder.
+  <strong>API execution, investigation, and change-verification workspace.</strong><br />
+  Compose, send, and organize API requests — then investigate failures, understand what a change affects, and verify an affected workflow before you trust it.
 </p>
 
 Tracer is a full-stack React and Express application. Requests execute through the Express API on the server and results are persisted in MongoDB, so a signed-in profile can build a real HTTP request, send it, inspect the response, save it into a collection, switch environments, and reopen it from history.
 
-## Why Tracer is different
-
-Most HTTP clients help you send a request and read a response. Tracer helps you answer the harder question that follows: **a request worked, then it stopped working — what actually caused that?**
-
-The investigation workflow is the heart of the product:
+## The mental model
 
 ```text
-work → break → investigate → verify a cause → minimize → reproduce
+Execute → Understand → Compare → Verify
+```
+
+| Step | Question it answers | Where it lives |
+| --- | --- | --- |
+| **Execute** | "What does this endpoint return right now?" | Workspace, Collections, Environments, History |
+| **Understand** | "Why did this stop working?" | History, Execution Passport, Flight Recorder |
+| **Compare** | "What does this change affect?" | Workspace snapshots, Change impact, Environment drift, Contracts |
+| **Verify** | "Can I treat this exact state as known-good?" | Rehearsal, Compatibility, Verification Proof |
+
+Tracer keeps one pipeline for all of it: there is no second transport, no second history, and no place where the UI decides a verification state on its own.
+
+## Why Tracer is different
+
+Most HTTP clients help you send a request and read a response. Tracer helps you answer the harder questions that follow: **a request worked, then it stopped working — what actually caused that?** and **is this workspace state safe to promote?**
+
+### Understand: the investigation workflow
+
+```text
+failure → investigate → compare → isolate → reproduce
 ```
 
 1. **Work.** A saved request succeeds, recorded as an immutable, secret-redacted Execution Passport.
-2. **Break.** An unrelated change lands, a replayable change lands, and a later execution fails.
+2. **Break.** An unrelated change lands and a later execution fails.
 3. **Investigate.** Tracer resolves a trustworthy regression boundary — the last passing run and the first failing run — and states it as a window, with an explicit caveat that the boundary itself is chronological evidence, not proof of cause.
-4. **Verify a cause.** Tracer runs interventions, not guesses. A change is labelled a **Verified cause** only when a probe shows that *applying* it reproduces the failure **and** a probe shows that *reverting* it removes the failure. Chronology, ordering, correlation, and first-divergence are reported as *leading divergence* and *correlated change*, and can never be promoted into a cause on their own.
-5. **Minimize.** Bounded, cancellable probes reduce the failing request to the smallest still-failing reproducer, and report honestly when the budget was reached instead of overstating minimality.
+4. **Compare.** Tracer runs interventions, not guesses. A change is labelled a **Verified cause** only when a probe shows that *applying* it reproduces the failure **and** a probe shows that *reverting* it removes the failure. Chronology, ordering, correlation, and first-divergence are reported as *leading divergence* and *correlated change*, and can never be promoted into a cause on their own.
+5. **Isolate.** Bounded, cancellable probes reduce the failing request to the smallest still-failing reproducer, and report honestly when the budget was reached instead of overstating minimality.
 6. **Reproduce.** A redacted `ReproCapsuleV1` carries the minimal request with placeholders instead of secrets. Importing it opens an **unsent, unsaved dirty draft** that you send yourself.
 
 The result is a plain-language, eight-question investigation — *What happened? When did it start? What changed? What was experimentally verified to cause it? What remains unverified? What is the smallest reproducer? Does it reproduce reliably? Export Repro Capsule* — where every conclusion cites concrete execution and probe ids, and nothing is claimed that was not demonstrated by a probe.
@@ -30,6 +46,18 @@ A deterministic end-to-end demo of the whole investigation runs against the seed
 ```bash
 bun run demo:investigation
 ```
+
+### Verify: the change-verification workflow
+
+```text
+edit → snapshot → impact → drift → rehearse → contract check → verify → proof
+```
+
+A **Workspace Snapshot** freezes the exact state a verification is about. **Change impact** says which requests and references a change can reach. **Environment drift** compares the snapshot's environment against the target environment path by path, and a blocking finding prevents a clean verification instead of being averaged away. A **Rehearsal** runs the affected workflow through the *same* compile → policy → DNS → transport → capture → normalize → history pipeline as any other send, changing nothing in your collections. **Contract compatibility** checks a response contract for removed fields, changed types, unexpected statuses, and missing required headers. **Verify** combines that evidence into a state.
+
+A **Verification Proof** is the result: a tamper-evident, secret-free record that commits the snapshot identity, environment identity, rehearsal run, counts, contracts, and drift, then signs the content. It contains no request or response bodies. Verification states are always the backend's answer — `VERIFIED`, `BLOCKED`, `NEEDS_REHEARSAL`, or `UNKNOWN` — and a report is `VALID`, `STALE`, `MISMATCH`, `INVALID`, or `UNKNOWN`. The frontend never infers, upgrades, or recomputes any of them: a `STALE` artifact is shown as stale, never as a green pass, and a missing currency signal yields `UNKNOWN` rather than a pass.
+
+Imported proof artifacts are inspection-only. Importing never executes, sends, or saves anything, and the UI reports that explicitly.
 
 ## API Flight Recorder
 
@@ -46,6 +74,10 @@ A deterministic end-to-end demo of the whole flow runs against the seeded app:
 ```bash
 bun run demo:flight-recorder
 ```
+
+## Learn Tracer in the app
+
+The header's **info** menu opens five in-product pages that describe this same product: **Getting Started** (a quick start plus the two workflows and a glossary), **About Tracer** (identity, core workflow, and execution versus verification), **Security & Safety** (how execution is bounded, secret-safe, and profile-scoped), **Data Handling** (what is stored and what is deliberately left out), and **Responsible Use** (the practical rules for pointing Tracer at a real host). These pages describe behavior the repository implements; they are not a certification, an audit result, or a compliance statement.
 
 ## Built With
 
@@ -86,7 +118,7 @@ bun run demo:flight-recorder
 │       ├── scripts/             # Seed and repository utility scripts
 │       └── shared/              # Configuration, middleware, errors, utilities
 ├── frontend/
-│   ├── src/features/            # Workspace, Runner, Flight Recorder, docs, mocks, cookies, etc.
+│   ├── src/features/            # Workspace, Runner, Flight Recorder, verification-proof, product surfaces, docs, mocks, cookies, etc.
 │   ├── src/shared/              # API client, reusable controls, formatting
 │   └── public/                  # Local static assets
 ├── examples/ci/                 # Deterministic CLI/CI proof fixtures
@@ -135,7 +167,7 @@ flowchart LR
 
 How the layers fit together:
 
-- **Frontend (`frontend/src`).** `features/` holds one folder per product domain (workspace, import, export, cookies, examples, mocks, scripts, docs, collection-runner, execution-intelligence, and more); `shared/` holds the API client, reusable controls, and formatting. State is plain React state and a workspace reducer: drafts live in the browser and are only persisted when you Save.
+- **Frontend (`frontend/src`).** `features/` holds one folder per product domain (workspace, import, export, cookies, examples, mocks, scripts, docs, collection-runner, execution-intelligence, verification-proof, product, and more); `shared/` holds the API client, reusable controls, and formatting. State is plain React state and a workspace reducer: drafts live in the browser and are only persisted when you Save.
 - **API (`backend/src`).** Each `features/<domain>/` folder separates routes, controllers, services, repositories, and models. Controllers validate input with Zod and translate errors to HTTP; services hold the rules (ownership, revisions/CAS, limits); repositories are the only MongoDB access. `shared/` carries configuration, auth middleware, error handling, and limits.
 - **Execution pipeline (`backend/src/features/executions`).** One pipeline serves manual sends, collection runs, the CLI, and failure minimization. There is no second execution path.
 
@@ -152,6 +184,8 @@ flowchart LR
 - **Security boundaries.** Target requests carry only request/collection auth plus that profile's cookie jar; application sign-in tokens never reach a target. Private, loopback, and reserved addresses are rejected before dispatch (SSRF boundary), with two explicit exceptions: the seeded demo target and hosts approved through Local Runtime. Secrets are stored as alias references and resolved server-side at send time; every stored or displayed artifact is redacted.
 - **Flight Recorder (`backend/src/features/execution-intelligence`).** Every history entry carries an immutable `ExecutionReceiptV1` passport. Compare, Minimize, and Reproduction Capsules build on those receipts as deterministic evidence, never a second transport.
 - **Headless CLI (`backend/src/features/cli`).** `bun run tracer` wires the same compiler, policy, transport, and collection runner over in-memory stores, so UI runs and CLI runs are equivalent by construction.
+- **Verification Proof (`backend/src/features/verification-proof-api`, `frontend/src/features/verification-proof`).** The build/export/import/verify surface over the snapshot, drift, rehearsal, and compatibility services. The frontend copies the backend's state instead of deciding anything: it never recomputes a fingerprint, never upgrades a state, and never renders `STALE` as a pass.
+- **Product surfaces (`frontend/src/features/product`).** The header's **info** menu and its five in-product pages (Getting Started, About, Security & Safety, Data Handling, Responsible Use). Content is a pure, tested model in `product-content.js`; the surfaces are presentation only and change no workspace state.
 
 ### Execution and analysis flow
 
@@ -211,6 +245,19 @@ Sign in with the demo account, then choose either profile:
 These credentials exist only for local evaluation. Tracer generates its own signing secret, fingerprint key, and demo target tokens at setup time; no secret is committed to the repository.
 
 Each profile owns an **Orders API** collection (with `Read` and `Write` folders and five saved requests) and an **HTTP Examples** collection, plus **Local** and **Staging** environments. Both environments point at the in-process demo target at `http://127.0.0.1:8000/demo/v1`, which serves genuine HTTP responses backed by MongoDB and requires a bearer token.
+
+### Ten-minute product walkthrough
+
+After `bun start` and signing in as `alex.morgan@example.test` / `password123`, this sequence exercises every capability with real requests and real persistence. Nothing here is a canned response.
+
+1. **Execute.** Open **Orders API → Read → List orders** and press `Ctrl/Cmd+Enter`. Read status, timing, size, headers, and body in the response pane.
+2. **Understand.** Open the **History** sidebar tab and choose **Passport** on the run you just made. The Flight Recorder opens on its **Passport** section with the compiled request evidence, variable and auth sources, policy decision, and the response contract.
+3. **Compare.** Change `GET /orders` to `GET /orders?status=pending` (or send **Get order** with an id that does not exist), send it, then open **Compare** between the two runs. Tracer reports the ordered differences and the first meaningful divergence.
+4. **Isolate and reproduce.** Use **Minimize** on the failing run and watch bounded probes reduce it to the smallest still-failing request, then **Export Capsule** and **Import Capsule** — the capsule opens as an unsent, unsaved dirty draft that you send yourself.
+5. **Verify.** Rehearse the affected collection against **Staging** from the **Run collection** action, then open **Verification Proof** from the header and follow its **Import & Verify** section. The state shown (`VERIFIED`, `BLOCKED`, `NEEDS_REHEARSAL`, or `UNKNOWN`) and the report status (`VALID`, `STALE`, `MISMATCH`, `INVALID`, or `UNKNOWN`) are the backend's answer, never the UI's guess.
+6. **Learn in place.** Open the header's **info** menu at any point for **Getting Started**, **About**, **Security & Safety**, **Data Handling**, and **Responsible Use**.
+
+Two deterministic scripts replay parts of this automatically: `bun run demo:flight-recorder` (Passport → Compare → Minimize → Capsule → Reproduce) and `bun run demo:investigation` (the eight-question investigation). Both require the app to be running.
 
 ## Run Instructions
 

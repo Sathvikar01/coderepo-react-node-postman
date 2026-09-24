@@ -41,14 +41,28 @@ export const hasSessionToken = () => Boolean(sessionToken || profileToken);
 export const hasProfileToken = () => Boolean(profileToken);
 
 export async function request(path, options = {}) {
-	const response = await fetch(`${baseUrl}${path}`, {
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...(profileToken || sessionToken ? { Authorization: `Bearer ${profileToken || sessionToken}` } : {}),
-			...options.headers,
-		},
-	});
+	let response;
+	try {
+		response = await fetch(`${baseUrl}${path}`, {
+			...options,
+			headers: {
+				"Content-Type": "application/json",
+				...(profileToken || sessionToken ? { Authorization: `Bearer ${profileToken || sessionToken}` } : {}),
+				...options.headers,
+			},
+		});
+	} catch (cause) {
+		// A transport-level failure (server down, DNS failure, offline, or a CORS
+		// rejection) surfaces from fetch as a bare TypeError whose message varies by
+		// browser. Wrap it in the same shape as a server error so every caller shows
+		// an actionable message instead of "Failed to fetch".
+		const error = new Error("Tracer could not reach its API. Check that the backend is running and that you are online, then try again.");
+		error.code = "NETWORK_UNREACHABLE";
+		error.details = null;
+		error.status = 0;
+		error.cause = cause;
+		throw error;
+	}
 	if (response.status === 204) return null;
 	const contentType = response.headers?.get?.("content-type") || "";
 	const payload = contentType.includes("application/json") ? await response.json().catch(() => null) : null;
