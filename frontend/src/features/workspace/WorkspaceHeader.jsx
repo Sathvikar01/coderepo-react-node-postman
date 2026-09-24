@@ -59,16 +59,6 @@ export function WorkspaceHeader({
 					<span className="rail-command-label">Variables</span>
 				</button>
 				<button
-					aria-label="View Verification Proof"
-					className="button rail-command"
-					title="View Verification Proof"
-					type="button"
-					onClick={onOpenProof}
-				>
-					<MaterialIcon size={19}>check</MaterialIcon>
-					<span className="rail-command-label">Proof</span>
-				</button>
-				<button
 					aria-label={`Local Runtime is ${localRuntime?.enabled ? "on" : "off"}`}
 					aria-pressed={localRuntime?.enabled === true}
 					className={`button rail-command ${localRuntime?.enabled ? "local-runtime-on" : ""}`}
@@ -82,6 +72,16 @@ export function WorkspaceHeader({
 			</nav>
 			<div className="app-header-spacer" />
 			<div className="app-header-actions rail-secondary">
+				<button
+					aria-label="View Verification Proof"
+					className="button rail-command"
+					title="View Verification Proof"
+					type="button"
+					onClick={onOpenProof}
+				>
+					<MaterialIcon size={19}>check</MaterialIcon>
+					<span className="rail-command-label">Proof</span>
+				</button>
 				<SelectMenu
 					ariaLabel="Active environment"
 					className="environment-picker"

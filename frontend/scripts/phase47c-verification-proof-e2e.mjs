@@ -14,9 +14,89 @@
 //
 // It talks only to a local, seeded instance and never contacts the network.
 
-const CDP = "http://127.0.0.1:9222";
-const APP = "http://127.0.0.1:3000";
+const CDP = process.env.TRACER_CDP_URL || "http://127.0.0.1:9222";
+const APP = process.env.TRACER_APP_URL || "http://127.0.0.1:3000";
+const API = process.env.TRACER_API_URL || "http://127.0.0.1:8000";
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// ---- runtime proof minting ---------------------------------------------
+// Proofs are HMAC-signed with EXECUTION_FINGERPRINT_KEY from backend/.env,
+// which setup.sh generates randomly per checkout/CI. No committed artifact can
+// verify everywhere, so mint a real proof live against the backend under test:
+// fixture input -> build -> export. Everything downstream (dialog import,
+// verify, round-trip) then runs key-consistently on any machine.
+const repoRootUrl = process.env.TRACER_REPO_ROOT
+	? new URL("file://" + process.env.TRACER_REPO_ROOT + "/")
+	: new URL("../../", import.meta.url);
+const backendEnvUrl = process.env.TRACER_BACKEND_ENV
+	? new URL("file://" + process.env.TRACER_BACKEND_ENV)
+	: new URL("backend/.env", repoRootUrl);
+const backendEnvText = await Bun.file(backendEnvUrl).text();
+function readBackendEnv(key) {
+	const line = backendEnvText.split("\n").find((l) => l.startsWith(key + "="));
+	if (!line) throw new Error("backend/.env has no " + key + "; run setup.sh --seed first");
+	return line.slice(key.length + 1).trim();
+}
+
+process.env.MONGODB_URI ??= readBackendEnv("MONGODB_URI");
+process.env.EXECUTION_FINGERPRINT_KEY ??= readBackendEnv("EXECUTION_FINGERPRINT_KEY");
+process.env.JWT_SECRET ??= readBackendEnv("JWT_SECRET");
+const { initConfig } = await import(new URL("backend/src/shared/config/index.js", repoRootUrl).href);
+initConfig();
+const { proofInput, executionEvidence, assertionEvidence } = await import(
+	new URL("backend/src/features/verification-proof/proof-fixtures.js", repoRootUrl).href
+);
+
+async function mintProofArtifact() {
+	const login = await (
+		await fetch(API + "/api/v1/auth/login", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ email: "alex.morgan@example.test", password: "password123" }),
+		})
+	).json();
+	const sessionToken = login.data?.token;
+	if (!sessionToken) throw new Error("mint: login failed");
+	const profiles = await (
+		await fetch(API + "/api/v1/profiles", { headers: { authorization: "Bearer " + sessionToken } })
+	).json();
+	const profileId = profiles.data?.[0]?._id;
+	const switched = await (
+		await fetch(API + "/api/v1/auth/switch-profile", {
+			method: "POST",
+			headers: { "content-type": "application/json", authorization: "Bearer " + sessionToken },
+			body: JSON.stringify({ profileId }),
+		})
+	).json();
+	const token = switched.data?.token;
+	if (!token) throw new Error("mint: switch-profile failed");
+	const H = { "content-type": "application/json", authorization: "Bearer " + token };
+	// No owner claim would also work, but naming the real profile exercises the
+	// isolation boundary instead of sidestepping it.
+	const input = proofInput({
+		evidence: {
+			executions: [executionEvidence({ ownerProfileId: profileId })],
+			assertions: [assertionEvidence({ ownerProfileId: profileId })],
+		},
+	});
+	const build = await (
+		await fetch(API + "/api/v1/verification-proofs", { method: "POST", headers: H, body: JSON.stringify({ input }) })
+	).json();
+	if (!build.data?.proof) throw new Error("mint: build failed: " + JSON.stringify(build).slice(0, 300));
+	const exported = await (
+		await fetch(API + "/api/v1/verification-proofs/export", {
+			method: "POST",
+			headers: H,
+			body: JSON.stringify({ proof: build.data.proof }),
+		})
+	).json();
+	if (!exported.data?.text) throw new Error("mint: export failed: " + JSON.stringify(exported).slice(0, 300));
+	return { proof: build.data.proof, artifactText: exported.data.text, filename: exported.data.filename };
+}
+
+const minted = await mintProofArtifact();
+const VALID_ARTIFACT = minted.artifactText;
+const MINTED_PROOF = minted.proof;
 
 async function retry(fn, label, timeout = 15000) {
 	const end = Date.now() + timeout;
@@ -240,7 +320,7 @@ for (const [tabName, marker] of [
 }
 
 // ---- a real, valid proof renders as evidence -----------------------------
-const VALID_ARTIFACT = await Bun.file(new URL("./fixtures/verification-proof.valid.json", import.meta.url)).text();
+// VALID_ARTIFACT was minted live above against the backend under test.
 await clickText('.verification-proof-dialog [role=tab]', "Import & Verify", "Import tab");
 await waitFor('document.querySelector(".verification-proof-dialog textarea") !== null', "import textarea");
 await setInput(".verification-proof-dialog textarea", VALID_ARTIFACT);
@@ -248,7 +328,15 @@ await sleep(250);
 await evaluate(
 	'(() => { const node = [...document.querySelectorAll(".verification-proof-dialog button")].find((b) => b.textContent.trim().startsWith("Verify") && !b.textContent.includes("Import")); if (!node) return false; node.click(); return true; })()',
 );
-await retry(() => evaluate('document.body.textContent.includes("Import result")'), "import result", 15000);
+// A successful import lands on the Proof tab (the dialog shows the proof, not
+// the import form); a refusal stays on the Import tab with an error.
+await retry(
+	() => evaluate('document.querySelector(".verification-proof-dialog .proof-headline") !== null || document.querySelector(".verification-proof-dialog .dialog-error") !== null'),
+	"import settled",
+	20000,
+);
+const importError = await evaluate('document.querySelector(".verification-proof-dialog .dialog-error")?.textContent || ""');
+if (importError) throw new Error("valid import was refused: " + importError.slice(0, 300));
 const validHeadline = await evaluate("document.querySelector('.verification-proof-dialog .proof-headline')?.className || ''");
 process.stdout.write("VALID_HEADLINE " + validHeadline + "\n");
 if (/success/.test(validHeadline)) {
@@ -264,6 +352,81 @@ await waitFor(
 	"export enabled",
 );
 pass("Export Proof becomes available once a real proof is loaded");
+
+// ---- verdict semantics against the live backend ------------------------
+// The dialog renders whatever the backend decides; these in-page checks prove
+// the backend's verdicts truthfully, and the headline rendering for every one
+// of these statuses is pinned by proof-view unit tests.
+async function apiVerify(payload) {
+	return evaluate(
+		`(async () => {
+			const token = localStorage.getItem("request-desk-profile-token") || localStorage.getItem("request-desk-session-token");
+			const response = await fetch("/api/v1/verification-proofs/verify", {
+				method: "POST",
+				headers: { "content-type": "application/json", authorization: "Bearer " + token },
+				body: ${JSON.stringify(JSON.stringify(payload))},
+			});
+			const text = await response.text();
+			return response.status + " " + text.slice(0, 600);
+		})()`,
+	);
+}
+
+const snap = MINTED_PROOF.identity.snapshot;
+const env = MINTED_PROOF.identity.targetEnvironment;
+const matchingCurrent = {
+	snapshot: { snapshotId: snap.snapshotId, snapshotFingerprint: snap.snapshotFingerprint },
+	targetEnvironment: { environmentId: env.environmentId, environmentFingerprint: env.environmentFingerprint },
+	verificationState: MINTED_PROOF.state,
+};
+const currentResult = await apiVerify({ proof: MINTED_PROOF, current: matchingCurrent });
+if (!currentResult.includes('"status":"VALID"') || !currentResult.includes('"staleness":"CURRENT"'))
+	throw new Error("matching identity did not verify VALID/CURRENT: " + currentResult);
+pass("VALID/CURRENT when snapshot and environment match");
+
+const staleResult = await apiVerify({
+	proof: MINTED_PROOF,
+	current: {
+		snapshot: { snapshotId: "snap-changed", snapshotFingerprint: "fp-changed" },
+		targetEnvironment: matchingCurrent.targetEnvironment,
+	},
+});
+if (!staleResult.includes('"status":"STALE"') || !staleResult.includes("SNAPSHOT_STALE"))
+	throw new Error("changed snapshot did not report STALE: " + staleResult);
+pass("STALE with exact reason when the snapshot moved on");
+
+const mismatchResult = await apiVerify({
+	proof: MINTED_PROOF,
+	current: { ...matchingCurrent, verificationState: "BLOCKED" },
+});
+if (!mismatchResult.includes('"status":"MISMATCH"'))
+	throw new Error("contradicting verification state did not report MISMATCH: " + mismatchResult);
+pass("MISMATCH when supplied evidence contradicts the proof");
+
+const unknownResult = await apiVerify({ proof: MINTED_PROOF });
+if (!unknownResult.includes('"staleness":"UNKNOWN"'))
+	throw new Error("missing identity did not report UNKNOWN: " + unknownResult);
+pass("UNKNOWN when no current identity is supplied");
+
+// ---- export determinism + dialog round-trip ----------------------------
+await clickText(".verification-proof-dialog button", "Export Proof", "dialog Export Proof");
+await retry(() => evaluate('document.body.textContent.includes("Exported ")'), "export notice", 15000);
+await clickText('.verification-proof-dialog [role=tab]', "Import & Verify", "Import tab again");
+await waitFor('document.querySelector(".verification-proof-dialog textarea") !== null', "import textarea again");
+const reexported = await evaluate('document.querySelector(".verification-proof-dialog textarea").value');
+if (reexported !== VALID_ARTIFACT) throw new Error("export is not deterministic for the same proof");
+pass("Export is deterministic for the same proof");
+await evaluate(
+	'(() => { const node = [...document.querySelectorAll(".verification-proof-dialog button")].find((b) => b.textContent.trim().startsWith("Verify") && !b.textContent.includes("Import")); if (!node) return false; node.click(); return true; })()',
+);
+// Success lands back on the Proof tab with the re-imported proof.
+await retry(() => evaluate('document.querySelector(".verification-proof-dialog .proof-headline") !== null'), "re-import headline", 20000);
+pass("export -> import -> verify round-trips through the dialog");
+await clickText('.verification-proof-dialog [role=tab]', "Import & Verify", "Import tab for flags");
+const flags = await evaluate('document.querySelector(".verification-proof-dialog .recorder-content")?.textContent || ""');
+if (!/Not executed/.test(flags) || !/no auto-send/.test(flags) || !/no auto-save/.test(flags) || !/not persisted/.test(flags) || !/state unchanged/.test(flags))
+	throw new Error("import is not inspection-only: " + flags.slice(0, 300));
+pass("import stays inspection-only: no execute, send, save, persist, or upgrade");
 
 // ---- keyboard accessibility ----------------------------------------------
 await clickText(".verification-proof-dialog [role=tab]", "Proof", "Proof tab");
