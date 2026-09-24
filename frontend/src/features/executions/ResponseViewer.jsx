@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { MaterialIcon } from "../../shared/components/MaterialIcon.jsx";
 import { useRovingTabs } from "../../shared/hooks/useRovingTabs.js";
 import { formatBytes, formatDuration, OUTCOME_LABELS, statusClass } from "../../shared/utils/format.js";
+import { isFailureResult } from "../execution-intelligence/investigation-model.js";
 import { ScriptResults } from "../scripts/ScriptResults.jsx";
 import { scriptCounts, scriptResultsOf } from "../scripts/script-results.js";
 import { bodyNotice, describeBody } from "./body-view.js";
@@ -150,7 +151,7 @@ function DetailsPanel({ result }) {
 	);
 }
 
-export function ResponseViewer({ onCopyUrl, result }) {
+export function ResponseViewer({ onCopyUrl, onInvestigate, result }) {
 	const [tab, setTab] = useState("body");
 	const tabs = useRovingTabs();
 	if (!result) return null;
@@ -195,6 +196,12 @@ export function ResponseViewer({ onCopyUrl, result }) {
 					<button className="button" type="button" onClick={() => onCopyUrl(response)}>
 						<MaterialIcon size={18}>content_copy</MaterialIcon>
 						<span className="button-label">Copy resolved URL</span>
+					</button>
+				)}
+				{onInvestigate && result?.executionId && isFailureResult(result) && (
+					<button className="primary-button" type="button" onClick={() => onInvestigate(result.executionId)}>
+						<MaterialIcon size={18}>search</MaterialIcon>
+						<span className="button-label">Investigate failure</span>
 					</button>
 				)}
 			</div>

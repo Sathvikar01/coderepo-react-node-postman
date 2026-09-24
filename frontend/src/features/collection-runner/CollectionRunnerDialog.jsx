@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MaterialIcon } from "../../shared/components/MaterialIcon.jsx";
 import { Modal } from "../../shared/components/Modal.jsx";
+import { canInvestigateStep } from "../execution-intelligence/investigation-model.js";
 import { formatDuration } from "../../shared/utils/format.js";
 import { collectionRunApi } from "./collection-run.api.js";
 import {
@@ -31,7 +32,7 @@ function effectiveSelection(baseSelection, planned, excluded) {
 	return { mode: "requests", requestIds: checked };
 }
 
-function RunStepRow({ canCompare, onCompare, onOpenPassport, results, step }) {
+function RunStepRow({ canCompare, onCompare, onInvestigate, onOpenPassport, results, step }) {
 	const previous = previousExecutedStep(results, step.index);
 	return (
 		<li className="run-step">
@@ -59,6 +60,15 @@ function RunStepRow({ canCompare, onCompare, onOpenPassport, results, step }) {
 						>
 							Passport
 						</button>
+						{onInvestigate && canInvestigateStep(step) && (
+							<button
+								aria-label={`Investigate the failure in ${step.name}`}
+								type="button"
+								onClick={() => onInvestigate(step.executionId)}
+							>
+								Investigate failure
+							</button>
+						)}
 						{canCompare && previous ? (
 							<button
 								aria-label={`Compare ${step.name} with ${previous.name}`}
@@ -82,6 +92,7 @@ export function CollectionRunnerDialog({
 	folderId = null,
 	onClose,
 	onCompare,
+	onInvestigate,
 	onOpenPassport,
 }) {
 	const baseSelection = useMemo(
@@ -333,6 +344,7 @@ export function CollectionRunnerDialog({
 											canCompare={finished}
 											key={`${step.index}-${step.requestId}`}
 											onCompare={onCompare}
+											onInvestigate={onInvestigate}
 											onOpenPassport={onOpenPassport}
 											results={run.results}
 											step={step}
