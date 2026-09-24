@@ -17,6 +17,7 @@ import { localRuntimeRouter } from "./features/local-runtime/local-runtime.route
 import { mockRouteRouter, mockRouter } from "./features/mocks/mock.routes.js";
 import { preferenceRouter, profileRouter } from "./features/profiles/profile.routes.js";
 import { verificationProofRouter } from "./features/verification-proof-api/verification-proof.routes.js";
+import { whyInspectorRouter } from "./features/why-inspector/why-inspector.routes.js";
 import { errorHandler, notFoundHandler } from "./shared/middleware/error-handler.js";
 import { requireWorkspaceAuth } from "./shared/middleware/auth.js";
 import { resolveProfileContext } from "./shared/middleware/profile-context.js";
@@ -131,6 +132,15 @@ export function createApp() {
 		requireWorkspaceAuth,
 		resolveProfileContext,
 		verificationProofRouter,
+	);
+	// Phase 49 — "Why?" Inspector. A read-only projection over already-recorded
+	// execution evidence. Never persisted, so it cannot drift from the execution.
+	app.use(
+		"/api/v1/why",
+		express.json({ limit: LIMITS.jsonBodyDefault }),
+		requireWorkspaceAuth,
+		resolveProfileContext,
+		whyInspectorRouter,
 	);
 
 	// Capability-token mock routes stay unauthenticated by design and never reach the execution pipeline.

@@ -1,0 +1,568 @@
+/* Phase 49 — "Why?" Inspector.
+   Reuses the Flight Recorder dialog shell and reads from the same design tokens.
+   The feature owns only its own presentation: an availability chip, a
+   precedence ladder, a pipeline timeline, an evidence chain, and dense key/value
+   and table layouts. Nothing here changes an existing component's look. */
+
+.why-modal {
+	width: min(960px, 95vw);
+	max-width: min(960px, 95vw);
+}
+.why-dialog {
+	width: min(960px, 95vw);
+	min-height: min(680px, 88vh);
+	/* Cap the dialog to the viewport and let only the section body scroll, so the
+	   header, section tabs, and footer stay reachable on short or narrow screens
+	   instead of being pushed below the fold. */
+	max-height: calc(100vh - 24px);
+	max-height: calc(100dvh - 24px);
+}
+.why-dialog footer {
+	flex-wrap: wrap;
+	gap: 8px;
+}
+.why-header-actions {
+	display: flex;
+	flex: none;
+	align-items: center;
+	gap: 6px;
+}
+.why-header-actions .text-button {
+	min-height: 34px;
+}
+.why-headline-hint {
+	max-width: 64ch;
+	margin-top: 6px;
+}
+.why-content {
+	flex: 1 1 auto;
+	min-height: 0;
+	max-height: none;
+}
+
+.why-stack {
+	display: grid;
+	gap: 12px;
+}
+
+/* --- Cards ------------------------------------------------------------- */
+.why-card {
+	display: grid;
+	gap: 10px;
+	padding: 14px 16px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--surface-raised);
+}
+.why-card h3 {
+	margin: 0;
+	color: var(--ink-strong);
+	font-size: 14px;
+	font-weight: 600;
+}
+.why-card h4 {
+	margin: 4px 0 0;
+	color: var(--muted);
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+}
+.why-card p {
+	margin: 0;
+	color: var(--ink);
+	font-size: 13px;
+	line-height: 1.5;
+}
+.why-card-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+}
+.why-card-head code {
+	color: var(--muted);
+	font-size: 12px;
+}
+.why-danger {
+	border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+	background: var(--danger-container);
+}
+
+/* --- Chips and pills --------------------------------------------------- */
+.why-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 2px 8px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	color: var(--muted);
+	font-size: 11px;
+	font-weight: 600;
+	white-space: nowrap;
+}
+.why-chip.success {
+	border-color: color-mix(in srgb, var(--success) 45%, var(--border));
+	background: var(--success-container);
+	color: var(--success);
+}
+.why-chip.warning {
+	border-color: color-mix(in srgb, var(--warning) 45%, var(--border));
+	background: var(--warning-container);
+	color: var(--warning);
+}
+.why-chip.danger {
+	border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+	background: var(--danger-container);
+	color: var(--danger);
+}
+.why-state-pill {
+	display: inline-flex;
+	align-items: center;
+	padding: 3px 10px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	color: var(--muted);
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+}
+.why-state-pill.success {
+	border-color: color-mix(in srgb, var(--success) 50%, var(--border));
+	background: var(--success-container);
+	color: var(--success);
+}
+.why-state-pill.warning {
+	border-color: color-mix(in srgb, var(--warning) 50%, var(--border));
+	background: var(--warning-container);
+	color: var(--warning);
+}
+.why-state-pill.danger {
+	border-color: color-mix(in srgb, var(--danger) 50%, var(--border));
+	background: var(--danger-container);
+	color: var(--danger);
+}
+.why-tab-dot {
+	display: inline-block;
+	width: 6px;
+	height: 6px;
+	margin-left: 6px;
+	border-radius: 50%;
+	background: var(--quiet);
+	vertical-align: middle;
+}
+.why-tab-dot.success {
+	background: var(--success);
+}
+.why-tab-dot.warning {
+	background: var(--warning);
+}
+
+/* --- Verification card ------------------------------------------------- */
+.why-verification {
+	gap: 8px;
+}
+.why-verification.success {
+	border-color: color-mix(in srgb, var(--success) 40%, var(--border));
+}
+.why-verification.warning {
+	border-color: color-mix(in srgb, var(--warning) 40%, var(--border));
+}
+.why-verification.danger {
+	border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
+}
+.why-basis {
+	color: var(--muted);
+	font-size: 12px;
+}
+.why-basis code,
+.why-reasons code,
+.why-gaps code {
+	padding: 1px 5px;
+	border-radius: var(--radius-sm);
+	background: var(--field);
+	color: var(--muted);
+	font-family: var(--font-mono);
+	font-size: 11px;
+}
+.why-caveat {
+	padding-top: 8px;
+	border-top: 1px dashed var(--divider);
+	color: var(--quiet);
+	font-size: 12px;
+	font-style: italic;
+}
+
+/* --- Reasons and gaps -------------------------------------------------- */
+.why-reasons,
+.why-gaps {
+	display: grid;
+	gap: 6px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.why-reasons li,
+.why-gaps li {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 8px;
+	padding: 8px 10px;
+	border: 1px solid var(--divider);
+	border-radius: var(--radius-md);
+	background: var(--surface-muted);
+	font-size: 12.5px;
+	line-height: 1.45;
+}
+.why-reasons li strong {
+	color: var(--ink-strong);
+}
+.why-reasons li span,
+.why-gaps li span {
+	color: var(--ink);
+}
+
+/* --- Empty / fail-closed ---------------------------------------------- */
+.why-empty {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	padding: 14px 16px;
+	border: 1px dashed var(--border-strong);
+	border-radius: var(--radius-lg);
+	background: var(--surface-muted);
+	color: var(--muted);
+}
+.why-empty strong {
+	display: block;
+	margin-bottom: 2px;
+	color: var(--ink-strong);
+	font-size: 13px;
+}
+.why-empty p {
+	margin: 0;
+	font-size: 12.5px;
+	line-height: 1.5;
+}
+
+/* --- Key / value ------------------------------------------------------- */
+.why-group {
+	display: grid;
+	gap: 6px;
+}
+.why-kv {
+	display: grid;
+	gap: 1px;
+	margin: 0;
+	border: 1px solid var(--divider);
+	border-radius: var(--radius-md);
+	overflow: hidden;
+}
+.why-kv-row {
+	display: grid;
+	grid-template-columns: minmax(140px, 32%) 1fr;
+	gap: 10px;
+	padding: 7px 10px;
+	background: var(--field);
+}
+.why-kv-row dt {
+	color: var(--muted);
+	font-size: 12px;
+}
+.why-kv-row dd {
+	margin: 0;
+	overflow-wrap: anywhere;
+	color: var(--ink-strong);
+	font-size: 12.5px;
+}
+.why-kv-row dd.mono {
+	font-family: var(--font-mono);
+	font-size: 11.5px;
+}
+
+/* --- Precedence ladder ------------------------------------------------- */
+.why-ladder {
+	display: grid;
+	gap: 4px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.why-ladder li {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	padding: 7px 10px;
+	border: 1px solid var(--divider);
+	border-radius: var(--radius-md);
+	background: var(--field);
+	font-size: 12.5px;
+}
+.why-ladder li.applied {
+	border-color: color-mix(in srgb, var(--success) 35%, var(--border));
+	background: var(--surface-muted);
+}
+.why-ladder-rank {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	flex: none;
+	border-radius: 50%;
+	background: var(--field-active);
+	color: var(--muted);
+	font-size: 11px;
+	font-weight: 700;
+}
+.why-ladder-label {
+	color: var(--ink-strong);
+	font-weight: 500;
+}
+.why-ladder-scope {
+	color: var(--quiet);
+	font-size: 11px;
+}
+
+/* --- Tables ------------------------------------------------------------ */
+.why-table {
+	width: 100%;
+	border-collapse: collapse;
+	border: 1px solid var(--divider);
+	border-radius: var(--radius-md);
+	overflow: hidden;
+	font-size: 12.5px;
+}
+.why-table th,
+.why-table td {
+	padding: 7px 10px;
+	border-bottom: 1px solid var(--divider);
+	text-align: left;
+	vertical-align: top;
+	overflow-wrap: anywhere;
+}
+.why-table thead th {
+	background: var(--surface-muted);
+	color: var(--muted);
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+.why-table tbody tr:last-child td {
+	border-bottom: 0;
+}
+.why-table td.mono {
+	font-family: var(--font-mono);
+	font-size: 11.5px;
+}
+
+/* --- References -------------------------------------------------------- */
+.why-references {
+	display: grid;
+	gap: 4px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	font-size: 12.5px;
+	color: var(--ink);
+}
+.why-references li {
+	padding: 6px 10px;
+	border: 1px solid var(--divider);
+	border-radius: var(--radius-md);
+	background: var(--field);
+}
+.why-references strong {
+	color: var(--muted);
+	font-size: 11px;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+/* --- Summary grid ------------------------------------------------------ */
+.why-summary-grid {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 10px;
+}
+.why-summary-grid > div {
+	display: grid;
+	gap: 2px;
+	padding: 10px 12px;
+	border: 1px solid var(--divider);
+	border-radius: var(--radius-md);
+	background: var(--field);
+}
+.why-summary-grid span {
+	color: var(--muted);
+	font-size: 11px;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+}
+.why-summary-grid strong {
+	color: var(--ink-strong);
+	font-size: 13px;
+	overflow-wrap: anywhere;
+}
+
+/* --- Pipeline timeline ------------------------------------------------- */
+.why-stages {
+	display: grid;
+	gap: 0;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.why-stages li {
+	position: relative;
+	padding: 0 0 14px 22px;
+	border-left: 1px solid var(--divider);
+}
+.why-stages li:last-child {
+	padding-bottom: 0;
+	border-left-color: transparent;
+}
+.why-stage-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+.why-stage-head strong {
+	color: var(--ink-strong);
+	font-size: 13px;
+}
+.why-stage-marker {
+	position: absolute;
+	left: -5px;
+	width: 9px;
+	height: 9px;
+	border: 2px solid var(--surface-raised);
+	border-radius: 50%;
+	background: var(--quiet);
+}
+.why-stages li.recorded .why-stage-marker {
+	background: var(--success);
+}
+.why-stages li p {
+	margin: 3px 0 0;
+	color: var(--muted);
+	font-size: 12.5px;
+}
+.why-stage-evidence {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	margin-top: 5px;
+	color: var(--quiet);
+	font-size: 11px;
+}
+.why-stage-evidence code {
+	color: var(--muted);
+	font-family: var(--font-mono);
+}
+
+/* --- Change ------------------------------------------------------------ */
+.why-first-divergence {
+	padding: 10px 12px;
+	border: 1px solid color-mix(in srgb, var(--warning) 40%, var(--border));
+	border-radius: var(--radius-md);
+	background: var(--warning-container);
+}
+.why-first-divergence p {
+	color: var(--ink-strong);
+}
+
+/* --- Evidence chain ---------------------------------------------------- */
+.why-chain {
+	display: grid;
+	gap: 4px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.why-chain li {
+	display: flex;
+	gap: 10px;
+	align-items: flex-start;
+	padding: 9px 10px;
+	border: 1px solid var(--divider);
+	border-radius: var(--radius-md);
+	background: var(--field);
+}
+.why-chain li.unavailable {
+	border-style: dashed;
+	background: transparent;
+}
+.why-chain-order {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	flex: none;
+	border-radius: 50%;
+	background: var(--field-active);
+	color: var(--muted);
+	font-size: 11px;
+	font-weight: 700;
+}
+.why-chain li > div {
+	display: grid;
+	gap: 3px;
+	min-width: 0;
+}
+.why-chain li strong {
+	color: var(--ink-strong);
+	font-size: 13px;
+}
+.why-chain li p {
+	margin: 0;
+	color: var(--muted);
+	font-size: 12.5px;
+	overflow-wrap: anywhere;
+}
+.why-chain code {
+	color: var(--quiet);
+	font-family: var(--font-mono);
+	font-size: 11px;
+}
+.why-chain code.why-unavailable {
+	color: var(--warning);
+}
+
+/* --- Responsive -------------------------------------------------------- */
+@media (max-width: 720px) {
+	.why-summary-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+@media (max-width: 600px) {
+	.why-modal,
+	.why-dialog {
+		width: 96vw;
+	}
+	.why-dialog .recorder-header {
+		flex-wrap: wrap;
+	}
+	.why-dialog .why-header-actions {
+		flex: 1 1 100%;
+		justify-content: flex-end;
+	}
+	.why-kv-row {
+		grid-template-columns: 1fr;
+		gap: 2px;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.why-modal *,
+	.why-dialog * {
+		transition-duration: 1ms !important;
+		animation-duration: 1ms !important;
+	}
+}

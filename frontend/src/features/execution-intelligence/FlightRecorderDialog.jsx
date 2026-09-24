@@ -92,7 +92,7 @@ function downloadText(filename, text) {
 	URL.revokeObjectURL(url);
 }
 
-export function FlightRecorderDialog({ comparisonIds = null, executionId, onClose, onOpenDraft }) {
+export function FlightRecorderDialog({ comparisonIds = null, executionId, onClose, onOpenDraft, onWhy }) {
 	const [tab, setTab] = useState(comparisonIds ? "compare" : "passport");
 	const [receipt, setReceipt] = useState(null);
 	const [comparison, setComparison] = useState(null);
@@ -165,7 +165,7 @@ export function FlightRecorderDialog({ comparisonIds = null, executionId, onClos
 	return (
 		<Modal className="flight-recorder-modal" label="API Flight Recorder" onClose={onClose}>
 			<section className="form-dialog flight-recorder-dialog">
-				<header className="recorder-header"><div><p className="eyebrow">Execution intelligence</p><h2>API Flight Recorder</h2></div><button aria-label="Close Flight Recorder" className="icon-button" type="button" onClick={onClose}><MaterialIcon>close</MaterialIcon></button></header>
+				<header className="recorder-header"><div><p className="eyebrow">Execution intelligence</p><h2>API Flight Recorder</h2></div><div className="proof-header-actions">{onWhy && (<button className="text-button" type="button" onClick={() => onWhy(executionId)}>Why?</button>)}<button aria-label="Close Flight Recorder" className="icon-button" type="button" onClick={onClose}><MaterialIcon>close</MaterialIcon></button></div></header>
 				<div aria-label="Flight Recorder sections" className="code-formats" onKeyDown={tabs.onKeyDown} ref={tabs.listRef} role="tablist">
 					{TABS.map((item) => <button aria-selected={tab === item.id} className="code-format" key={item.id} role="tab" tabIndex={tab === item.id ? 0 : -1} type="button" onClick={() => setTab(item.id)}>{item.label}</button>)}
 				</div>
