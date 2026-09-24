@@ -25,6 +25,7 @@ import { environmentApi } from "./features/environments/environment.api.js";
 import { executionApi } from "./features/executions/execution.api.js";
 import { FlightRecorderDialog } from "./features/execution-intelligence/FlightRecorderDialog.jsx";
 import { InvestigationDialog } from "./features/execution-intelligence/InvestigationDialog.jsx";
+import { VerificationProofDialog } from "./features/verification-proof/VerificationProofDialog.jsx";
 import { capsuleDraftTab } from "./features/execution-intelligence/flight-recorder-model.js";
 import { exampleApi } from "./features/examples/example.api.js";
 import { ExampleActions } from "./features/examples/ExampleActions.jsx";
@@ -104,6 +105,7 @@ export default function App() {
 	const [toasts, setToasts] = useState([]);
 	const [historyRefresh, setHistoryRefresh] = useState(0);
 	const [flightRecorder, setFlightRecorder] = useState(null);
+	const [proofOpen, setProofOpen] = useState(false);
 	const [investigation, setInvestigation] = useState(null);
 	const [runner, setRunner] = useState(null);
 	const [comparisonBaseId, setComparisonBaseId] = useState(null);
@@ -940,7 +942,7 @@ export default function App() {
 	};
 
 	const shortcutHandlers = useRef({ send: null, saveDraft: null, dialogOpen: false });
-	shortcutHandlers.current = { send, saveDraft, dialogOpen: Boolean(dialog || flightRecorder || investigation || runner) };
+	shortcutHandlers.current = { send, saveDraft, dialogOpen: Boolean(dialog || flightRecorder || investigation || runner || proofOpen) };
 
 	useEffect(() => {
 		const onKeyDown = (event) => {
@@ -1134,6 +1136,8 @@ export default function App() {
 		/>
 	) : null;
 
+	const proofNode = proofOpen ? <VerificationProofDialog onClose={() => setProofOpen(false)} /> : null;
+
 	const runnerNode = runner ? (
 		<CollectionRunnerDialog
 			activeEnvironmentId={state.activeEnvironmentId}
@@ -1165,6 +1169,7 @@ export default function App() {
 	return (
 		<div className="app-shell">
 			{exampleDialogNode}
+			{proofNode}
 			{flightRecorderNode}
 			{runnerNode}
 			{investigationNode}
@@ -1183,6 +1188,7 @@ export default function App() {
 				onOpenEnvironments={() => openDialog({ kind: "environments" })}
 				onOpenImport={() => openDialog({ kind: "import-curl" })}
 				onOpenLocalRuntime={() => openDialog({ kind: "local-runtime" })}
+				onOpenProof={() => setProofOpen(true)}
 				onToggleSidebar={() => {
 					setSidebarTab("collections");
 					setSidebarOpen(true);

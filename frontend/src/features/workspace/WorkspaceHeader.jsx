@@ -12,6 +12,7 @@ export function WorkspaceHeader({
 	onOpenEnvironments,
 	onOpenImport,
 	onOpenLocalRuntime,
+	onOpenProof,
 	onLogout,
 	onToggleSidebar,
 	onToggleTheme,
@@ -56,6 +57,16 @@ export function WorkspaceHeader({
 				>
 					<MaterialIcon size={19}>edit</MaterialIcon>
 					<span className="rail-command-label">Variables</span>
+				</button>
+				<button
+					aria-label="View Verification Proof"
+					className="button rail-command"
+					title="View Verification Proof"
+					type="button"
+					onClick={onOpenProof}
+				>
+					<MaterialIcon size={19}>check</MaterialIcon>
+					<span className="rail-command-label">Proof</span>
 				</button>
 				<button
 					aria-label={`Local Runtime is ${localRuntime?.enabled ? "on" : "off"}`}
