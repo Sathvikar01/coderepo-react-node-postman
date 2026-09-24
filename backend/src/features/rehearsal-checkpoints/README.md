@@ -29,7 +29,8 @@ core is that seam's state layer. The executor is deliberately out of scope.
 | **Strict lifecycle** | `CREATED → RUNNING ⇄ PAUSED → COMPLETED / ABORTED / FAILED`. Terminal states have no outgoing transition, and terminal protection is checked *before* any other rule. |
 | **Stale-worker protection** | Ownership is a `generation` epoch. Claim/resume/reclaim atomically `$inc` it under a CAS filter; a worker holding an old generation matches nothing. |
 | **Exactly-once completion** | A repeated completion with the *same* completion identity is an idempotent no-op; a *contradictory* one is refused with a typed 409. The attempt counter is incremented only by a genuine advance. |
-| **Crash-safe resume** | Resume recomputes pending work from persisted state only. Completed and skipped steps are never rescheduled. |
+| **In-flight (ambiguous side effect) detection** | A worker records `beginStep` (PENDING → IN_PROGRESS) *before* it dispatches a remote request. If it dies before the checkpoint, the step stays IN_PROGRESS; a later resume can see that a side effect may already have landed and fail closed with `STEP_IN_DOUBT` instead of replaying a possibly-mutating request. A worker that aborts a dispatch (cancel/deadline) calls `releaseStep` (IN_PROGRESS → PENDING) so the safe-to-retry step is not mistaken for an ambiguous one. |
+| **Crash-safe resume** | Resume recomputes pending work from persisted state only. Completed and skipped steps are never rescheduled; an un-checkpointed in-flight step is surfaced, never silently replayed. |
 | **Self-consistent derived state** | `completedStepIds` and the `current`/`next` step pointers are derived *inside* the atomic write from the step array after the change — never from a caller's stale read — so two concurrent checkpoints of different steps cannot erase each other. |
 | **Data minimization** | Only identities, fingerprints, statuses, and bounded evidence references are persisted. No request bodies, headers, cookies, tokens, or resolved secrets. Credential-shaped values are rejected at the boundary. |
 | **Tenant isolation** | Every read and write is constrained by `ownerProfileId`. The unique index is `(ownerProfileId, runId)`, so the same run id is independent across profiles. |
@@ -84,13 +85,17 @@ bun test src/features/rehearsal-checkpoints
 A rehearsal executor will, for each pending step:
 
 1. `resumeRun(...)` to obtain the authoritative pending-step list and its generation,
-2. do the work with its own execution/transport path,
-3. `checkpointStep(...)` with the generation it was granted and the evidence
-   reference of what it did.
+2. `beginStep(...)` to mark the step IN_PROGRESS *before* the remote request,
+3. do the work with its own execution/transport path,
+4. `checkpointStep(...)` with the generation it was granted and the evidence
+   reference of what it did — or `releaseStep(...)` if the dispatch was aborted
+   (cancelled / deadline) without a completed remote side effect.
 
-Anything the executor does that is not a `checkpointStep` at the current generation
+Anything the executor does that is not one of those calls at the current generation
 is invisible to the checkpoint, which is what makes a crash between steps safe: the
-durable state only ever advances at recorded step boundaries.
+durable state only ever advances at recorded step boundaries. A crash *during* a step
+leaves the IN_PROGRESS marker behind, which is exactly the evidence a resume needs to
+refuse to replay work whose remote effect is unknown.
 
 ### Adapter from a Phase 46A plan
 

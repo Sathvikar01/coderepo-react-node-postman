@@ -96,6 +96,9 @@ export const REASON_CODES = Object.freeze({
 	// Integrity driven
 	PLAN_INCOMPLETE: "PLAN_INCOMPLETE",
 	STEP_OUTCOME_MISSING: "STEP_OUTCOME_MISSING",
+	// A worker started a step and never recorded its outcome, so whether the remote
+	// side effect happened is unknowable. The run fails closed rather than replay it.
+	STEP_IN_DOUBT: "STEP_IN_DOUBT",
 	INTERNAL_ERROR: "INTERNAL_ERROR",
 });
 

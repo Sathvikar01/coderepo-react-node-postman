@@ -24,6 +24,75 @@ import { RUN_STATES, STEP_STATES, TERMINAL_STEP_STATE_VALUES } from "./reason-co
 const SUMMARY =
 	"runId schemaVersion kind runState generation owner lastOwnerGeneration identity identityFingerprint plan planFingerprint completedStepIds currentStepId nextStepId terminalReasonCode terminalReason completedAt abortedAt failedAt label createdAt updatedAt";
 
+// Recompute the flat mirrors (`completedStepIds`, `nextStepId`, `currentStepId`)
+// from the step array *after* a positional step write, inside the same atomic
+// update. A plain `$set` would force the caller to precompute them from a stale
+// read, which is the race the checkpoint core exists to eliminate.
+function derivedPointerStages(generation) {
+	return [
+		{
+			$set: {
+				lastOwnerGeneration: generation,
+				completedStepIds: {
+					$sortArray: {
+						input: {
+							$map: {
+								input: {
+									$filter: {
+										input: "$stepStates",
+										as: "step",
+										cond: { $in: ["$$step.state", TERMINAL_STEP_STATE_VALUES] },
+									},
+								},
+								as: "done",
+								in: "$$done.stepId",
+							},
+						},
+						sortBy: 1,
+					},
+				},
+				nextStepId: {
+					$let: {
+						vars: {
+							remaining: {
+								$filter: {
+									input: "$plan.steps",
+									as: "planStep",
+									cond: {
+										$not: [
+											{
+												$in: [
+													"$$planStep.stepId",
+													{
+														$map: {
+															input: { $filter: { input: "$stepStates", as: "s", cond: { $in: ["$$s.state", TERMINAL_STEP_STATE_VALUES] } } },
+															as: "t",
+															in: "$$t.stepId",
+														},
+													},
+												],
+											},
+										],
+									},
+								},
+							},
+						},
+						in: { $ifNull: [{ $first: "$$remaining.stepId" }, null] },
+					},
+				},
+				currentStepId: {
+					$let: {
+						vars: {
+							active: { $filter: { input: "$stepStates", as: "s", cond: { $eq: ["$$s.state", "IN_PROGRESS"] } } },
+						},
+						in: { $ifNull: [{ $first: "$$active.stepId" }, null] },
+					},
+				},
+			},
+		},
+	];
+}
+
 export const checkpointRepository = {
 	// Insert a brand-new run. A duplicate (profile, runId) surfaces as a Mongo
 	// duplicate-key error, which the service maps to a deterministic conflict.
@@ -197,6 +266,99 @@ export const checkpointRepository = {
 						},
 					},
 				},
+			],
+			{ new: true },
+		).lean(),
+
+	// -----------------------------------------------------------------------
+	// Step claim / release — the in-flight marker that makes an ambiguous remote
+	// side effect detectable.
+	// -----------------------------------------------------------------------
+	//
+	// A worker marks a step IN_PROGRESS *before* it dispatches the remote request.
+	// If the process dies between dispatch and checkpoint, the step is left
+	// IN_PROGRESS, so a later resume can see that the side effect may already have
+	// happened instead of blindly replaying it. The claim is generation- and
+	// owner-guarded and per-step CAS (PENDING -> IN_PROGRESS), so two workers cannot
+	// both claim the same step; the attempt counter advances exactly once per claim.
+	beginStep: (ownerProfileId, runId, { generation, owner, stepId, fromStepStates }) =>
+		RehearsalCheckpoint.findOneAndUpdate(
+			{
+				ownerProfileId,
+				runId,
+				generation,
+				owner,
+				runState: { $in: [RUN_STATES.CREATED, RUN_STATES.RUNNING] },
+				stepStates: { $elemMatch: { stepId, state: { $in: fromStepStates } } },
+			},
+			[
+				{
+					$set: {
+						stepStates: {
+							$map: {
+								input: "$stepStates",
+								as: "step",
+								in: {
+									$cond: [
+										{ $eq: ["$$step.stepId", stepId] },
+										{
+											$mergeObjects: [
+												"$$step",
+												{
+													state: STEP_STATES.IN_PROGRESS,
+													attempt: {
+														attempts: { $add: [{ $ifNull: ["$$step.attempt.attempts", 0] }, 1] },
+														ownerGeneration: generation,
+														evidenceRefs: { $ifNull: ["$$step.attempt.evidenceRefs", []] },
+													},
+													lastReasonCode: null,
+												},
+											],
+										},
+										"$$step",
+									],
+								},
+							},
+						},
+					},
+				},
+				...derivedPointerStages(generation),
+			],
+			{ new: true },
+		).lean(),
+
+	// Release an in-flight claim without recording an outcome. Used when a worker
+	// cancels or times out *during* dispatch: the request was aborted, so no
+	// ambiguous side effect exists and a later resume may safely re-run the step.
+	releaseStep: (ownerProfileId, runId, { generation, owner, stepId, fromStepStates }) =>
+		RehearsalCheckpoint.findOneAndUpdate(
+			{
+				ownerProfileId,
+				runId,
+				generation,
+				owner,
+				runState: { $in: [RUN_STATES.CREATED, RUN_STATES.RUNNING] },
+				stepStates: { $elemMatch: { stepId, state: { $in: fromStepStates } } },
+			},
+			[
+				{
+					$set: {
+						stepStates: {
+							$map: {
+								input: "$stepStates",
+								as: "step",
+								in: {
+									$cond: [
+										{ $eq: ["$$step.stepId", stepId] },
+										{ $mergeObjects: ["$$step", { state: STEP_STATES.PENDING }] },
+										"$$step",
+									],
+								},
+							},
+						},
+					},
+				},
+				...derivedPointerStages(generation),
 			],
 			{ new: true },
 		).lean(),

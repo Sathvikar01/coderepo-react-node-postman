@@ -533,4 +533,85 @@ describe.skipIf(!ready)("Phase 46B persistence — index and constraint integrit
 		const counts = await checkpointRepository.countByState(profileA);
 		expect(counts).toEqual([{ _id: RUN_STATES.CREATED, count: 1 }]);
 	});
+
+	// ---------------------------------------------------------------------
+	// Phase 48B — in-flight claim / release (ambiguous-side-effect detection)
+	// ---------------------------------------------------------------------
+
+	mtest("beginStep persists an in-flight claim and releaseStep returns it to PENDING", async () => {
+		const runId = nextRunId("claim-release");
+		await freshRun(profileA, runId, { plan: planOf("s1", "s2") });
+		const started = await service.startRun(profileA, runId, { owner: "w1" });
+
+		const claimed = await service.beginStep(profileA, runId, { generation: started.generation, owner: "w1", stepId: "s1", identity: identity() });
+		expect(claimed.idempotent).toBe(false);
+		expect(claimed.run.currentStepId).toBe("s1");
+		expect(claimed.run.stepStates.find((entry) => entry.stepId === "s1").state).toBe(STEP_STATES.IN_PROGRESS);
+		expect(claimed.run.stepStates.find((entry) => entry.stepId === "s1").attempt.attempts).toBe(1);
+		expect(claimed.run.stepStates.find((entry) => entry.stepId === "s1").attempt.ownerGeneration).toBe(started.generation);
+
+		// A second claim from a *different* owner at the same generation is refused: the
+		// step is already in flight.
+		await expectAppError(service.beginStep(profileA, runId, { generation: started.generation, owner: "w2", stepId: "s1" }), { code: CODES.LEASE_NOT_HELD, statusCode: 409 });
+
+		const released = await service.releaseStep(profileA, runId, { generation: started.generation, owner: "w1", stepId: "s1", identity: identity() });
+		expect(released.run.currentStepId).toBeNull();
+		expect(released.run.stepStates.find((entry) => entry.stepId === "s1").state).toBe(STEP_STATES.PENDING);
+		// Releasing does not inflate the attempt counter, and a later claim succeeds.
+		const reclaimed = await service.beginStep(profileA, runId, { generation: started.generation, owner: "w1", stepId: "s1" });
+		expect(reclaimed.run.stepStates.find((entry) => entry.stepId === "s1").attempt.attempts).toBe(2);
+
+		// A checkpoint completes the in-flight step (the normal post-dispatch path).
+		const done = await service.checkpointStep(profileA, runId, { generation: started.generation, owner: "w1", stepId: "s1", state: STEP_STATES.COMPLETED, outcome: { outcomeId: "o1" } });
+		expect(done.run.completedStepIds).toEqual(["s1"]);
+		expect(done.run.currentStepId).toBeNull();
+	});
+
+	mtest("a crashed worker leaves an IN_PROGRESS step that a fresh worker can detect", async () => {
+		const runId = nextRunId("claim-crash");
+		await freshRun(profileA, runId, { plan: planOf("s1", "s2") });
+		const started = await service.startRun(profileA, runId, { owner: "w1" });
+		await service.beginStep(profileA, runId, { generation: started.generation, owner: "w1", stepId: "s1", identity: identity() });
+
+		// The worker dies. A fresh service instance reconstructs from persisted state
+		// and must be able to see that s1 was in flight.
+		const fresh = createRehearsalCheckpointService({ repository: checkpointRepository, now: () => new Date() });
+		const reconstructed = await fresh.reconstruct(profileA, runId);
+		expect(reconstructed.pendingStepIds).toContain("s1");
+		expect(reconstructed.run.stepStates.find((entry) => entry.stepId === "s1").state).toBe(STEP_STATES.IN_PROGRESS);
+
+		// A resume can claim the run, but the in-flight step remains visible so the
+		// caller can fail closed instead of replaying it.
+		const resumed = await fresh.resumeRun(profileA, runId, { owner: "w2", expectedGeneration: started.generation, identity: identity() });
+		expect(resumed.run.stepStates.find((entry) => entry.stepId === "s1").state).toBe(STEP_STATES.IN_PROGRESS);
+		expect(resumed.pendingStepIds).toContain("s1");
+	});
+
+	mtest("two simultaneous claims of the same step produce exactly one winner", async () => {
+		const runId = nextRunId("claim-race");
+		await freshRun(profileA, runId, { plan: planOf("s1") });
+		const started = await service.startRun(profileA, runId, { owner: "w1" });
+		const payload = { generation: started.generation, owner: "w1", stepId: "s1", identity: identity() };
+		const results = await Promise.allSettled([service.beginStep(profileA, runId, payload), service.beginStep(profileA, runId, payload), service.beginStep(profileA, runId, payload)]);
+
+		const advanced = results.filter((result) => result.status === "fulfilled" && result.value.idempotent === false);
+		expect(advanced).toHaveLength(1);
+		for (const result of results) {
+			if (result.status === "fulfilled" && result.value.idempotent) continue;
+			if (result.status === "rejected") expect([CODES.STEP_NOT_PENDING]).toContain(result.reason.code);
+		}
+		const stored = await RehearsalCheckpoint.findOne({ ownerProfileId: profileA, runId });
+		const step = stored.stepStates.find((entry) => entry.stepId === "s1");
+		expect(step.state).toBe(STEP_STATES.IN_PROGRESS);
+		// Exactly one genuine advance, regardless of how many idempotent re-claims land.
+		expect(step.attempt.attempts).toBeGreaterThanOrEqual(1);
+	});
+
+	mtest("a terminal run refuses an in-flight claim", async () => {
+		const runId = nextRunId("claim-terminal");
+		await freshRun(profileA, runId, { plan: planOf("s1") });
+		const started = await service.startRun(profileA, runId, { owner: "w1" });
+		await service.abortRun(profileA, runId, { generation: started.generation, owner: "w1", reasonCode: "OPERATOR_REQUESTED" });
+		await expectAppError(service.beginStep(profileA, runId, { generation: started.generation, owner: "w1", stepId: "s1" }), { code: CODES.TERMINAL_STATE, statusCode: 409 });
+	});
 });

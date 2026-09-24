@@ -153,7 +153,7 @@ function okResponse(status = 200) {
 // No persistence, no CAS races: single worker, deterministic generation.
 function createFakeCheckpoints() {
 	const runs = new Map();
-	const calls = { checkpointStep: 0, completeRun: 0, pauseRun: 0, abortRun: 0, failRun: 0 };
+	const calls = { checkpointStep: 0, completeRun: 0, pauseRun: 0, abortRun: 0, failRun: 0, beginStep: 0, releaseStep: 0 };
 	function stored(runId) {
 		const run = runs.get(runId);
 		if (!run) throw new Error(`missing run ${runId}`);
@@ -161,6 +161,7 @@ function createFakeCheckpoints() {
 	}
 	return {
 		calls,
+		runs,
 		async ensureRun(_profileId, { runId, identity, plan }) {
 			let run = runs.get(runId);
 			if (!run) {
@@ -210,6 +211,35 @@ function createFakeCheckpoints() {
 			if (!run.completedStepIds.includes(stepId)) run.completedStepIds.push(stepId);
 			return { run };
 		},
+		// Mirror the real service's in-flight marker semantics: PENDING -> IN_PROGRESS
+		// before dispatch, IN_PROGRESS -> PENDING on release.
+		async beginStep(_profileId, runId, { stepId, generation }) {
+			calls.beginStep += 1;
+			const run = stored(runId);
+			const entry = run.stepStates.find((s) => s.stepId === stepId);
+			if (entry.state === CHECKPOINT_STEP_STATES.IN_PROGRESS && entry.attempt?.ownerGeneration === generation) return { run, idempotent: true, stepId };
+			if (entry.state !== CHECKPOINT_STEP_STATES.PENDING) {
+				const error = new Error(`step ${stepId} is ${entry.state}`);
+				error.code = "REHEARSAL_CHECKPOINT_STEP_NOT_PENDING";
+				throw error;
+			}
+			entry.state = CHECKPOINT_STEP_STATES.IN_PROGRESS;
+			entry.attempt = { attempts: (entry.attempt?.attempts ?? 0) + 1, ownerGeneration: generation, evidenceRefs: [] };
+			return { run, idempotent: false, stepId };
+		},
+		async releaseStep(_profileId, runId, { stepId }) {
+			calls.releaseStep += 1;
+			const run = stored(runId);
+			const entry = run.stepStates.find((s) => s.stepId === stepId);
+			if (entry.state === CHECKPOINT_STEP_STATES.PENDING) return { run, idempotent: true, stepId };
+			if (entry.state !== CHECKPOINT_STEP_STATES.IN_PROGRESS) {
+				const error = new Error(`step ${stepId} is ${entry.state}`);
+				error.code = "REHEARSAL_CHECKPOINT_STEP_NOT_PENDING";
+				throw error;
+			}
+			entry.state = CHECKPOINT_STEP_STATES.PENDING;
+			return { run, idempotent: false, stepId };
+		},
 		async completeRun(_profileId, runId) {
 			calls.completeRun += 1;
 			const run = stored(runId);
@@ -228,10 +258,11 @@ function createFakeCheckpoints() {
 			run.runState = "ABORTED";
 			return run;
 		},
-		async failRun(_profileId, runId) {
+		async failRun(_profileId, runId, input = {}) {
 			calls.failRun += 1;
 			const run = stored(runId);
 			run.runState = "FAILED";
+			run.terminalReasonCode = input.reasonCode ?? null;
 			return run;
 		},
 	};
@@ -493,6 +524,50 @@ describe("rehearsal executor", () => {
 		expect(report.stopReason).toBe(EXECUTOR_STOP_REASONS.CANCELLED);
 		expect(checkpoints.calls.checkpointStep).toBe(0);
 		expect(checkpoints.calls.pauseRun).toBe(1);
+		// The in-flight claim is released, so a resume may safely re-run the step.
+		expect(checkpoints.calls.releaseStep).toBe(1);
+		const run = [...checkpoints.runs.values()][0];
+		expect(run.stepStates.find((s) => s.stepId === "step:r1").state).toBe(CHECKPOINT_STEP_STATES.PENDING);
+	});
+
+	it("fails closed instead of replaying a step whose remote side effect is in doubt", async () => {
+		const checkpoints = createFakeCheckpoints();
+		const sent = [];
+		const originalCheckpointStep = checkpoints.checkpointStep;
+		let crashOnce = true;
+		checkpoints.checkpointStep = async (...args) => {
+			if (crashOnce) {
+				crashOnce = false;
+				// Simulate the process dying after the remote request returned but before
+				// the checkpoint write landed: the step stays IN_PROGRESS.
+				throw new Error("simulated crash between remote execution and checkpoint");
+			}
+			return originalCheckpointStep(...args);
+		};
+		const send = async (_profileId, request) => {
+			sent.push(request.context.requestId);
+			return okResponse(200);
+		};
+
+		const first = createRehearsalExecutor({ checkpoints, executions: { send }, abortEvaluator: continueEvaluator, newExecutionId: () => "exec-crash" });
+		await expect(first.run(PROFILE, executorInput())).rejects.toThrow();
+
+		const crashedRun = [...checkpoints.runs.values()][0];
+		expect(crashedRun.stepStates.find((s) => s.stepId === "step:r1").state).toBe(CHECKPOINT_STEP_STATES.IN_PROGRESS);
+		expect(sent).toEqual(["r1"]);
+
+		// Resume in a fresh worker (simulating a restart after the crash).
+		const second = createRehearsalExecutor({ checkpoints, executions: { send }, abortEvaluator: continueEvaluator, newExecutionId: () => "exec-resume" });
+		const report = await second.run(PROFILE, executorInput());
+
+		// The possibly-mutating request is NOT replayed, and no false completion is claimed.
+		expect(sent).toEqual(["r1"]);
+		expect(report.stopReason).toBe(EXECUTOR_STOP_REASONS.EXECUTION_ERROR);
+		expect(report.runState).toBe("FAILED");
+		expect(report.reasonCodes).toContain(EXECUTOR_ERROR_CODES.EXECUTION_FAILED);
+		expect(report.run.terminalReasonCode).toBe("STEP_IN_DOUBT");
+		expect(report.executedStepIds).toHaveLength(0);
+		expect(report.completedStepIds).not.toContain("step:r1");
 	});
 
 	it("fails closed on an unknown execution outcome", async () => {

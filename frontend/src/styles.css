@@ -3219,6 +3219,27 @@ dialog::backdrop {
 	max-width: 62ch;
 	margin-top: 6px;
 }
+@media (max-width: 600px) {
+	/* The proof header pairs a long hint with a two-control action cluster. Below
+	   600px, a non-shrinking action cluster squeezes the title into a tall narrow
+	   column, which pushes the dialog footer past the viewport. Stack the header so
+	   the title keeps the full width, and let the scrollable content shrink so the
+	   footer always stays inside the dialog. */
+	.verification-proof-modal,
+	.verification-proof-dialog {
+		width: 96vw;
+	}
+	.verification-proof-dialog .recorder-header {
+		flex-wrap: wrap;
+	}
+	.verification-proof-dialog .proof-header-actions {
+		flex: 1 1 100%;
+		justify-content: flex-end;
+	}
+	.verification-proof-dialog .recorder-content {
+		min-height: 220px;
+	}
+}
 .proof-headline {
 	display: flex;
 	align-items: flex-start;
