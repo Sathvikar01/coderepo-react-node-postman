@@ -29,7 +29,8 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 const CDP = process.env.P37_CDP ?? "http://127.0.0.1:9222";
-const APP = "http://127.0.0.1:3000";
+const APP = process.env.P37_APP ?? "http://127.0.0.1:3000";
+const API_TARGET = process.env.P37_API ?? "8000";
 const EVIDENCE_DIR = join(homedir(), "hackerrank_postman", "phase37-browser-evidence");
 mkdirSync(EVIDENCE_DIR, { recursive: true });
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -161,13 +162,27 @@ function escapeRegExp(text) {
 
 async function sendAndWait(expectedUrl = null) {
 	if (expectedUrl) await setRequestUrl(expectedUrl);
+	// Wait for the *next* terminal result. A previously completed send leaves a status pill on
+	// screen, so waiting merely for "a terminal status" races ahead and reads the stale value.
+	const before = await evaluate('document.querySelector(".response-toolbar .status-pill")?.textContent?.trim() || ""');
 	await click(".send-button", "Send");
-	await waitFor('document.querySelector(".response-toolbar") !== null', "terminal send result", 30000);
-	await sleep(250);
+	const wait = `(() => {
+		const text = document.querySelector('.response-toolbar .status-pill')?.textContent?.trim() || '';
+		const terminal = /^\\d{3}\\b/.test(text) || /^(Cancelled|Blocked|Failed|Error|Timed out)/i.test(text);
+		return terminal && text !== ${JSON.stringify(before)};
+	})()`;
+	await waitFor(wait, "terminal send result", 30000);
+	await sleep(300);
 }
 
 async function responseStatus() {
-	await waitFor('document.querySelector(".response-toolbar .status-pill") !== null', "response status pill");
+	// A fresh tab renders a placeholder ("Not sent") before the first terminal result, so wait
+	// for a real status number or an explicit terminal outcome before reading the pill.
+	await waitFor(
+		"(() => { const text = document.querySelector('.response-toolbar .status-pill')?.textContent?.trim() || ''; return /^\\d{3}\\b/.test(text) || /^(Cancelled|Blocked|Failed|Error|Timed out)/i.test(text); })()",
+		"terminal response status",
+		30000,
+	);
 	return evaluate('document.querySelector(".response-toolbar .status-pill")?.textContent?.trim() || ""');
 }
 
@@ -362,8 +377,8 @@ pass("login -> profile -> workspace");
 const ROW = (id, key, value) => ({ id, key, value, enabled: true });
 const UUID = (n) => `${String(n).padStart(8, "0")}-1111-4222-8333-444444444444`;
 const SECRET = "super-secret-987";
-const GOOD_URL = "http://127.0.0.1:8000/demo/v1/status/200";
-const BAD_URL = "http://127.0.0.1:8000/demo/v1/status/500";
+const GOOD_URL = `http://127.0.0.1:${API_TARGET}/demo/v1/status/200`;
+const BAD_URL = `http://127.0.0.1:${API_TARGET}/demo/v1/status/500`;
 
 await createCollectionWithRequests("P37 Acceptance", [requestDefinition(UUID(1), "Status probe", "GET", GOOD_URL)]);
 await createCollectionWithRequests("P37 Secret", [
