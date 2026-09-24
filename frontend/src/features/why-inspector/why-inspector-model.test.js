@@ -1,12 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import {
+	SUPPORTED_WHY_SCHEMA_VERSION,
 	configurationGroups,
 	evidenceKindLabel,
 	hasRecordedChange,
 	isExplanation,
+	linkStatusLabel,
+	linkStatusTone,
 	precedenceLadder,
 	sectionStateLabel,
 	sectionStateTone,
+	toSuppliedProof,
 	variableRows,
 	verificationBasisLabel,
 	verificationTone,
@@ -16,7 +20,7 @@ import {
 
 const explanation = {
 	kind: "tracer.why-explanation",
-	schemaVersion: 1,
+	schemaVersion: 2,
 };
 
 describe("Phase 49 — Why? Inspector view helpers", () => {
@@ -43,11 +47,11 @@ describe("Phase 49 — Why? Inspector view helpers", () => {
 		expect(verificationTone("INVENTED")).toBe("neutral");
 	});
 
-	test("4 — labels verification bases, defaulting to unknown", () => {
-		expect(verificationBasisLabel("recorded_assertions")).toBe("Recorded request assertions");
-		expect(verificationBasisLabel("target_policy")).toBe("Recorded target policy");
-		expect(verificationBasisLabel("linked_verification")).toBe("Linked verification artifact");
+	test("4 — labels only the v2 verification bases; old self-derived bases are unknown", () => {
+		expect(verificationBasisLabel("linked_verification")).toBe("Linked Phase 41 verification");
 		expect(verificationBasisLabel("none")).toBe("No verification evidence");
+		expect(verificationBasisLabel("target_policy")).toBe("Unknown basis");
+		expect(verificationBasisLabel("recorded_assertions")).toBe("Unknown basis");
 		expect(verificationBasisLabel(undefined)).toBe("Unknown basis");
 	});
 
@@ -104,10 +108,12 @@ describe("Phase 49 — Why? Inspector view helpers", () => {
 		expect(hasRecordedChange(null)).toBe(false);
 	});
 
-	test("9 — refuses any payload that is not the documented envelope", () => {
+	test("9 — accepts only the v2 envelope; v1 and unknown versions are refused", () => {
+		expect(SUPPORTED_WHY_SCHEMA_VERSION).toBe(2);
 		expect(isExplanation(explanation)).toBe(true);
-		expect(isExplanation({ kind: "tracer.why-explanation", schemaVersion: 2 })).toBe(false);
-		expect(isExplanation({ kind: "something-else", schemaVersion: 1 })).toBe(false);
+		expect(isExplanation({ kind: "tracer.why-explanation", schemaVersion: 1 })).toBe(false);
+		expect(isExplanation({ kind: "tracer.why-explanation", schemaVersion: 3 })).toBe(false);
+		expect(isExplanation({ kind: "something-else", schemaVersion: 2 })).toBe(false);
 		expect(isExplanation(null)).toBe(false);
 		expect(isExplanation({})).toBe(false);
 	});
@@ -115,7 +121,47 @@ describe("Phase 49 — Why? Inspector view helpers", () => {
 	test("10 — labels evidence nodes and defaults to a generic label", () => {
 		expect(evidenceKindLabel("execution-receipt")).toBe("Execution receipt");
 		expect(evidenceKindLabel("change-analysis")).toBe("Change analysis");
+		expect(evidenceKindLabel("impact")).toBe("Impact");
+		expect(evidenceKindLabel("drift")).toBe("Drift");
+		expect(evidenceKindLabel("rehearsal")).toBe("Rehearsal");
+		expect(evidenceKindLabel("contract")).toBe("Contract");
+		expect(evidenceKindLabel("verification")).toBe("Verification state");
+		expect(evidenceKindLabel("proof")).toBe("Proof");
 		expect(evidenceKindLabel("unknown-kind")).toBe("Evidence");
+	});
+
+	test("12 — link statuses stay explicit and never render as success unless recorded", () => {
+		expect(linkStatusLabel("recorded")).toBe("Recorded");
+		expect(linkStatusLabel("partial")).toBe("Partial");
+		expect(linkStatusLabel("not_recorded")).toBe("Not recorded");
+		expect(linkStatusLabel("stale")).toBe("Stale");
+		expect(linkStatusLabel("invalid")).toBe("Invalid");
+		expect(linkStatusLabel("identity_mismatch")).toBe("Identity mismatch");
+		expect(linkStatusLabel("unknown")).toBe("Unknown");
+		expect(linkStatusLabel("something_new")).toBe("Unknown");
+		expect(linkStatusTone("recorded")).toBe("success");
+		expect(linkStatusTone("partial")).toBe("warning");
+		expect(linkStatusTone("stale")).toBe("warning");
+		expect(linkStatusTone("identity_mismatch")).toBe("danger");
+		expect(linkStatusTone("invalid")).toBe("danger");
+		expect(linkStatusTone("not_recorded")).toBe("neutral");
+		expect(linkStatusTone("unknown")).toBe("neutral");
+	});
+
+	test("13 — proof text is transport-opaque: blank means no proof, otherwise passed through untouched", () => {
+		expect(toSuppliedProof(null)).toBeNull();
+		expect(toSuppliedProof(undefined)).toBeNull();
+		expect(toSuppliedProof("   ")).toBeNull();
+		const artifact = '{"proof":{"proofId":"p1"},"secret":"hunter2-value"}';
+		expect(toSuppliedProof(artifact)).toBe(artifact);
+	});
+
+	test("14 — verification states render without inventing a basis", () => {
+		for (const state of ["VERIFIED", "BLOCKED", "NEEDS_REHEARSAL", "UNKNOWN"]) {
+			expect(verificationTone(state)).not.toBe(undefined);
+		}
+		expect(verificationTone("VERIFIED")).toBe("success");
+		expect(verificationTone("BLOCKED")).toBe("danger");
 	});
 
 	test("11 — maps backend error codes to actionable text", () => {

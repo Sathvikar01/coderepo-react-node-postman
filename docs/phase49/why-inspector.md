@@ -211,3 +211,37 @@ Both were found by the real browser, not by inspection, and both were fixed with
 ## 10. Verdict
 
 **PHASE 49 VERDICT: PASS — WHY INSPECTOR READY**
+
+---
+
+## 11. Phase 49B — verification-evidence linkage + v2 UI integration
+
+Branch `phase49/why-verification-integration` (PR #51, unmerged). No Phase 41 / Phase 47 / engine / persistence change: this is the missing frontend half of the v2 read-model.
+
+### 11.1 Backend (already on the branch)
+
+`why-evidence.js` + `why-evidence.repository.js` link persisted rehearsal runs and a caller-supplied Phase 47 proof artifact to the execution; `POST /api/v1/why/executions/:executionId` carries `{proof}` for one read and stores nothing. Only a linked Phase 41 result is authoritative, so the envelope moved to `schemaVersion: 2` and the v1 bases `target_policy` / `recorded_assertions` are gone.
+
+### 11.2 Frontend (this change)
+
+- `why-inspector-model.js` consumes v2 only (`SUPPORTED_WHY_SCHEMA_VERSION = 2`; v1 and unknown futures are refused, never guessed). Basis labels are `linked_verification` / `none` only; chain-kind labels gained Impact / Drift / Rehearsal / Contract / Proof; new `linkStatusLabel` / `linkStatusTone` keep STALE / INVALID / identity-mismatch explicit and never success-green.
+- `why-inspector.api.js` gained `explainExecutionWithProof` (opaque POST body, no parsing in React).
+- `WhyInspectorDialog.jsx` accepts an optional read-scoped `proofText`: with it the dialog POSTs, without it GETs (the v2 not_recorded / UNKNOWN chain). The Evidence tab offers an attach/remove affordance backed by component state only — no persistence, no proof construction, no state derivation. Chain nodes now render their backend link-status chip; proof parse errors render as alerts.
+- Design decision: the proof reaches Why? by paste-and-attach inside the dialog rather than cross-dialog plumbing, because proofs are not persisted server-side and the dialog already owns the read lifecycle. The backend's strict Phase 47B importer remains the sole validator.
+
+### 11.3 Real-browser acceptance — `PHASE49B_E2E_PASS 29/29`
+
+The 49B suite mints real proofs live (fixture input → build → export through the real Phase 47B endpoints, rebound to the live request/environment/snapshot identities) and seeds one rehearsal checkpoint through the real Phase 46B service; the browser then proves: v2 envelope, UNKNOWN/none with no proof, attach → Impact/Drift/Contract/Phase 41 VERIFIED/Proof recorded, POST secret-exclusion, STALE stays STALE (warning, never VERIFIED), CURRENT restores VERIFIED, tampered → INVALID (danger), wrong environment → identity mismatch, malformed → refusal alert, run cleanup, read-only surface, Passport cross-links, keyboard/Escape, the 375/768/1024/1440 × dark/light matrix with zero overflow, no new execution, zero console errors.
+
+### 11.4 Gates
+
+| Gate | Result |
+| --- | --- |
+| `bun install --frozen-lockfile` | PASS (no changes) |
+| Backend `bun test` | **1518 pass, 2 skip, 0 fail** — 5164 `expect()` calls, 90 files |
+| Frontend `bun test` | **394 pass, 0 fail** — 1632 `expect()` calls, 30 files |
+| `cd frontend && bun run build` | PASS |
+| Real-browser 49B suite | **PASS — `PHASE49B_E2E_PASS 29/29`** |
+| Phase 47C Proof E2E (regression) | **PASS — 23/23** |
+| Phase 36 investigation E2E (regression) | **PASS — 30/30** |
+| Phase 37 investigation acceptance E2E (regression) | **PASS — 18/18** |

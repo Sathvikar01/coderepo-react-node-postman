@@ -8,9 +8,12 @@ import {
 	evidenceKindLabel,
 	hasRecordedChange,
 	isExplanation,
+	linkStatusLabel,
+	linkStatusTone,
 	precedenceLadder,
 	sectionStateLabel,
 	sectionStateTone,
+	toSuppliedProof,
 	variableRows,
 	verificationBasisLabel,
 	verificationTone,
@@ -19,7 +22,7 @@ import {
 } from "./why-inspector-model.js";
 import "./why-inspector.css";
 
-// Phase 49 — "Why?" Inspector dialog.
+// Phase 49B — "Why?" Inspector dialog.
 //
 // Presentation only. It fetches one backend projection and renders exactly what
 // the backend returned:
@@ -27,7 +30,13 @@ import "./why-inspector.css";
 //   * It never derives variable precedence, impact, drift, contract
 //     compatibility, a verification state, or a proof.
 //   * It never resolves a secret. The projection only carries references.
-//   * It fails closed: a section with no recorded evidence says so explicitly.
+//   * It fails closed: a section with no recorded evidence says so explicitly,
+//     and a non-v2 envelope is refused rather than guessed at.
+//   * Proof evidence is caller-supplied and read-scoped: when the caller holds
+//     a Phase 47 proof artifact it is POSTed opaquely for this read; otherwise
+//     the dialog GETs, which can only report the not_recorded / UNKNOWN chain.
+//     The artifact is kept in component state only — never persisted,
+//     constructed, or validated here.
 //
 // The dialog is read-only. There is no send, save, or mutate action, because an
 // explanation describes evidence that already exists.
@@ -373,10 +382,50 @@ function ChangePanel({ explanation }) {
 	);
 }
 
-function EvidencePanel({ explanation }) {
+function EvidencePanel({ explanation, proof, draft, onDraftChange, onAttachProof, onClearProof, usingProof }) {
 	const { evidence } = explanation;
+	const parseError = evidence.proof?.parseError ?? null;
 	return (
 		<div className="why-stack">
+			<section className="why-card">
+				<h3>Proof evidence</h3>
+				{usingProof ? (
+					<p className="field-hint">Explaining with the attached Phase 47 proof artifact. It is used for this read only and is never stored.</p>
+				) : (
+					<p className="field-hint">
+						No proof artifact attached — Impact, Drift, Rehearsal, Contract, Verification, and Proof can only report what is already
+						recorded. Paste a Phase 47 proof artifact to link them for this read.
+					</p>
+				)}
+				<label className="field-hint" htmlFor="why-proof-artifact">
+					Phase 47 proof artifact
+				</label>
+				<textarea
+					className="why-proof-input mono"
+					id="why-proof-artifact"
+					onChange={(event) => onDraftChange(event.target.value)}
+					placeholder="Paste a Phase 47 proof artifact…"
+					rows={3}
+					spellCheck={false}
+					value={draft}
+				/>
+				<div className="why-proof-actions">
+					<button disabled={!toSuppliedProof(draft)} onClick={onAttachProof} type="button">
+						Attach proof for this read
+					</button>
+					{proof && (
+						<button onClick={onClearProof} type="button">
+							Remove proof
+						</button>
+					)}
+				</div>
+				{parseError && (
+					<p className="why-proof-error" role="alert">
+						Proof artifact refused: <code>{parseError.errorCode ?? "PROOF_ARTIFACT_REJECTED"}</code>{" "}
+						<span>{parseError.errorMessage ?? "The supplied proof artifact was refused."}</span>
+					</p>
+				)}
+			</section>
 			<section className="why-card">
 				<h3>Evidence chain</h3>
 				<p className="field-hint">
@@ -392,7 +441,10 @@ function EvidencePanel({ explanation }) {
 								<span className="why-chain-order">{node.order}</span>
 								<div>
 									<strong>{node.label}</strong>
-									<span className="why-chip neutral">{evidenceKindLabel(node.kind)}</span>
+									<span className="why-chip neutral">{evidenceKindLabel(node.kind)}</span>{" "}
+									<span className={`why-chip ${linkStatusTone(node.status)}`} title={node.detail ?? undefined}>
+										{linkStatusLabel(node.status)}
+									</span>
 									{node.detail && <p>{node.detail}</p>}
 									{node.ref ? (
 										<code title={node.ref}>{String(node.ref).slice(0, 24)}…</code>
@@ -436,21 +488,34 @@ function EvidencePanel({ explanation }) {
 	);
 }
 
-export function WhyInspectorDialog({ executionId, onClose, onInvestigate, onOpenPassport }) {
+export function WhyInspectorDialog({ executionId, proofText = null, onClose, onInvestigate, onOpenPassport }) {
 	const [tab, setTab] = useState("configuration");
 	const [explanation, setExplanation] = useState(null);
 	const [error, setError] = useState("");
 	const [loading, setLoading] = useState(true);
+	// Proof evidence is read-scoped component state: attached for one
+	// explanation fetch, never persisted anywhere.
+	const [proof, setProof] = useState(() => toSuppliedProof(proofText));
+	const [draft, setDraft] = useState(() => toSuppliedProof(proofText) ?? "");
 	const requestToken = useRef(0);
 	const tabs = useRovingTabs();
+
+	// A proof names exactly one execution. Carrying it across executions
+	// would only ever render an identity mismatch, so reset with the dialog.
+	useEffect(() => {
+		setProof(toSuppliedProof(proofText));
+		setDraft(toSuppliedProof(proofText) ?? "");
+	}, [executionId, proofText]);
 
 	useEffect(() => {
 		const token = requestToken.current + 1;
 		requestToken.current = token;
 		setLoading(true);
 		setError("");
-		whyInspectorApi
-			.explainExecution(executionId)
+		const pending = proof
+			? whyInspectorApi.explainExecutionWithProof(executionId, proof)
+			: whyInspectorApi.explainExecution(executionId);
+		pending
 			.then((value) => {
 				if (requestToken.current !== token) return;
 				if (!isExplanation(value)) {
@@ -469,7 +534,7 @@ export function WhyInspectorDialog({ executionId, onClose, onInvestigate, onOpen
 		return () => {
 			requestToken.current += 1;
 		};
-	}, [executionId]);
+	}, [executionId, proof]);
 
 	const availability = explanation?.availability ?? {};
 
@@ -551,8 +616,34 @@ export function WhyInspectorDialog({ executionId, onClose, onInvestigate, onOpen
 							{explanation.recorded && tab === "configuration" && <ConfigurationPanel explanation={explanation} />}
 							{explanation.recorded && tab === "execution" && <ExecutionPanel explanation={explanation} />}
 							{explanation.recorded && tab === "change" && <ChangePanel explanation={explanation} />}
-							{explanation.recorded && tab === "evidence" && <EvidencePanel explanation={explanation} />}
-							{!explanation.recorded && tab === "evidence" && <EvidencePanel explanation={explanation} />}
+							{explanation.recorded && tab === "evidence" && (
+								<EvidencePanel
+									draft={draft}
+									explanation={explanation}
+									onAttachProof={() => setProof(toSuppliedProof(draft))}
+									onClearProof={() => {
+										setProof(null);
+										setDraft("");
+									}}
+									onDraftChange={setDraft}
+									proof={proof}
+									usingProof={Boolean(proof)}
+								/>
+							)}
+							{!explanation.recorded && tab === "evidence" && (
+								<EvidencePanel
+									draft={draft}
+									explanation={explanation}
+									onAttachProof={() => setProof(toSuppliedProof(draft))}
+									onClearProof={() => {
+										setProof(null);
+										setDraft("");
+									}}
+									onDraftChange={setDraft}
+									proof={proof}
+									usingProof={Boolean(proof)}
+								/>
+							)}
 						</div>
 					</>
 				)}

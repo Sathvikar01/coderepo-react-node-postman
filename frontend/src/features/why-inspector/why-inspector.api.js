@@ -8,4 +8,9 @@ import { request } from "../../shared/api/client.js";
 // rendered as returned.
 export const whyInspectorApi = {
 	explainExecution: (executionId) => request(`/why/executions/${encodeURIComponent(executionId)}`),
+	// Explain with a caller-supplied Phase 47 proof artifact. The proof is
+	// forwarded opaquely for this read only: nothing is persisted, nothing is
+	// constructed here, and the backend linkage layer strictly parses it.
+	explainExecutionWithProof: (executionId, proof) =>
+		request(`/why/executions/${encodeURIComponent(executionId)}`, { method: "POST", body: JSON.stringify({ proof }) }),
 };
