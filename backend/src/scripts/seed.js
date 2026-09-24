@@ -17,6 +17,7 @@ import { ReproductionSeries } from "../features/execution-intelligence/reproduci
 import { Investigation } from "../features/execution-intelligence/investigation/investigation.model.js";
 import { LocalRuntimeSetting } from "../features/local-runtime/local-runtime.model.js";
 import { ContractCounter, ContractVersion } from "../features/contract-registry/contract.model.js";
+import { RehearsalCheckpoint } from "../features/rehearsal-checkpoints/checkpoint.model.js";
 import { createHash } from "node:crypto";
 
 dotenv.config({ quiet: true });
@@ -263,6 +264,9 @@ async function seed() {
 		LocalRuntimeSetting.deleteMany({}),
 		ContractVersion.deleteMany({}),
 		ContractCounter.deleteMany({}),
+		// Phase 46B: rehearsal checkpoints are profile-scoped run state, so a reset
+		// must clear them with everything else rather than leave resumable rows behind.
+		RehearsalCheckpoint.deleteMany({}),
 	]);
 
 	const passwordHash = await bcrypt.hash("password" + "123", 10);
