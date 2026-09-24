@@ -45,6 +45,8 @@ import { localRuntimeApi } from "./features/local-runtime/local-runtime.api.js";
 import { approvedHostForUrl, EMPTY_LOCAL_RUNTIME } from "./features/local-runtime/local-runtime.js";
 import { ProfilePicker } from "./features/profiles/ProfilePicker.jsx";
 import { profileApi } from "./features/profiles/profile.api.js";
+import { ProductDialog } from "./features/product/ProductDialog.jsx";
+import { DEFAULT_PRODUCT_SURFACE } from "./features/product/product-content.js";
 import { RequestBuilder } from "./features/requests/RequestBuilder.jsx";
 import { MaterialIcon } from "./shared/components/MaterialIcon.jsx";
 import {
@@ -106,6 +108,7 @@ export default function App() {
 	const [historyRefresh, setHistoryRefresh] = useState(0);
 	const [flightRecorder, setFlightRecorder] = useState(null);
 	const [proofOpen, setProofOpen] = useState(false);
+	const [productSurface, setProductSurface] = useState(null);
 	const [investigation, setInvestigation] = useState(null);
 	const [runner, setRunner] = useState(null);
 	const [comparisonBaseId, setComparisonBaseId] = useState(null);
@@ -942,7 +945,7 @@ export default function App() {
 	};
 
 	const shortcutHandlers = useRef({ send: null, saveDraft: null, dialogOpen: false });
-	shortcutHandlers.current = { send, saveDraft, dialogOpen: Boolean(dialog || flightRecorder || investigation || runner || proofOpen) };
+	shortcutHandlers.current = { send, saveDraft, dialogOpen: Boolean(dialog || flightRecorder || investigation || runner || proofOpen || productSurface) };
 
 	useEffect(() => {
 		const onKeyDown = (event) => {
@@ -1136,7 +1139,11 @@ export default function App() {
 		/>
 	) : null;
 
-	const proofNode = proofOpen ? <VerificationProofDialog onClose={() => setProofOpen(false)} /> : null;
+	const proofNode = proofOpen ? <VerificationProofDialog onClose={() => setProofOpen(false)} onOpenHelp={() => setProductSurface("help")} /> : null;
+
+	const productNode = productSurface ? (
+		<ProductDialog initialSurface={productSurface} onClose={() => setProductSurface(null)} />
+	) : null;
 
 	const runnerNode = runner ? (
 		<CollectionRunnerDialog
@@ -1169,6 +1176,7 @@ export default function App() {
 	return (
 		<div className="app-shell">
 			{exampleDialogNode}
+			{productNode}
 			{proofNode}
 			{flightRecorderNode}
 			{runnerNode}
@@ -1189,6 +1197,7 @@ export default function App() {
 				onOpenImport={() => openDialog({ kind: "import-curl" })}
 				onOpenLocalRuntime={() => openDialog({ kind: "local-runtime" })}
 				onOpenProof={() => setProofOpen(true)}
+				onOpenProduct={(surfaceId) => setProductSurface(surfaceId || DEFAULT_PRODUCT_SURFACE)}
 				onToggleSidebar={() => {
 					setSidebarTab("collections");
 					setSidebarOpen(true);

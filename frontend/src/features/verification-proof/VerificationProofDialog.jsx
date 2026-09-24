@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { MaterialIcon } from "../../shared/components/MaterialIcon.jsx";
 import { Modal } from "../../shared/components/Modal.jsx";
 import { useRovingTabs } from "../../shared/hooks/useRovingTabs.js";
+import { VERIFICATION_WORKFLOW } from "../product/product-content.js";
+import { WorkflowProgression } from "../product/WorkflowProgression.jsx";
 import { verificationProofApi } from "./verification-proof.api.js";
 import {
 	contractRows,
@@ -233,7 +235,7 @@ function IntegrityView({ proof, artifact }) {
 	);
 }
 
-export function VerificationProofDialog({ onClose }) {
+export function VerificationProofDialog({ onClose, onOpenHelp }) {
 	const [tab, setTab] = useState("proof");
 	const [artifactText, setArtifactText] = useState("");
 	const [proof, setProof] = useState(null);
@@ -326,11 +328,24 @@ export function VerificationProofDialog({ onClose }) {
 					<div>
 						<p className="eyebrow">Verification proof</p>
 						<h2>Verification Proof</h2>
+						<p className="field-hint proof-headline-hint">
+							A signed record of what was verified. Tracer never upgrades a state — every state and status below is the backend's answer.
+						</p>
 					</div>
-					<button aria-label="Close Verification Proof" className="icon-button" type="button" onClick={onClose}>
-						<MaterialIcon>close</MaterialIcon>
-					</button>
+					<div className="proof-header-actions">
+						{onOpenHelp && (
+							<button className="text-button" type="button" onClick={onOpenHelp}>
+								<MaterialIcon size={16}>info</MaterialIcon>
+								How verification works
+							</button>
+						)}
+						<button aria-label="Close Verification Proof" className="icon-button" type="button" onClick={onClose}>
+							<MaterialIcon>close</MaterialIcon>
+						</button>
+					</div>
 				</header>
+
+				<WorkflowProgression compact currentStep="proof" label="Verification workflow" workflow={VERIFICATION_WORKFLOW} />
 
 				<div
 					aria-label="Verification Proof sections"
@@ -422,7 +437,9 @@ export function VerificationProofDialog({ onClose }) {
 						</div>
 					)}
 					{!hasProof && tab !== "import" && (
-						<p className="kv-empty">No proof is loaded. Open the Import &amp; Verify section to inspect an artifact.</p>
+						<p className="kv-empty">
+							No proof is loaded. Open the Import &amp; Verify section to inspect an artifact.
+						</p>
 					)}
 				</div>
 
