@@ -351,6 +351,7 @@ await call("Page.addScriptToEvaluateOnNewDocument", {
 });
 await viewport(1440);
 let loginReady = false;
+let loginLastError = "";
 for (let attempt = 0; attempt < 3 && !loginReady; attempt += 1) {
 	await call("Page.navigate", { url: APP });
 	await sleep(1200);
@@ -359,12 +360,11 @@ for (let attempt = 0; attempt < 3 && !loginReady; attempt += 1) {
 	try {
 		await waitFor('document.querySelector("#workspace-email") !== null', "login screen", 8000);
 		loginReady = true;
-	} catch (error) {
-		const body = await evaluate("document.body.textContent.replace(/\\s+/g, ' ').slice(0, 160)");
-		console.log("DEBUG login attempt " + (attempt + 1) + " body:", JSON.stringify(body), "errors:", JSON.stringify(runtimeErrors.slice(-3)));
+	} catch {
+		loginLastError = await evaluate("document.body.textContent.replace(/\\s+/g, ' ').slice(0, 160)");
 	}
 }
-if (!loginReady) throw new Error("login screen never appeared");
+if (!loginReady) throw new Error("login screen never appeared: " + loginLastError);
 await setInput("#workspace-email", "alex.morgan@example.test");
 await setInput("#workspace-password", "password123");
 await evaluate('document.querySelector(".workspace-login-card form").requestSubmit(); true');
