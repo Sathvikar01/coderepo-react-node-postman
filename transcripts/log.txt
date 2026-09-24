@@ -5610,3 +5610,38 @@ pr=41 MERGED
 merge_commit=45b8335c77fdfe14dd3532555a35386a2325f7a6
 report=docs/phase44/branch-reconciliation-report.md
 reported_verdict=PHASE 44 VERDICT: PASS — CORES INTEGRATED, INVESTIGATION FREEZE PRESERVED
+
+
+## [2026-09-24T14:23:00+05:30] Phase 46A — Checkpointed Rehearsal Planning Core
+
+User Prompt (normalized, secrets redacted):
+Build Phase 46A as an isolated backend-only deterministic planning core for checkpointed cross-environment rehearsal. Consume existing snapshot, change-impact, environment-drift, blast-radius, and contract identities through public interfaces; decide which impacted requests may be rehearsed and in what deterministic dependency-respecting order; preserve blocked, unknown, confirmation-required, cycles, and unresolved dependencies explicitly; emit a secret-safe immutable plan envelope; execute no HTTP, persist nothing, and do not modify the runner.
+
+Agent Response Summary:
+Implemented backend/src/features/rehearsal-planning/** as nine new files on phase46/rehearsal-planning-core. The planner is pure and deterministic: it binds plans to workspace/snapshot/target-environment/policy identity, filters to impacted requests, respects Phase 45 blast-radius admission, orders resolvable dependencies before dependents, detects cycles, keeps unknown/dynamic dependency state explicit, and emits only bounded identity/decision metadata with no request bodies or secrets.
+
+Four defects were found and corrected under test. Dependency edges initially stored the target request ID instead of the owning request ID, collapsing valid plans into self-cycles. Plan-level reason codes failed to summarize step-level concerns. Closed vocabularies were duplicated between schema literals and constants and were consolidated to one source of truth. Finally, an executable request whose prerequisite was blocked/unknown/confirmation-required could still remain executable; the planner now propagates DEPENDENCY_UNRESOLVED to dependents to a transitive fixpoint so no request is scheduled ahead of a prerequisite that cannot execute.
+
+Verification reported 41 focused tests / 0 fail; full suite 1200 pass / 2 skip / 0 fail; backend and frontend builds green; scope limited to backend/src/features/rehearsal-planning/**; no manifests, lockfiles, persistence, execution path, runner, or pre-46 files changed; no secret/payload leakage in outputs. Cross-process determinism is exercised by a second Bun process.
+
+GitHub verification confirmed PR #42 was clean/mergeable with Baseline Gate and Tracer CLI green on head 1d4959c9775452b43d63fd24b0eda452fb26f89c. ChatGPT then merged PR #42 into main as 9f0986f1887b51f2ee9a70d728eb862b1e60f00d.
+
+Actions:
+* implemented the isolated rehearsal-planning core
+* enforced deterministic dependency ordering, cycle detection, and fail-closed unknown handling
+* propagated blocked/unrunnable prerequisite state to dependents as DEPENDENCY_UNRESOLVED
+* consolidated closed vocabularies to one source of truth
+* verified secret-safe bounded output and cross-process determinism
+* ran focused tests, full suite, backend build, and frontend build successfully
+* pushed commit 1d4959c9775452b43d63fd24b0eda452fb26f89c
+* opened PR #42 and verified both CI workflows green
+* merged PR #42 into main as 9f0986f1887b51f2ee9a70d728eb862b1e60f00d
+
+Context:
+tool=local coding agent + ChatGPT GitHub verification
+phase=46A
+branch=phase46/rehearsal-planning-core
+head=1d4959c9775452b43d63fd24b0eda452fb26f89c
+pr=42 MERGED
+merge_commit=9f0986f1887b51f2ee9a70d728eb862b1e60f00d
+reported_verdict=PHASE 46A VERDICT: PASS — READY FOR REHEARSAL INTEGRATION
