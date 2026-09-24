@@ -44,10 +44,10 @@ export function verificationTone(state) {
 }
 
 // Basis is a backend-supplied explanation of where the state came from.
+// Phase 49B (envelope v2): only a linked Phase 41 result is authoritative.
+// The v1 self-derived bases are gone on purpose.
 export const VERIFICATION_BASIS_LABEL = {
-	linked_verification: "Linked verification artifact",
-	target_policy: "Recorded target policy",
-	recorded_assertions: "Recorded request assertions",
+	linked_verification: "Linked Phase 41 verification",
 	none: "No verification evidence",
 };
 
@@ -74,10 +74,41 @@ export const EVIDENCE_KIND_LABEL = {
 	"response-body": "Captured response",
 	"change-analysis": "Change analysis",
 	verification: "Verification state",
+	// Phase 49B (envelope v2) chain vocabulary. Labels only; the backend
+	// decides which nodes exist and what each one says.
+	impact: "Impact",
+	drift: "Drift",
+	rehearsal: "Rehearsal",
+	contract: "Contract",
+	proof: "Proof",
+	execution: "Execution",
 };
 
 export function evidenceKindLabel(kind) {
 	return EVIDENCE_KIND_LABEL[kind] ?? "Evidence";
+}
+
+// Link status is backend-supplied per chain node. STALE, INVALID, and
+// identity mismatches stay explicit: they never render as success.
+export const LINK_STATUS_LABEL = {
+	recorded: "Recorded",
+	partial: "Partial",
+	not_recorded: "Not recorded",
+	unknown: "Unknown",
+	identity_mismatch: "Identity mismatch",
+	stale: "Stale",
+	invalid: "Invalid",
+};
+
+export function linkStatusLabel(status) {
+	return LINK_STATUS_LABEL[status] ?? "Unknown";
+}
+
+export function linkStatusTone(status) {
+	if (status === "recorded") return "success";
+	if (status === "partial" || status === "stale") return "warning";
+	if (status === "identity_mismatch" || status === "invalid") return "danger";
+	return "neutral";
 }
 
 /** Group configuration entries in a fixed, backend-declared order. */
@@ -131,9 +162,24 @@ export function hasRecordedChange(change) {
 	return Boolean(change?.recorded) && (change?.comparisons?.length ?? 0) > 0;
 }
 
-/** True only when the backend actually returned a usable explanation. */
+/** The only envelope version this view understands. v1 and unknown future
+ * versions are rejected (fail closed) rather than guessed at. */
+export const SUPPORTED_WHY_SCHEMA_VERSION = 2;
+
+/**
+ * Normalize user-supplied proof text into the opaque POST body value.
+ * Transport only: blank input means "no proof" (GET fallback). The text is
+ * never parsed, validated, or rewritten here — Phase 47B's strict importer
+ * inside the backend linkage layer is the sole authority.
+ */
+export function toSuppliedProof(value) {
+	if (typeof value !== "string") return null;
+	return value.trim().length > 0 ? value : null;
+}
+
+/** True only when the backend actually returned a usable v2 explanation. */
 export function isExplanation(value) {
-	return Boolean(value) && value.kind === "tracer.why-explanation" && value.schemaVersion === 1;
+	return Boolean(value) && value.kind === "tracer.why-explanation" && value.schemaVersion === SUPPORTED_WHY_SCHEMA_VERSION;
 }
 
 export function whyErrorMessage(error) {

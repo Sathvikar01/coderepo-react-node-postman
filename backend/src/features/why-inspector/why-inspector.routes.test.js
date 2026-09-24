@@ -218,7 +218,7 @@ describe.skipIf(!ready)("Phase 49 — Why? Inspector over HTTP", () => {
 		expect(response.status).toBe(200);
 		const explanation = response.payload.data;
 		expect(explanation.kind).toBe("tracer.why-explanation");
-		expect(explanation.schemaVersion).toBe(1);
+		expect(explanation.schemaVersion).toBe(2);
 		expect(explanation.recorded).toBe(true);
 		expect(explanation.configuration.state).toBe("partial");
 		expect(explanation.configuration.entries.length).toBeGreaterThan(0);
@@ -296,26 +296,34 @@ describe.skipIf(!ready)("Phase 49 — Why? Inspector over HTTP", () => {
 		expect(explanation.change.recorded).toBe(true);
 		expect(explanation.change.comparisons[0].firstDivergence.message).toBe("paid -> pending");
 		expect(explanation.change.comparisons[0].verifiedCauses).toHaveLength(1);
-		expect(explanation.evidence.chain.map((node) => node.kind)).toContain("change-analysis");
+		// Phase 49B chain vocabulary is fixed to WHY_CHAIN (configuration,
+		// execution, impact, drift, rehearsal, contract, verification, proof);
+		// the composed investigation lives in the change section, not the chain.
+		expect(explanation.evidence.chain.map((node) => node.kind)).toContain("verification");
 	});
 
-	mtest("reports BLOCKED when the recorded policy blocked the target", async () => {
+	mtest("a recorded policy block is an observation, never a verification state", async () => {
 		const executionId = await seedExecution(profileA._id, {
 			receiptOverrides: { policy: { decision: "blocked", version: 7, local: false }, target: null, transport: null, response: null },
 			recordOverrides: { outcome: "validation_error", response: null, error: { code: "TARGET_BLOCKED", message: "blocked" } },
 		});
 		const response = await api(`/api/v1/why/executions/${executionId}`);
-		expect(response.payload.data.verification.state).toBe("BLOCKED");
-		expect(response.payload.data.verification.stateBasis).toBe("target_policy");
+		// Phase 49B: only a linked Phase 41 result is authoritative. With no
+		// proof linked, the state stays UNKNOWN and the recorded policy
+		// decision is reported as an observation-only reason.
+		expect(response.payload.data.verification.state).toBe("UNKNOWN");
+		expect(response.payload.data.verification.stateBasis).toBe("none");
+		expect(JSON.stringify(response.payload.data.verification.reasons)).toContain("blocked");
 	});
 
-	mtest("reports VERIFIED when recorded assertions all passed", async () => {
+	mtest("recorded assertions are observations, never a verification state", async () => {
 		const executionId = await seedExecution(profileA._id, {
 			receiptOverrides: { tests: { counts: { passed: 2, failed: 0, error: 0 }, failureFingerprint: null } },
 		});
 		const response = await api(`/api/v1/why/executions/${executionId}`);
-		expect(response.payload.data.verification.state).toBe("VERIFIED");
-		expect(response.payload.data.verification.stateBasis).toBe("recorded_assertions");
+		expect(response.payload.data.verification.state).toBe("UNKNOWN");
+		expect(response.payload.data.verification.stateBasis).toBe("none");
+		expect(JSON.stringify(response.payload.data.verification.reasons)).toContain("2 request assertions");
 	});
 
 	mtest("a second profile's investigation is never composed into another profile's explanation", async () => {

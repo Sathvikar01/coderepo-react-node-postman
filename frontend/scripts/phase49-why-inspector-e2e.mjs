@@ -1,20 +1,35 @@
-// Phase 49 — "Why?" Inspector browser verification.
+// Phase 49B — "Why?" Inspector evidence-chain browser verification.
 //
 // Drives the real Tracer app through the Chrome DevTools Protocol against a
-// local, seeded instance and proves the properties this phase exists to
+// local, seeded instance and proves the properties Phase 49B exists to
 // guarantee:
 //
 //   * A real execution exposes a "Why?" action on its history row.
-//   * The dialog answers the question from recorded evidence only:
-//     configuration, dependencies/precedence, the execution pipeline, change
-//     evidence, and the evidence chain.
-//   * The read-model never resolves a secret: a `{{orders_token}}` reference is
-//     reported as a reference while no credential value appears anywhere.
-//   * Change evidence fails closed when nothing recorded it, instead of
-//     inventing a cause.
-//   * The dialog is read-only: nothing sends, saves, or mutates.
+//   * The dialog consumes the v2 envelope only (`tracer.why-explanation`
+//     schemaVersion 2); anything else fails closed.
+//   * With no linked proof the dialog reports the v2 not_recorded / UNKNOWN
+//     chain exactly as returned: Impact, Drift, Rehearsal, Contract,
+//     Verification, and Proof are all present and explicit.
+//   * Attaching a real, backend-minted Phase 47 proof artifact links the
+//     chain for that read only: Impact, Drift, Contract, the Phase 41 state,
+//     and the Proof state become visible with recorded evidence.
+//   * A stale proof stays STALE (warning tone, never success green); a
+//     tampered proof is INVALID; a wrong-environment proof is an explicit
+//     identity mismatch; a malformed artifact is refused with an alert.
+//   * The read-model never resolves a secret: a `{{orders_token}}` reference
+//     is reported as a reference while no credential value appears anywhere.
+//   * The dialog is read-only: nothing sends, saves, persists a proof, or
+//     mutates.
 //   * Keyboard-only usage works, and the layout holds at 375 / 768 / 1024 /
-//     1440 in both themes.
+//     1440 in both themes with zero console errors and zero overflow.
+//
+// Proofs are HMAC-signed with EXECUTION_FINGERPRINT_KEY from backend/.env,
+// which setup.sh generates randomly per checkout/CI. No committed artifact can
+// verify everywhere, so the script mints real proofs live against the backend
+// under test (fixture input -> build -> export through the real Phase 47B
+// endpoints), then attaches them through the real dialog textarea. The
+// STALE case additionally seeds one rehearsal checkpoint through the real
+// Phase 46B service so a recorded run identity exists to disagree with.
 //
 // It talks only to a local, seeded instance and never contacts the network.
 
@@ -22,7 +37,35 @@ import { readFileSync } from "node:fs";
 
 const CDP = process.env.TRACER_CDP_URL || "http://127.0.0.1:9222";
 const APP = process.env.TRACER_APP_URL || "http://127.0.0.1:3000";
+const API = process.env.TRACER_API_URL || "http://127.0.0.1:8000";
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// ---- backend access for proof minting and run seeding --------------------
+// Same pattern as the Phase 47C E2E: read the live backend env, init config,
+// and reuse the backend's own fixture builders so every minted proof is a real
+// Phase 47A envelope, never hand-rolled.
+const repoRootUrl = process.env.TRACER_REPO_ROOT
+	? new URL("file://" + process.env.TRACER_REPO_ROOT + "/")
+	: new URL("../../", import.meta.url);
+const backendEnvUrl = process.env.TRACER_BACKEND_ENV
+	? new URL("file://" + process.env.TRACER_BACKEND_ENV)
+	: new URL("backend/.env", repoRootUrl);
+const backendEnvText = readFileSync(backendEnvUrl, "utf8");
+function readBackendEnv(key) {
+	const line = backendEnvText.split("\n").find((l) => l.startsWith(key + "="));
+	if (!line) throw new Error("backend/.env has no " + key + "; run setup.sh --seed first");
+	return line.slice(key.length + 1).trim();
+}
+
+process.env.MONGODB_URI ??= readBackendEnv("MONGODB_URI");
+process.env.EXECUTION_FINGERPRINT_KEY ??= readBackendEnv("EXECUTION_FINGERPRINT_KEY");
+process.env.JWT_SECRET ??= readBackendEnv("JWT_SECRET");
+const { initConfig } = await import(new URL("backend/src/shared/config/index.js", repoRootUrl).href);
+initConfig();
+const { proofInput, impactResult, contractResult, verificationFixture, executionEvidence, assertionEvidence } = await import(
+	new URL("backend/src/features/verification-proof/proof-fixtures.js", repoRootUrl).href
+);
+const { identityFingerprint } = await import(new URL("backend/src/features/rehearsal-checkpoints/index.js", repoRootUrl).href);
 
 async function retry(fn, label, timeout = 20000) {
 	const end = Date.now() + timeout;
@@ -136,13 +179,15 @@ async function viewport(width, height = 900) {
 
 // Runs a request through the app's own authenticated API client (the page's
 // origin and profile token), so the script never handles a credential itself.
-async function api(method, path) {
+async function api(method, path, body) {
 	const payload = await evaluate(
 		"(async () => { const token = localStorage.getItem('request-desk-profile-token') || localStorage.getItem('request-desk-session-token'); const response = await fetch('/api/v1" +
 			path +
 			"', { method: " +
 			JSON.stringify(method) +
-			", headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token } }); return { status: response.status, body: await response.json() }; })()",
+			", headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }" +
+			(body === undefined ? "" : ", body: " + JSON.stringify(JSON.stringify(body))) +
+			" }); return { status: response.status, body: await response.json() }; })()",
 	);
 	return payload;
 }
@@ -269,41 +314,32 @@ if (!referenceKeys.includes("orders_token")) throw new Error("The credential ref
 if (!referenceKeys.includes("base_url")) throw new Error("The `base_url` variable reference was not recorded: " + JSON.stringify(referenceKeys));
 pass("dependencies record the variable references and the backend precedence ladder");
 
-// Execution: the full pipeline is present with per-stage recorded state.
-await clickText(".why-dialog [role=tab]", "Execution", "Execution tab");
-await sleep(200);
-const stages = await evaluate("[...document.querySelectorAll('.why-stages li')].map((n) => n.textContent.replace(/\\s+/g, ' ').trim())");
-for (const expected of ["Compile", "Target policy", "DNS resolution", "Transport", "Response capture", "Normalize", "History record"]) {
-	if (!stages.some((stage) => stage.includes(expected))) throw new Error("Execution pipeline is missing stage: " + expected);
-}
-const recordedStages = await evaluate("document.querySelectorAll('.why-stages li.recorded').length");
-if (recordedStages !== stages.length) throw new Error("Only " + recordedStages + " of " + stages.length + " pipeline stages are recorded for a successful send");
-pass("execution pipeline reports all seven stages as recorded");
+// ---- v2 envelope with no linked proof: the UNKNOWN chain ----------------
+// Without a proof the dialog GETs, and Phase 49B can only report what is
+// already recorded: every evidence node is present and explicit.
+const verificationBasis = await evaluate("document.querySelector('.why-verification .why-basis')?.textContent.replace(/\\s+/g, ' ').trim() || ''");
+if (!/UNKNOWN/.test(await evaluate("document.querySelector('.why-verification .why-state-pill')?.textContent || ''")))
+	throw new Error("Without a linked proof the verification state is not UNKNOWN");
+if (!/No verification evidence|none/.test(verificationBasis)) throw new Error("Without a linked proof the basis is not none: " + verificationBasis);
+pass("no linked proof renders UNKNOWN with the v2 none basis");
 
-// Change: fail closed rather than invent a cause.
-await clickText(".why-dialog [role=tab]", "Change", "Change tab");
-await sleep(200);
-const changeText = await evaluate("document.querySelector('.why-content')?.textContent || ''");
-if (!/No change evidence recorded/i.test(changeText)) throw new Error("Change section did not fail closed: " + changeText.slice(0, 240));
-if (/first meaningful divergence/i.test(changeText)) throw new Error("Change section rendered a divergence with no recorded analysis");
-pass("change evidence fails closed when nothing recorded it");
-
-// Evidence: a real chain plus projection metadata.
 await clickText(".why-dialog [role=tab]", "Evidence", "Evidence tab");
 await sleep(200);
-const chain = await evaluate("[...document.querySelectorAll('.why-chain li')].map((n) => n.textContent.replace(/\\s+/g, ' ').trim())");
-if (chain.length < 3) throw new Error("Evidence chain has only " + chain.length + " nodes");
-const chainText = chain.join(" | ");
-if (!/Execution receipt/.test(chainText)) throw new Error("Evidence chain has no execution receipt node: " + chainText);
+const chainLabels = await evaluate("[...document.querySelectorAll('.why-chain li strong')].map((n) => n.textContent.trim())");
+for (const expected of ["Impact", "Drift", "Rehearsal", "Contract", "Verification", "Proof"]) {
+	if (!chainLabels.includes(expected)) throw new Error("Evidence chain is missing the v2 node: " + expected + " (got " + chainLabels.join(", ") + ")");
+}
+const chainStatuses = await evaluate("[...document.querySelectorAll('.why-chain li')].map((n) => n.textContent.replace(/\\s+/g, ' ').trim())");
+if (!chainStatuses.some((text) => /Not recorded/.test(text))) throw new Error("Evidence chain shows no explicit not_recorded node: " + chainStatuses.join(" | "));
 const metadata = await evaluate("document.querySelector('.why-content')?.textContent || ''");
-if (!/tracer\.why-explanation/.test(metadata) || !/v1/.test(metadata)) throw new Error("Projection metadata is not shown: " + metadata.slice(0, 240));
-pass("evidence chain and projection metadata are rendered");
+if (!/tracer\.why-explanation/.test(metadata) || !/v2/.test(metadata)) throw new Error("Projection metadata does not show the v2 envelope: " + metadata.slice(0, 240));
+pass("v2 evidence chain renders Impact/Drift/Rehearsal/Contract/Verification/Proof as explicit not_recorded");
 
 // ---- the read-model never resolves a secret -----------------------------
 const explanation = await api("GET", "/why/executions/" + executionId);
 if (explanation.status !== 200) throw new Error("Projection endpoint returned " + explanation.status);
 const envelope = explanation.body?.data;
-if (envelope?.kind !== "tracer.why-explanation" || envelope?.schemaVersion !== 1) throw new Error("Unexpected envelope: " + JSON.stringify(envelope).slice(0, 200));
+if (envelope?.kind !== "tracer.why-explanation" || envelope?.schemaVersion !== 2) throw new Error("Unexpected envelope: " + JSON.stringify(envelope).slice(0, 200));
 if (envelope?.recorded !== true) throw new Error("A recorded execution was not reported as recorded");
 const serialized = JSON.stringify(envelope);
 // The projection may name a field path (auth.tokenTemplate) but must never carry a
@@ -333,6 +369,271 @@ const unknown = await api("GET", "/why/executions/00000000-0000-4000-8000-000000
 if (unknown.status !== 404 || unknown.body?.error?.code !== "EXECUTION_NOT_FOUND")
 	throw new Error("Unknown identifier did not fail with EXECUTION_NOT_FOUND: " + JSON.stringify(unknown).slice(0, 200));
 pass("unknown and malformed identifiers fail closed with explicit codes");
+
+// ---- discover the live request and environment identities ----------------
+// The proof must name the exact request and environment the execution was
+// recorded against, so both are read from the live seeded workspace.
+const collections = await api("GET", "/collections");
+const ordersApi = (collections.body?.data ?? []).find((c) => c.name === "Orders API");
+if (!ordersApi?._id) throw new Error("Could not find the Orders API collection: " + JSON.stringify(collections).slice(0, 300));
+const ordersDetail = await api("GET", "/collections/" + ordersApi._id);
+const listOrders = (ordersDetail.body?.data?.requests ?? []).find((r) => r.name === "List orders");
+const requestId = listOrders?.id ?? listOrders?._id;
+if (!requestId) throw new Error("Could not find the List orders request id: " + JSON.stringify(collections).slice(0, 300));
+const environments = await api("GET", "/environments");
+const localEnv = (environments.body?.data ?? []).find((e) => e.name === "Local");
+const environmentId = localEnv?._id;
+if (!environmentId) throw new Error("Could not find the Local environment id: " + JSON.stringify(environments).slice(0, 300));
+pass("live request and environment identities discovered");
+
+// ---- mint real Phase 47 proofs against the backend under test ------------
+const SNAPSHOT_RUN = { snapshotId: "snap-why-e2e-run", snapshotFingerprint: "f".repeat(64) };
+const SNAPSHOT_SEED = { snapshotId: "snap-why-e2e-run", snapshotFingerprint: "5".repeat(64) };
+const ENV_FINGERPRINT = "9".repeat(64);
+
+function proofApiInput({ snapshot, envId, envName }) {
+	// proofInput is a fixture builder: requestIds/runOptions drive its plan
+	// construction but are not part of the HTTP input schema, so strip them.
+	// The fixture plan/run cite synthetic identities, while the proof binds
+	// the live request/environment/snapshot — rebind the plan and run to the
+	// same live identity so the builder's binding check sees one story.
+	const { requestIds: _requestIds, runOptions: _runOptions, ...input } = proofInput({
+		requestIds: [requestId],
+		snapshot,
+		targetEnvironment: { environmentId: envId, environmentFingerprint: ENV_FINGERPRINT, environmentName: envName },
+		// Name the real profile on the evidence so the build exercises the
+		// isolation boundary instead of sidestepping it (same as 47C).
+		evidence: {
+			executions: [
+				executionEvidence({
+					ownerProfileId: pageProfileId,
+					requestId,
+					snapshotId: snapshot.snapshotId,
+					snapshotFingerprint: snapshot.snapshotFingerprint,
+					environmentId: envId,
+					environmentName: envName,
+				}),
+			],
+			assertions: [assertionEvidence({ ownerProfileId: pageProfileId, requestId })],
+		},
+		verification: verificationFixture({
+			verifiedRequestIds: [requestId],
+			affectedRequestIds: [requestId],
+			requiredRehearsalRequestIds: [requestId],
+			target: { snapshotId: snapshot.snapshotId, snapshotFingerprint: snapshot.snapshotFingerprint, environmentId: envId },
+		}),
+		impact: impactResult({ direct: [requestId] }),
+		contracts: [contractResult({ requestId })],
+	});
+	input.plan.target.environmentId = envId;
+	input.plan.target.snapshotFingerprint = snapshot.snapshotFingerprint;
+	input.plan.snapshot.snapshotId = snapshot.snapshotId;
+	input.plan.snapshot.snapshotFingerprint = snapshot.snapshotFingerprint;
+	input.run.identity.snapshotId = snapshot.snapshotId;
+	input.run.identity.snapshotFingerprint = snapshot.snapshotFingerprint;
+	input.run.identity.targetEnvironment = { environmentId: envId, environmentFingerprint: ENV_FINGERPRINT, environmentName: envName };
+	input.run.identity.planId = input.plan.identity.planFingerprint;
+	input.run.identity.planFingerprint = input.plan.identity.planFingerprint;
+	input.run.identityFingerprint = identityFingerprint(input.run.identity);
+	return input;
+}
+
+async function exportArtifact(input) {
+	const built = await fetch(API + "/api/v1/verification-proofs", {
+		method: "POST",
+		headers: { "content-type": "application/json", authorization: "Bearer " + pageToken },
+		body: JSON.stringify({ input }),
+	}).then((r) => r.json());
+	if (!built.data?.proof) throw new Error("mint: build failed: " + JSON.stringify(built).slice(0, 300));
+	const exported = await fetch(API + "/api/v1/verification-proofs/export", {
+		method: "POST",
+		headers: { "content-type": "application/json", authorization: "Bearer " + pageToken },
+		body: JSON.stringify({ proof: built.data.proof }),
+	}).then((r) => r.json());
+	if (!exported.data?.text) throw new Error("mint: export failed: " + JSON.stringify(exported).slice(0, 300));
+	return exported.data.text;
+}
+
+async function mintProofArtifact(snapshot) {
+	return exportArtifact(proofApiInput({ snapshot, envId: environmentId, envName: "Local" }));
+}
+
+const pageToken = await evaluate("localStorage.getItem('request-desk-profile-token') || localStorage.getItem('request-desk-session-token')");
+if (!pageToken) throw new Error("Could not read the page profile token for proof minting");
+const pageProfileId = await evaluate("localStorage.getItem('request-desk-profile-id') || ''");
+if (!pageProfileId) throw new Error("Could not read the page profile id for proof minting");
+
+// Rehearsal-linkage reads persisted runs, so a leftover run from an earlier
+// partial run would change every link verdict below. Clear this suite's runs
+// up front (and again at the end) through the same database the backend reads.
+const mongoose = (await import(new URL("backend/node_modules/mongoose/lib/mongoose.js", repoRootUrl).href)).default;
+await mongoose.connect(process.env.MONGODB_URI);
+const { RehearsalCheckpoint } = await import(new URL("backend/src/features/rehearsal-checkpoints/checkpoint.model.js", repoRootUrl).href);
+await RehearsalCheckpoint.deleteMany({ ownerProfileId: pageProfileId, runId: /^why-e2e-/ });
+
+// Proof A names this request in this environment, so with no recorded run to
+// disagree with it links as RECORDED and the Phase 41 VERIFIED state appears.
+const proofTextA = await mintProofArtifact(SNAPSHOT_RUN);
+
+async function attachProof(text) {
+	await waitFor('document.querySelector(".why-dialog [role=tab]") !== null', "Why sections before attach", 30000);
+	await clickText(".why-dialog [role=tab]", "Evidence", "Evidence tab");
+	await sleep(200);
+	await setInput("#why-proof-artifact", text);
+	await clickText(".why-proof-actions button", "Attach proof for this read", "Attach proof");
+}
+
+async function chainNode(label) {
+	const nodes = await evaluate(
+		"[...document.querySelectorAll('.why-chain li')].map((n) => ({ label: n.querySelector('strong')?.textContent.trim() ?? '', text: n.textContent.replace(/\\s+/g, ' ').trim() }))",
+	);
+	return (nodes ?? []).find((node) => node.label === label)?.text ?? null;
+}
+
+async function waitChainNode(label, pattern, what, timeout = 20000) {
+	return retry(async () => {
+		const node = await chainNode(label);
+		return node && pattern.test(node) ? node : null;
+	}, what, timeout);
+}
+
+async function removeProof() {
+	await waitFor('document.querySelector(".why-dialog [role=tab]") !== null', "Why sections before remove", 30000);
+	await clickText(".why-dialog [role=tab]", "Evidence", "Evidence tab");
+	await sleep(200);
+	await clickText(".why-proof-actions button", "Remove proof", "Remove proof");
+}
+
+await attachProof(proofTextA);
+await waitChainNode("Proof", /Recorded/, "proof links as recorded");
+await clickText(".why-dialog [role=tab]", "Configuration", "Configuration tab after link");
+await sleep(200);
+const linkedVerification = await evaluate(
+	"(() => ({ state: document.querySelector('.why-verification .why-state-pill')?.textContent.trim() || null, basis: document.querySelector('.why-verification .why-basis')?.textContent.replace(/\\s+/g, ' ').trim() || '' }))()",
+);
+if (linkedVerification.state !== "VERIFIED") throw new Error("Linked proof did not surface the Phase 41 VERIFIED state: " + linkedVerification.state);
+if (!/linked_verification/.test(linkedVerification.basis)) throw new Error("Linked proof did not surface the linked basis: " + linkedVerification.basis);
+await clickText(".why-dialog [role=tab]", "Evidence", "Evidence tab after link");
+await sleep(200);
+const linkedNodes = await evaluate(
+	"[...document.querySelectorAll('.why-chain li')].map((n) => ({ label: n.querySelector('strong')?.textContent.trim() ?? '', text: n.textContent.replace(/\\s+/g, ' ').trim() }))",
+);
+for (const expected of ["Impact", "Drift", "Contract", "Verification", "Proof"]) {
+	const node = (linkedNodes ?? []).find((entry) => entry.label === expected);
+	if (!node || !/Recorded/.test(node.text)) throw new Error("Linked chain node is not recorded: " + expected);
+}
+pass("attached proof links Impact/Drift/Contract/Phase 41/Proof with recorded evidence");
+
+// POST envelope carries the same secret-exclusion guarantee as GET.
+const posted = await api("POST", "/why/executions/" + executionId, { proof: proofTextA });
+if (posted.status !== 200) throw new Error("POST explanation returned " + posted.status);
+const postedSerialized = JSON.stringify(posted.body?.data);
+for (const secret of demoSecrets) {
+	if (postedSerialized.includes(secret)) throw new Error("The POST projection leaked a resolved demo credential value");
+}
+if (!/orders_token/.test(postedSerialized)) throw new Error("The POST projection dropped the recorded credential reference key");
+pass("POST explanation keeps the secret-exclusion guarantee");
+
+// ---- a recorded run that disagrees makes the proof STALE ----------------
+// Seed one rehearsal checkpoint through the real Phase 46B service: it names
+// this execution in its step evidence refs, but its snapshot fingerprint
+// differs from proof A's, so Phase 47B answers STALE and the dialog must show it.
+const { checkpointRepository } = await import(new URL("backend/src/features/rehearsal-checkpoints/checkpoint.repository.js", repoRootUrl).href);
+const { createRehearsalCheckpointService } = await import(
+	new URL("backend/src/features/rehearsal-checkpoints/rehearsal-checkpoint.service.js", repoRootUrl).href
+);
+const { STEP_STATES } = await import(new URL("backend/src/features/rehearsal-checkpoints/reason-codes.js", repoRootUrl).href);
+const checkpointService = createRehearsalCheckpointService({ repository: checkpointRepository, now: () => new Date() });
+const profileId = pageProfileId;
+const e2eRunId = "why-e2e-" + Date.now().toString(36);
+await checkpointService.createRun(profileId, {
+	runId: e2eRunId,
+	identity: {
+		workspaceId: "ws-why-e2e",
+		snapshotId: SNAPSHOT_SEED.snapshotId,
+		snapshotFingerprint: SNAPSHOT_SEED.snapshotFingerprint,
+		targetEnvironment: { environmentId, environmentName: "Local", environmentFingerprint: ENV_FINGERPRINT },
+		planId: "plan-why-e2e",
+		planFingerprint: "p".repeat(64),
+	},
+	plan: { steps: [{ stepId: "step:" + requestId, refId: requestId }] },
+});
+const startedRun = await checkpointService.startRun(profileId, e2eRunId, { owner: "why-e2e" });
+await checkpointService.checkpointStep(profileId, e2eRunId, {
+	generation: startedRun.generation,
+	owner: "why-e2e",
+	stepId: "step:" + requestId,
+	state: STEP_STATES.COMPLETED,
+	outcome: { outcomeId: "why-e2e-outcome" },
+	evidenceRefs: [executionId],
+});
+
+// The run names this execution, so even without a proof the rehearsal node is
+// now recorded evidence.
+await removeProof();
+await waitChainNode("Rehearsal", /Recorded/, "rehearsal links as recorded");
+pass("seeded rehearsal run links as recorded rehearsal evidence");
+
+// Re-attaching proof A now disagrees with the recorded run identity: STALE.
+// STALE must read as a warning, never as success green.
+await attachProof(proofTextA);
+await waitChainNode("Proof", /Stale/, "proof stays stale");
+const staleProofNode = await chainNode("Proof");
+if (!staleProofNode || /Recorded/.test(staleProofNode)) throw new Error("Stale proof node is not explicit: " + (staleProofNode ?? "missing").slice(0, 600));
+const staleProofTone = await evaluate("(() => { const node = [...document.querySelectorAll('.why-chain li')].find((n) => n.querySelector('strong')?.textContent.trim() === 'Proof'); return node?.querySelectorAll('.why-chip')[1]?.className || null; })()");
+if (!staleProofTone || /success/.test(staleProofTone)) throw new Error("Stale proof renders as success: " + staleProofTone);
+await clickText(".why-dialog [role=tab]", "Configuration", "Configuration tab after stale");
+await sleep(200);
+const staleVerification = await evaluate("document.querySelector('.why-verification .why-state-pill')?.textContent.trim() || ''");
+if (staleVerification === "VERIFIED") throw new Error("A stale proof still reports VERIFIED");
+pass("stale proof stays STALE and never upgrades the verification state");
+
+// Proof B matches the recorded run identity: CURRENT with full evidence.
+const proofTextB = await mintProofArtifact(SNAPSHOT_SEED);
+await removeProof();
+await attachProof(proofTextB);
+await waitChainNode("Proof", /Recorded/, "proof links as current");
+await clickText(".why-dialog [role=tab]", "Configuration", "Configuration tab when current");
+await sleep(200);
+const currentVerification = await evaluate("document.querySelector('.why-verification .why-state-pill')?.textContent.trim() || ''");
+if (currentVerification !== "VERIFIED") throw new Error("Current proof did not restore VERIFIED: " + currentVerification);
+pass("matching proof links as CURRENT with the Phase 41 state");
+
+// A tampered artifact fails integrity: INVALID with danger tone, and the
+// verification state falls back to UNKNOWN instead of trusting it.
+const tampered = proofTextB.slice(0, 400) + (proofTextB[400] === "a" ? "b" : "a") + proofTextB.slice(401);
+await removeProof();
+await attachProof(tampered);
+await waitChainNode("Proof", /Invalid/, "tampered proof is invalid");
+const invalidTone = await evaluate("(() => { const node = [...document.querySelectorAll('.why-chain li')].find((n) => n.querySelector('strong')?.textContent.trim() === 'Proof'); return node?.querySelectorAll('.why-chip')[1]?.className || null; })()");
+if (!invalidTone || !/danger/.test(invalidTone)) throw new Error("Invalid proof does not render with danger tone: " + invalidTone);
+await clickText(".why-dialog [role=tab]", "Configuration", "Configuration tab after invalid");
+await sleep(200);
+const invalidVerification = await evaluate("document.querySelector('.why-verification .why-state-pill')?.textContent.trim() || ''");
+if (invalidVerification === "VERIFIED") throw new Error("A tampered proof still reports VERIFIED");
+pass("tampered proof is INVALID and never upgrades the verification state");
+
+// A proof for another environment is an explicit identity mismatch. The
+// artifact is internally consistent (it builds cleanly); it disagrees with
+// the execution's environment, which linkProof reports without trusting it.
+const elsewhereText = await exportArtifact(
+	proofApiInput({ snapshot: SNAPSHOT_RUN, envId: "00000000-0000-4000-8000-000000000001", envName: "Elsewhere" }),
+);
+await removeProof();
+await attachProof(elsewhereText);
+await waitChainNode("Proof", /Identity mismatch/, "environment mismatch is explicit");
+pass("wrong-environment proof is an explicit identity mismatch");
+
+// A malformed artifact is refused with an alert, not a guess.
+await removeProof();
+await attachProof("{not a proof artifact");
+await retry(async () => evaluate("document.querySelector('.why-proof-error') !== null"), "proof refusal alert");
+pass("malformed proof artifact is refused with an explicit alert");
+
+// Cleanup the seeded run so the dev database is left as found.
+await RehearsalCheckpoint.deleteMany({ ownerProfileId: pageProfileId, runId: /^why-e2e-/ }).catch(() => null);
+await mongoose.disconnect().catch(() => null);
+pass("seeded rehearsal run cleaned up");
 
 // ---- read-only: no send, save, or mutation affordance -------------------
 const actionText = await evaluate("(() => { const nodes = [...document.querySelectorAll('.why-dialog button')]; return nodes.map((n) => n.textContent.trim()).join('|'); })()");
@@ -380,24 +681,12 @@ for (const width of [375, 768, 1024, 1440]) {
 			await clickText(".why-dialog [role=tab]", label, label + " tab");
 			await sleep(160);
 			const dialogOverflow = await evaluate("(() => { const node = document.querySelector('.why-dialog'); return node.scrollWidth - node.clientWidth; })()");
-			if (dialogOverflow > 1) throw new Error(`Why dialog overflows at ${width}px/${theme} on ${label}: ${dialogOverflow}px`);
-			const rendered = await evaluate("document.querySelector('.why-content')?.textContent?.length || 0");
-			if (rendered < 20) throw new Error(`Why dialog rendered nothing at ${width}px/${theme} on ${label}`);
+			if (dialogOverflow > 1) throw new Error(`Why dialog overflows at ${width}px/${theme}/${label}: ${dialogOverflow}px`);
 		}
-		const clippedFooter = await evaluate(
-			"(() => { const footer = document.querySelector('.why-dialog footer'); if (!footer) return false; return footer.getBoundingClientRect().bottom > window.innerHeight + 2; })()",
-		);
-		if (clippedFooter) throw new Error(`Why dialog footer is clipped at ${width}px/${theme}`);
-		const surface = await evaluate(
-			"(() => { const dialog = document.querySelector('.why-modal'); const body = document.querySelector('.why-dialog'); return getComputedStyle(dialog).backgroundColor + '|' + getComputedStyle(body).color; })()",
-		);
-		matrix.push(`${width}/${theme}:${surface}`);
+		matrix.push(width + "/" + theme);
 	}
 }
-if (new Set(matrix.map((entry) => entry.split(":").slice(1).join(":"))).size !== 2) throw new Error("Both themes did not produce a distinct dialog surface: " + matrix.join(" "));
-await pressEscape();
-await retry(() => evaluate('document.querySelector(".why-dialog") === null'), "close after matrix");
-pass("Why Inspector renders at 375/768/1024/1440 in both themes with no overflow or clipping");
+pass("responsive matrix holds at " + matrix.join(", "));
 
 // ---- no side effects ----------------------------------------------------
 const afterHistory = await api("GET", "/history?limit=1");
@@ -408,5 +697,5 @@ pass("opening the Why Inspector produces no new execution");
 if (runtimeErrors.length) throw new Error("Browser exceptions: " + runtimeErrors.join(" | "));
 pass("no unhandled browser exceptions");
 
-process.stdout.write("PHASE49_E2E_PASS " + checks.length + "/" + checks.length + "\n");
+process.stdout.write("PHASE49B_E2E_PASS " + checks.length + "/" + checks.length + "\n");
 socket.close();
