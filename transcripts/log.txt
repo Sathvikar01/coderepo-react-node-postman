@@ -5645,3 +5645,41 @@ head=1d4959c9775452b43d63fd24b0eda452fb26f89c
 pr=42 MERGED
 merge_commit=9f0986f1887b51f2ee9a70d728eb862b1e60f00d
 reported_verdict=PHASE 46A VERDICT: PASS — READY FOR REHEARSAL INTEGRATION
+
+
+## [2026-09-24T14:35:00+05:30] Phase 46B — Rehearsal Checkpoint + Resume Core
+
+User Prompt (normalized, secrets redacted):
+Build Phase 46B as an isolated backend-only persistent checkpoint/resume core for cross-environment rehearsal. Bind each run immutably to workspace, snapshot, target environment, plan, and policy identity; checkpoint completed steps safely; resume after crashes without repeating finished work; prevent stale workers through generation/CAS semantics; enforce strict terminal-state transitions; minimize persisted data; prove concurrency behavior against real persistence; do not execute HTTP or modify the runner.
+
+Agent Response Summary:
+Implemented backend/src/features/rehearsal-checkpoints/** plus a minimal additive seed/reset registration. The feature is a persistent crash-safe rehearsal state machine with strict lifecycle semantics, immutable run identity, generation-based stale-worker protection, exactly-once completion accounting, crash-safe resume, bounded evidence references, and tenant isolation through ownerProfileId on every read/write.
+
+The lifecycle is CREATED → RUNNING ⇄ PAUSED → COMPLETED/ABORTED/FAILED with no outgoing terminal transitions. Every mutation revalidates the immutable workspace/snapshot/target-environment/plan/policy binding. Claims, resumes, and reclaims atomically increment a generation epoch under CAS filters; stale workers therefore stop matching future writes. Identical duplicate completions are idempotent while contradictory duplicate completions fail with a typed conflict.
+
+Three important defects were found and fixed under test. Concurrent different-step checkpoints could previously lose progress because derived mirrors were computed from stale pre-write state; this was replaced with an aggregation-pipeline atomic update deriving completed IDs and pointers from the post-update step array. countByState used an uncast string profile ID inside an aggregation and returned empty results; it now explicitly casts ObjectId. A misleading secondary plan fingerprint was removed in favor of persisting the declared planFingerprint directly. Additional stale-derived-field and order-dependence issues in completion fingerprinting were also corrected.
+
+Verification reported 59 semantic tests plus 25 real-Mongo persistence/concurrency tests, 84 new tests total. Full suite: 1243 pass / 2 skip / 0 fail. Backend syntax passed on all 289 files, frontend build succeeded, frozen-lockfile install made no changes, seed/reset cleared the new collection correctly, and GitHub Baseline Gate plus Tracer CLI were green.
+
+GitHub verification confirmed PR #43 was clean and mergeable with both CI workflows green on head cd0ab2aea8aee7986a05ff4bfc3a142cbb89f9e7. ChatGPT merged PR #43 into main as e0fe38e51e9cc5806328443ca4317c4be7d3393c.
+
+Actions:
+* implemented the isolated rehearsal-checkpoint persistent state machine
+* enforced immutable run binding and strict lifecycle transitions
+* added generation/CAS stale-worker protection and exactly-once completion accounting
+* fixed concurrent lost-update behavior with atomic post-update derivation
+* added real Mongo concurrency/crash-resume persistence tests
+* added minimal deterministic reset registration
+* ran full unit/persistence/build/syntax/seed gates successfully
+* pushed commit cd0ab2aea8aee7986a05ff4bfc3a142cbb89f9e7
+* opened PR #43 and verified both CI workflows green
+* merged PR #43 into main as e0fe38e51e9cc5806328443ca4317c4be7d3393c
+
+Context:
+tool=local coding agent + ChatGPT GitHub verification
+phase=46B
+branch=phase46/rehearsal-checkpoint-core
+head=cd0ab2aea8aee7986a05ff4bfc3a142cbb89f9e7
+pr=43 MERGED
+merge_commit=e0fe38e51e9cc5806328443ca4317c4be7d3393c
+reported_verdict=PHASE 46B VERDICT: PASS — READY FOR REHEARSAL INTEGRATION
