@@ -3,10 +3,11 @@ import { AppError } from "../../shared/errors/app-error.js";
 import { LIMITS } from "../../shared/utils/limits.js";
 import { Profile } from "../profiles/profile.model.js";
 import { ResourceVersion } from "../versions/version.model.js";
+import { verificationProofApiService } from "../verification-proof-api/index.js";
 import { publishWorkspaceEvent } from "../workspaces/workspace-events.js";
 import { Workspace } from "../workspaces/workspace.model.js";
 import { changedEvidenceFields, displayIdForSequence, reviewEvidenceFingerprintOf, reviewFingerprintKeyId } from "./review-identity.js";
-import { REVIEW_BOUNDS, REVIEW_DECISION, REVIEW_FRESHNESS, REVIEW_STATUS } from "./review-schema.js";
+import { REVIEW_BOUNDS, REVIEW_DECISION, REVIEW_FINDING_TYPES, REVIEW_FRESHNESS, REVIEW_STATUS } from "./review-schema.js";
 import { reviewAuditRepository, reviewCommentRepository, reviewRepository } from "./review.repository.js";
 
 // Phase 50 — Review & Decision Workflow service.
@@ -139,7 +140,147 @@ function serializeReview(review) {
 	};
 }
 
+
+function reviewSourceMismatch(message, details) {
+	return new AppError(422, "REVIEW_SOURCE_MISMATCH", message, details);
+}
+
+function provenanceDigest(proof, source) {
+	return (proof?.provenance?.sources ?? []).find((entry) => entry?.source === source)?.digest ?? null;
+}
+
+// A review source is derived only from a Phase 47 Verification Proof that passed
+// the existing artifact importer/integrity checks. Humans choose what to discuss;
+// they do not type technical truth or machine fingerprints.
+export function deriveReviewSourceFromProof(proof, findingType, expectedWorkspaceId) {
+	if (!proof || typeof proof !== "object") throw reviewSourceMismatch("A validated Verification Proof is required.");
+	if (String(proof.identity?.workspaceId ?? "") !== String(expectedWorkspaceId)) {
+		throw reviewSourceMismatch("The Verification Proof belongs to a different workspace.", {
+			expectedWorkspaceId: String(expectedWorkspaceId),
+			actualWorkspaceId: proof.identity?.workspaceId ?? null,
+		});
+	}
+
+	let technicalState;
+	switch (findingType) {
+		case REVIEW_FINDING_TYPES.CONTRACT_BREAKING:
+			if ((proof.contracts?.classes?.breaking ?? 0) < 1) {
+				throw reviewSourceMismatch("This proof does not contain a breaking contract finding.");
+			}
+			technicalState = "BREAKING";
+			break;
+		case REVIEW_FINDING_TYPES.VERIFICATION_BLOCKED:
+			if (proof.state !== "BLOCKED") throw reviewSourceMismatch("This proof is not BLOCKED.");
+			technicalState = "BLOCKED";
+			break;
+		case REVIEW_FINDING_TYPES.VERIFICATION_UNKNOWN:
+			if (proof.state !== "UNKNOWN") throw reviewSourceMismatch("This proof is not UNKNOWN.");
+			technicalState = "UNKNOWN";
+			break;
+		case REVIEW_FINDING_TYPES.DRIFT_BLOCKING:
+			if ((proof.drift?.blockingCount ?? 0) < 1) throw reviewSourceMismatch("This proof does not contain blocking drift.");
+			technicalState = "BLOCKING_DRIFT";
+			break;
+		case REVIEW_FINDING_TYPES.DRIFT_UNKNOWN: {
+			const hasUnknown = (proof.drift?.blocking ?? []).some((entry) => entry?.severity === "unknown" || entry?.status === "unknown");
+			if (!hasUnknown) throw reviewSourceMismatch("This proof does not contain unknown drift.");
+			technicalState = "UNKNOWN_DRIFT";
+			break;
+		}
+		case REVIEW_FINDING_TYPES.IMPACT_UNRESOLVED:
+			if (
+				proof.impact?.resolved !== false &&
+				proof.impact?.truncated !== true &&
+				(proof.impact?.unknownCount ?? 0) < 1
+			) {
+				throw reviewSourceMismatch("This proof does not contain unresolved impact.");
+			}
+			technicalState = "UNRESOLVED";
+			break;
+		case REVIEW_FINDING_TYPES.REHEARSAL_FAILURE:
+			if (!["FAILED", "ABORTED"].includes(proof.rehearsal?.runState)) {
+				throw reviewSourceMismatch("This proof does not contain a failed or aborted rehearsal.");
+			}
+			technicalState = proof.rehearsal.runState;
+			break;
+		case REVIEW_FINDING_TYPES.VERIFICATION_PROOF:
+		case REVIEW_FINDING_TYPES.WHY_EVIDENCE:
+			technicalState = proof.state;
+			break;
+		default:
+			throw reviewSourceMismatch("The requested review finding type is not supported.");
+	}
+
+	const evidence = {
+		workspaceId: String(expectedWorkspaceId),
+		snapshotId: proof.identity.snapshot.snapshotId,
+		snapshotFingerprint: proof.identity.snapshot.snapshotFingerprint,
+		targetEnvironmentId: proof.identity.targetEnvironment.environmentId,
+		targetEnvironmentFingerprint: proof.identity.targetEnvironment.environmentFingerprint,
+		planFingerprint: proof.identity.planFingerprint,
+		impactFingerprint: proof.impact?.fingerprint ?? provenanceDigest(proof, "change-impact"),
+		driftFingerprint: proof.drift?.fingerprint ?? provenanceDigest(proof, "environment-drift"),
+		rehearsalRunId: proof.rehearsal?.runId ?? proof.identity.runId,
+		rehearsalFingerprint: proof.rehearsal?.identityFingerprint ?? proof.identity.runIdentityFingerprint,
+		verificationFingerprint: proof.verification?.fingerprint ?? provenanceDigest(proof, "cross-env-verification"),
+		contractFingerprint: provenanceDigest(proof, "contract-compatibility"),
+		technicalState,
+		proofId: proof.proofId,
+		proofFingerprint: proof.fingerprint,
+	};
+	for (const key of Object.keys(evidence)) {
+		if (evidence[key] === null || evidence[key] === undefined) delete evidence[key];
+	}
+	return { technicalState, evidence };
+}
+
+async function assertResourceBinding(workspaceId, resource) {
+	if (!resource) return null;
+	const row = await ResourceVersion.findOne({
+		workspaceId,
+		resourceType: resource.resourceType,
+		resourceId: resource.resourceId,
+		revision: resource.revision,
+	})
+		.select("resourceType resourceId revision")
+		.lean();
+	if (!row) {
+		throw reviewSourceMismatch("The bound resource revision does not exist in this workspace.", {
+			resourceType: resource.resourceType,
+			resourceId: resource.resourceId,
+			revision: resource.revision,
+		});
+	}
+	return {
+		resourceType: resource.resourceType,
+		resourceId: resource.resourceId,
+		revision: resource.revision,
+	};
+}
+
 export const reviewService = {
+	// Public HTTP creation boundary. The imported proof is already validated by
+	// Phase 47B; this method derives all machine-owned fields server-side.
+	async createFromProof({ workspaceId, profileId, input }) {
+		const imported = verificationProofApiService.importProof(profileId, input.proofArtifact);
+		const source = deriveReviewSourceFromProof(imported.proof, input.findingType, workspaceId);
+		const resource = await assertResourceBinding(workspaceId, input.resource);
+		return this.create({
+			workspaceId,
+			profileId,
+			input: {
+				title: input.title,
+				findingType: input.findingType,
+				findingSummary: input.findingSummary,
+				technicalState: source.technicalState,
+				evidence: { ...source.evidence, ...(resource ?? {}) },
+				assigneeProfileId: input.assigneeProfileId ?? null,
+				reviewerProfileId: input.reviewerProfileId ?? null,
+				supersedesReviewId: input.supersedesReviewId ?? null,
+			},
+		});
+	},
+
 	// --- Promote to Review -------------------------------------------------
 	// Explicit creation only: the caller names the finding type and the exact
 	// frozen evidence. Nothing here auto-sends, auto-saves, or re-executes.
@@ -231,8 +372,13 @@ export const reviewService = {
 		if (assigneeProfileId) requireProfilesAreMembers(workspace, [assigneeProfileId], "Review assignee");
 		if (role === "VIEWER") throw forbidden("Viewers may not assign reviews.");
 		// Editors may only assign work to themselves; owners may assign anyone.
-		if (role === "EDITOR" && assigneeProfileId && String(assigneeProfileId) !== String(profileId)) {
-			throw forbidden("Editors may only assign reviews to themselves.");
+		if (role === "EDITOR") {
+			if (assigneeProfileId && String(assigneeProfileId) !== String(profileId)) {
+				throw forbidden("Editors may only assign reviews to themselves.");
+			}
+			if (!assigneeProfileId && review.assigneeProfileId && String(review.assigneeProfileId) !== String(profileId)) {
+				throw forbidden("Editors may only clear their own assignment.");
+			}
 		}
 		// Assignment never grants resource permissions; membership/roles are untouched.
 
@@ -263,9 +409,12 @@ export const reviewService = {
 		if (reviewerProfileId) requireProfilesAreMembers(workspace, [reviewerProfileId], "Review reviewer");
 		if (role === "VIEWER") throw forbidden("Viewers may not change the reviewer.");
 		if (role === "EDITOR") {
-			const selfOnly = !reviewerProfileId || String(reviewerProfileId) === String(profileId);
-			const isAssignee = review.assigneeProfileId && String(review.assigneeProfileId) === String(profileId);
-			if (!selfOnly && !isAssignee) throw forbidden("Editors may only designate themselves as reviewer.");
+			if (reviewerProfileId && String(reviewerProfileId) !== String(profileId)) {
+				throw forbidden("Editors may only designate themselves as reviewer.");
+			}
+			if (!reviewerProfileId && review.reviewerProfileId && String(review.reviewerProfileId) !== String(profileId)) {
+				throw forbidden("Editors may only clear themselves as reviewer.");
+			}
 		}
 
 		const previous = { ...review };
@@ -325,8 +474,7 @@ export const reviewService = {
 		if (role === "VIEWER") throw forbidden("Viewers may not record review decisions.");
 		if (role === "EDITOR") {
 			const isReviewer = review.reviewerProfileId && String(review.reviewerProfileId) === String(profileId);
-			const isAssignee = review.assigneeProfileId && String(review.assigneeProfileId) === String(profileId);
-			if (!isReviewer && !isAssignee) throw forbidden("Editors may only decide reviews assigned to them for review or work.");
+			if (!isReviewer) throw forbidden("Editors may only decide reviews when they are the designated reviewer.");
 		}
 		if (decision === REVIEW_DECISION.CHANGES_REQUESTED && reason && reason.length > REVIEW_BOUNDS.reasonMax) {
 			throw new AppError(400, "VALIDATION_ERROR", "The change-request reason is too long.");
@@ -497,7 +645,7 @@ export const reviewService = {
 		if (!review) throw notFound();
 		if (review.freshness === REVIEW_FRESHNESS.STALE) return serializeReview(review);
 
-		const live = { ...(current ?? {}) };
+		const live = { ...(review.evidence ?? {}), ...(current ?? {}) };
 		// Fill persisted resource revisions from the version tip when the frozen
 		// manifest binds a resource but the caller did not supply a current one.
 		if (review.evidence?.resourceType && review.evidence?.resourceId && live.revision === undefined) {
@@ -528,9 +676,41 @@ export const reviewService = {
 		return out;
 	},
 
+	async refreshFromProof({ workspaceId, profileId, reviewId, proofArtifact }) {
+		const review = await reviewRepository.findByIdInWorkspace(reviewId, workspaceId);
+		if (!review) throw notFound();
+		if (!proofArtifact) return this.refresh({ workspaceId, profileId, reviewId, current: {} });
+		const imported = verificationProofApiService.importProof(profileId, proofArtifact);
+		const source = deriveReviewSourceFromProof(imported.proof, review.findingType, workspaceId);
+		return this.refresh({ workspaceId, profileId, reviewId, current: source.evidence });
+	},
+
 	// --- Re-review ---------------------------------------------------------------
 	// Never mutates the old manifest. Creates a NEW review bound to current
 	// evidence and links it via `supersedesReviewId`; old decisions stay visible.
+	async reReviewFromProof({ workspaceId, profileId, reviewId, input }) {
+		const workspace = await workspaceOrThrow(workspaceId);
+		requireMembership(workspace, profileId);
+		const previous = await reviewRepository.findByIdInWorkspace(reviewId, workspace._id);
+		if (!previous) throw notFound();
+		return this.createFromProof({
+			workspaceId,
+			profileId,
+			input: {
+				title: input?.title ?? `Re-review of ${previous.displayId}`,
+				findingType: previous.findingType,
+				findingSummary: input?.findingSummary ?? previous.findingSummary,
+				proofArtifact: input.proofArtifact,
+				resource: input.resource,
+				assigneeProfileId: input?.assigneeProfileId ?? null,
+				reviewerProfileId: input?.reviewerProfileId ?? null,
+				supersedesReviewId: String(previous._id),
+			},
+		});
+	},
+
+	// Trusted internal/test primitive retained for deterministic service tests.
+	// Production HTTP routes use createFromProof/reReviewFromProof instead.
 	async reReview({ workspaceId, profileId, reviewId, input }) {
 		const workspace = await workspaceOrThrow(workspaceId);
 		requireMembership(workspace, profileId);
