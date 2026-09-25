@@ -50,8 +50,11 @@ export const reviewsApi = {
 			body: JSON.stringify({ body, mentions }),
 		}),
 	audit: (reviewId) => request(`/reviews/${reviewId}/audit`),
-	refresh: (reviewId, current) =>
-		request(`/reviews/${reviewId}/refresh`, { method: "POST", body: JSON.stringify({ current }) }),
+	refresh: (reviewId, proofArtifact = null) =>
+		request(`/reviews/${reviewId}/refresh`, {
+			method: "POST",
+			body: JSON.stringify(proofArtifact ? { proofArtifact } : {}),
+		}),
 	rereview: (reviewId, input) =>
 		request(`/reviews/${reviewId}/rereview`, { method: "POST", body: JSON.stringify(input ?? {}) }),
 };
