@@ -6092,3 +6092,12 @@ branch=docs/live-collaboration-reviewer-story
 pr=58 MERGED
 head=bb157f422ff7354f77649a6ea5889ee05df62dc4
 merge_commit=61ec9b5ba016cb784dd37a667ce19afada9c0d06
+
+
+## [2026-09-25T22:05:00+05:30] Proof/security wording precision pass
+
+User asked to tighten two documentation/product-copy claims after code review: replace ambiguous “signs the content” wording with precise HMAC-SHA256 keyed integrity language, and soften broad redaction/security absolutes so the product claims only the specific sensitive surfaces the implementation actually protects.
+
+ChatGPT updated README.md plus in-product copy in frontend/src/features/product/product-content.js, ProductDialog.jsx, and VerificationProofDialog.jsx. Verification Proof is now described as canonical content authenticated with an HMAC-SHA256 fingerprint under a server-held key, explicitly not an asymmetric third-party-verifiable digital signature. Broad “everything is redacted” / “secret-free” phrasing was replaced with explicit structural exclusions and defined sensitive surfaces. Target-policy copy was also corrected to mention seeded-demo and Local Runtime exceptions. Regression tests were added to pin the HMAC and scoped-redaction wording.
+
+PR #59 passed Tracer CLI, Baseline Gate, Phase 30 browser E2E, and Phase 30 Locust load on head d963d7d0fabe0ce5e46dff8c0f0d1aeec8ba4bd2. ChatGPT merged PR #59 into main as a36bcb51cbf453cc99d765e9df4c0794e914a068.
