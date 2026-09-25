@@ -651,7 +651,8 @@ export const reviewService = {
 	// magically unapproved, never CURRENT.
 	async refresh({ workspaceId, profileId, reviewId, current }) {
 		const workspace = await workspaceOrThrow(workspaceId);
-		requireMembership(workspace, profileId);
+		const role = requireMembership(workspace, profileId);
+		if (role === "VIEWER") throw forbidden("Viewers may read reviews but not refresh review evidence.");
 		const review = await reviewRepository.findByIdInWorkspace(reviewId, workspace._id);
 		if (!review) throw notFound();
 		if (review.freshness === REVIEW_FRESHNESS.STALE) return serializeReview(review);
@@ -661,6 +662,7 @@ export const reviewService = {
 		// manifest binds a resource but the caller did not supply a current one.
 		if (review.evidence?.resourceType && review.evidence?.resourceId && live.revision === undefined) {
 			const tip = await ResourceVersion.findOne({
+				workspaceId: workspace._id,
 				resourceType: review.evidence.resourceType,
 				resourceId: review.evidence.resourceId,
 			})
