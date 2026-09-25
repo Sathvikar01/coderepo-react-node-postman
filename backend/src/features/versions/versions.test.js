@@ -127,7 +127,13 @@ describe("phase 24B version history", () => {
 		const created = await collectionService.create(collectionInput("Orders API"), scope);
 		const rows = await versionsService.list("collection", created._id, scope);
 		expect(rows).toHaveLength(1);
-		expect(rows[0]).toMatchObject({ revision: 1, action: "CREATED", resourceId: String(created._id) });
+		expect(rows[0]).toMatchObject({
+			revision: 1,
+			action: "CREATED",
+			resourceId: String(created._id),
+			actorProfileId: String(ALEX),
+			actorName: "Alex Morgan",
+		});
 		expect(rows[0].fingerprint).toMatch(/^[0-9a-f]{64}$/);
 		expect(rows[0].snapshot.name).toBe("Orders API");
 		expect(rows[0].snapshot.requests).toHaveLength(1);
@@ -147,6 +153,7 @@ describe("phase 24B version history", () => {
 		const rows = await versionsService.list("collection", created._id, scope);
 		expect(rows.map((row) => row.revision)).toEqual([2, 1]);
 		expect(rows[0].action).toBe("UPDATED");
+		expect(rows[0].actorName).toBe("Alex Morgan");
 		expect(rows[0].previousRevision).toBe(1);
 		expect(rows[0].fingerprint).not.toBe(rows[1].fingerprint);
 	});
@@ -313,6 +320,8 @@ describe("phase 24B version history", () => {
 			{ statusCode: 409, code: "COLLECTION_REVISION_CONFLICT" },
 		);
 		expect(error.details.lastUpdatedByName).toBe("Jordan Lee");
+		const versions = await versionsService.list("collection", created._id, alexScope);
+		expect(versions[0]).toMatchObject({ revision: 2, actorProfileId: String(JORDAN), actorName: "Jordan Lee" });
 		const current = await collectionService.get(created._id, alexScope);
 		expect(current.revision).toBe(2);
 	});
