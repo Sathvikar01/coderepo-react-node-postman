@@ -269,8 +269,15 @@ After `bun start`:
 
 - Frontend: `http://localhost:3000`
 - Backend: `http://localhost:8000`
-- Email: `alex.morgan@example.test`
+- Email: `alex.morgan@example.test` (team workspace `OWNER`)
 - Password: `password123`
+- Second account: `jordan.lee@example.test` / `password123` (team workspace `EDITOR`)
+
+Both accounts are members of the seeded **API Platform Team** workspace. Use a
+private/incognito window for the second account to see the same shared
+collections and environments from an independently authenticated session, and
+the workspace **Manage** dialog as Alex to change Jordan's role, remove, or
+re-add them.
 
 ## Useful commands
 

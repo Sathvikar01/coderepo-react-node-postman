@@ -178,6 +178,8 @@ function BodyEditor({ body, onChange }) {
 
 export function RequestBuilder({
 	authOverride,
+	canExecute = false,
+	canWrite = false,
 	collectionAuth,
 	draftVersion,
 	environments,
@@ -219,7 +221,15 @@ export function RequestBuilder({
 					onChange={(event) => onChange({ name: event.target.value })}
 				/>
 				{savedName && <span className="field-hint">Saved in {savedName}</span>}
-				<button className="button" type="button" onClick={onSave}>
+				<button
+					className="button"
+					disabled={!canWrite}
+					title={
+						canWrite ? "Save this request into its collection" : "Your workspace role cannot change collections. Ask an owner for the editor role."
+					}
+					type="button"
+					onClick={onSave}
+				>
 					<MaterialIcon size={18}>save</MaterialIcon>
 					<span className="button-label">Save</span>
 				</button>
@@ -250,7 +260,17 @@ export function RequestBuilder({
 					<MaterialIcon size={18}>code</MaterialIcon>
 					<span className="button-label">Code</span>
 				</button>
-				<button className={`send-button ${running ? "cancel" : ""}`} type="button" onClick={onSend}>
+				<button
+					className={`send-button ${running ? "cancel" : ""}`}
+					disabled={!canExecute && !running}
+					title={
+						canExecute || running
+							? "Send this request"
+							: "Your workspace role cannot execute requests. Ask an owner for the editor role."
+					}
+					type="button"
+					onClick={onSend}
+				>
 					<MaterialIcon size={18}>{running ? "stop" : "send"}</MaterialIcon>
 					{running ? "Cancel" : "Send"}
 				</button>

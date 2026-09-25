@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 const preferenceSchema = new mongoose.Schema(
 	{
 		ownerProfileId: { type: mongoose.Schema.Types.ObjectId, ref: "Profile", required: true },
+		activeWorkspaceId: { type: mongoose.Schema.Types.ObjectId, ref: "Workspace", default: null },
 		activeEnvironmentId: { type: mongoose.Schema.Types.ObjectId, ref: "Environment", default: null },
 		lastSavedRequest: {
 			collectionId: { type: mongoose.Schema.Types.ObjectId, ref: "Collection", default: null },

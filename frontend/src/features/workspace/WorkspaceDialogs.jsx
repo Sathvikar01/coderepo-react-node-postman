@@ -188,6 +188,19 @@ export function WorkspaceDialogs({ actions, collectionAuth = null, collections, 
 		);
 	}
 
+	if (dialog.kind === "switch-workspace") {
+		return (
+			<ConfirmationDialog
+				busy={false}
+				confirmLabel="Switch workspace"
+				message="Switching workspaces closes every open request tab and cancels active sends. Unsaved changes are discarded. Each workspace keeps its own collections and environments."
+				onCancel={onClose}
+				onConfirm={() => actions.confirmWorkspaceSwitch()}
+				title="Switch workspace"
+			/>
+		);
+	}
+
 	if (dialog.kind === "clear-history") {
 		return (
 			<ConfirmationDialog

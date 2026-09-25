@@ -17,7 +17,7 @@ const deleteQuerySchema = z.object({ revision: revisionSchema }).strict();
 
 export async function listCollections(request, response, next) {
 	try {
-		response.json({ data: await collectionService.list(request.profileId) });
+		response.json({ data: await collectionService.list(request.workspaceScope) });
 	} catch (error) {
 		next(error);
 	}
@@ -25,7 +25,7 @@ export async function listCollections(request, response, next) {
 
 export async function getCollection(request, response, next) {
 	try {
-		response.json({ data: await collectionService.get(request.params.collectionId, request.profileId) });
+		response.json({ data: await collectionService.get(request.params.collectionId, request.workspaceScope) });
 	} catch (error) {
 		next(error);
 	}
@@ -33,7 +33,7 @@ export async function getCollection(request, response, next) {
 
 export async function createCollection(request, response, next) {
 	try {
-		response.status(201).json({ data: await collectionService.create(createSchema.parse(request.body), request.profileId) });
+		response.status(201).json({ data: await collectionService.create(createSchema.parse(request.body), request.workspaceScope) });
 	} catch (error) {
 		next(error);
 	}
@@ -43,7 +43,7 @@ export async function updateCollection(request, response, next) {
 	try {
 		const { expectedRevision, collection } = updateSchema.parse(request.body);
 		response.json({
-			data: await collectionService.replace(request.params.collectionId, request.profileId, expectedRevision, collection),
+			data: await collectionService.replace(request.params.collectionId, request.workspaceScope, expectedRevision, collection),
 		});
 	} catch (error) {
 		next(error);
@@ -55,7 +55,7 @@ export async function duplicateCollection(request, response, next) {
 		const { expectedRevision, name } = duplicateSchema.parse(request.body);
 		response
 			.status(201)
-			.json({ data: await collectionService.duplicate(request.params.collectionId, request.profileId, expectedRevision, name) });
+			.json({ data: await collectionService.duplicate(request.params.collectionId, request.workspaceScope, expectedRevision, name) });
 	} catch (error) {
 		next(error);
 	}
@@ -64,7 +64,7 @@ export async function duplicateCollection(request, response, next) {
 export async function deleteCollection(request, response, next) {
 	try {
 		const { revision } = deleteQuerySchema.parse(request.query);
-		await collectionService.remove(request.params.collectionId, request.profileId, revision);
+		await collectionService.remove(request.params.collectionId, request.workspaceScope, revision);
 		response.status(204).send();
 	} catch (error) {
 		next(error);

@@ -2,9 +2,13 @@ const baseUrl = import.meta.env.VITE_API_URL || "/api/v1";
 const SESSION_KEY = "request-desk-session-token";
 const PROFILE_TOKEN_KEY = "request-desk-profile-token";
 const PROFILE_ID_KEY = "request-desk-profile-id";
+// Phase 24 — the workspace boundary. Every workspace-scoped endpoint reads this
+// header, so which workspace the UI is looking at is decided in exactly one place.
+const WORKSPACE_ID_KEY = "request-desk-workspace-id";
 
 let sessionToken = localStorage.getItem(SESSION_KEY) || "";
 let profileToken = localStorage.getItem(PROFILE_TOKEN_KEY) || "";
+let workspaceId = localStorage.getItem(WORKSPACE_ID_KEY) || "";
 
 export function setSessionToken(token) {
 	sessionToken = token || "";
@@ -27,9 +31,22 @@ export function readStoredProfileId() {
 	return localStorage.getItem(PROFILE_ID_KEY) || "";
 }
 
+// Workspace ids are profile-scoped, so they are cleared alongside the profile
+// session: a different signed-in user must never inherit another user's boundary.
+export function setActiveWorkspaceId(nextWorkspaceId) {
+	workspaceId = nextWorkspaceId || "";
+	if (workspaceId) localStorage.setItem(WORKSPACE_ID_KEY, workspaceId);
+	else localStorage.removeItem(WORKSPACE_ID_KEY);
+}
+
+export function readActiveWorkspaceId() {
+	return workspaceId;
+}
+
 export function clearProfileSession() {
 	setProfileToken("");
 	setStoredProfileId("");
+	setActiveWorkspaceId("");
 }
 
 export function clearSession() {
@@ -48,6 +65,7 @@ export async function request(path, options = {}) {
 			headers: {
 				"Content-Type": "application/json",
 				...(profileToken || sessionToken ? { Authorization: `Bearer ${profileToken || sessionToken}` } : {}),
+				...(workspaceId ? { "x-workspace-id": workspaceId } : {}),
 				...options.headers,
 			},
 		});

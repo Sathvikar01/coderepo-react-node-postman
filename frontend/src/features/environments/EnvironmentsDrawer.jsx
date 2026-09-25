@@ -84,7 +84,7 @@ function VariableRows({ aliases, onChange, rows }) {
 	);
 }
 
-function EnvironmentEditor({ aliases, environment, onCancel, onSaved, onDeleted }) {
+function EnvironmentEditor({ aliases, canWrite = true, environment, onCancel, onSaved, onDeleted }) {
 	const [name, setName] = useState(environment.name);
 	const [variables, setVariables] = useState(environment.variables ?? []);
 	const [busy, setBusy] = useState(false);
@@ -156,7 +156,7 @@ function EnvironmentEditor({ aliases, environment, onCancel, onSaved, onDeleted 
 				<button className="text-button" disabled={busy} type="button" onClick={onCancel}>
 					Cancel
 				</button>
-				<button className="primary-button" disabled={busy || !name.trim()} type="button" onClick={save}>
+				<button className="primary-button" disabled={busy || !canWrite || !name.trim()} type="button" onClick={save}>
 					{busy ? "Saving…" : "Save"}
 				</button>
 			</footer>
@@ -164,7 +164,7 @@ function EnvironmentEditor({ aliases, environment, onCancel, onSaved, onDeleted 
 	);
 }
 
-export function EnvironmentsDrawer({ activeEnvironmentId, onClose, onDeleted, onSaved, onSelect }) {
+export function EnvironmentsDrawer({ activeEnvironmentId, canWrite = false, onClose, onDeleted, onSaved, onSelect }) {
 	const [environments, setEnvironments] = useState([]);
 	const [aliases, setAliases] = useState([]);
 	const [editing, setEditing] = useState(null);
@@ -211,6 +211,7 @@ export function EnvironmentsDrawer({ activeEnvironmentId, onClose, onDeleted, on
 			{editing ? (
 				<EnvironmentEditor
 					aliases={aliases}
+					canWrite={canWrite}
 					environment={editing}
 					onCancel={() => setEditing(null)}
 					onDeleted={(id) => {
@@ -232,6 +233,12 @@ export function EnvironmentsDrawer({ activeEnvironmentId, onClose, onDeleted, on
 				<section className="form-dialog">
 					<h2>Environments</h2>
 					<div className="form-dialog-body">
+						{!canWrite && (
+							<p className="workspace-readonly-banner" role="status">
+								Read-only: your role in this workspace cannot create or edit environments. Secret values are never
+								shared — only variable definitions and alias names travel with a shared environment.
+							</p>
+						)}
 						{loading && <p className="kv-empty">Loading environments…</p>}
 						{!loading && error && (
 							<p className="dialog-error" role="alert">
@@ -262,7 +269,13 @@ export function EnvironmentsDrawer({ activeEnvironmentId, onClose, onDeleted, on
 							))}
 					</div>
 					<footer>
-						<button className="button" type="button" onClick={create}>
+						<button
+							className="button"
+							disabled={!canWrite}
+							title={canWrite ? "Create an environment" : "Your workspace role cannot change environments."}
+							type="button"
+							onClick={create}
+						>
 							New environment
 						</button>
 						<span style={{ flex: 1 }} />

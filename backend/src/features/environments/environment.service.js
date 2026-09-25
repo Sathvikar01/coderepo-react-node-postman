@@ -3,78 +3,175 @@ import { AppError } from "../../shared/errors/app-error.js";
 import { getConfig } from "../../shared/config/index.js";
 import { LIMITS } from "../../shared/utils/limits.js";
 import { nameKey } from "../../shared/utils/names.js";
+import { Profile } from "../profiles/profile.model.js";
+import { recordWorkspaceActivity } from "../workspaces/workspace-activity.js";
+import { assertScopeCapability, resolveScope } from "../workspaces/workspace-scope.js";
 import { environmentRepository } from "./environment.repository.js";
 
 function assertId(id) {
 	if (!mongoose.isValidObjectId(id)) throw new AppError(404, "ENVIRONMENT_NOT_FOUND", "The requested environment does not exist.");
 }
 
-async function ensureUniqueName(name, ownerProfileId, excludedId) {
-	const conflict = await environmentRepository.findByNameKey(nameKey(name), ownerProfileId, excludedId);
-	if (conflict) throw new AppError(409, "ENVIRONMENT_NAME_CONFLICT", "An environment with this name already exists in this profile.");
+async function ensureUniqueName(name, workspaceId, excludedId) {
+	const conflict = await environmentRepository.findByNameKeyInWorkspace(nameKey(name), workspaceId, excludedId);
+	if (conflict) throw nameConflict();
+}
+
+function nameConflict() {
+	return new AppError(409, "ENVIRONMENT_NAME_CONFLICT", "An environment with this name already exists in this workspace.");
 }
 
 async function withNameConflictBoundary(operation) {
 	try {
 		return await operation();
 	} catch (error) {
-		if (error?.code === 11000)
-			throw new AppError(409, "ENVIRONMENT_NAME_CONFLICT", "An environment with this name already exists in this profile.");
+		if (error?.code === 11000) throw nameConflict();
 		throw error;
 	}
 }
 
+async function conflictDetails(id, workspaceId, expectedRevision) {
+	const current = await environmentRepository.findByIdInWorkspace(id, workspaceId);
+	if (!current) return null;
+	let lastUpdatedByName = null;
+	if (current.updatedByProfileId) {
+		const profile = await Profile.findById(current.updatedByProfileId).select("name").lean();
+		lastUpdatedByName = profile?.name ?? null;
+	}
+	return {
+		workspaceId: String(workspaceId),
+		expectedRevision,
+		currentRevision: current.revision,
+		lastUpdatedByProfileId: current.updatedByProfileId ? String(current.updatedByProfileId) : null,
+		lastUpdatedByName,
+		lastUpdatedAt: current.updatedAt,
+	};
+}
+
+async function revisionConflict(id, workspaceId, expectedRevision, message) {
+	const details = await conflictDetails(id, workspaceId, expectedRevision);
+	if (!details) throw new AppError(404, "ENVIRONMENT_NOT_FOUND", "The requested environment does not exist.");
+	throw new AppError(409, "ENVIRONMENT_REVISION_CONFLICT", message, details);
+}
+
 export const environmentService = {
-	list: (ownerProfileId) => environmentRepository.list(ownerProfileId),
-	async get(id, ownerProfileId) {
+	async list(scope) {
+		const resolved = await resolveScope(scope);
+		assertScopeCapability(resolved, "read");
+		if (!resolved.scoped) return environmentRepository.list(resolved.actorProfileId);
+		return environmentRepository.listByWorkspace(resolved.workspaceId);
+	},
+	async get(id, scope) {
 		assertId(id);
-		const environment = await environmentRepository.findById(id, ownerProfileId);
+		const resolved = await resolveScope(scope);
+		assertScopeCapability(resolved, "read");
+		const environment =
+			!resolved.scoped
+				? await environmentRepository.findById(id, resolved.actorProfileId)
+				: await environmentRepository.findByIdInWorkspace(id, resolved.workspaceId);
 		if (!environment) throw new AppError(404, "ENVIRONMENT_NOT_FOUND", "The requested environment does not exist.");
 		return environment;
 	},
-	async create(input, ownerProfileId) {
-		const count = await environmentRepository.count(ownerProfileId);
+	async create(input, scope) {
+		const resolved = await resolveScope(scope);
+		assertScopeCapability(resolved, "writeEnvironments");
+		const count = await environmentRepository.countByWorkspace(resolved.workspaceId);
 		if (count >= LIMITS.environmentsPerProfile)
-			throw new AppError(413, "PROFILE_LIMIT", "This profile has reached the 20 environment limit.", {
+			throw new AppError(413, "PROFILE_LIMIT", "This workspace has reached the 20 environment limit.", {
 				limit: LIMITS.environmentsPerProfile,
 				actual: count,
 				unit: "environments",
-				scope: "profile",
+				scope: "workspace",
 			});
-		await ensureUniqueName(input.name, ownerProfileId, null);
-		return withNameConflictBoundary(() =>
-			environmentRepository.create({ ...input, nameKey: nameKey(input.name), ownerProfileId, revision: 1 }),
-		);
-	},
-	async replace(id, ownerProfileId, expectedRevision, input) {
-		assertId(id);
-		const current = await environmentRepository.findById(id, ownerProfileId);
-		if (!current) throw new AppError(404, "ENVIRONMENT_NOT_FOUND", "The requested environment does not exist.");
-		await ensureUniqueName(input.name, ownerProfileId, id);
-		const updated = await withNameConflictBoundary(() =>
-			environmentRepository.replaceWithRevision(id, ownerProfileId, expectedRevision, {
+		await ensureUniqueName(input.name, resolved.workspaceId, null);
+		const created = await withNameConflictBoundary(() =>
+			environmentRepository.create({
 				...input,
 				nameKey: nameKey(input.name),
+				workspaceId: resolved.workspaceId,
+				ownerProfileId: resolved.actorProfileId,
+				createdByProfileId: resolved.actorProfileId,
+				updatedByProfileId: resolved.actorProfileId,
+				revision: 1,
+			}),
+		);
+		const environment = created.toObject ? created.toObject() : created;
+		await recordWorkspaceActivity({
+			workspaceId: resolved.workspaceId,
+			actorProfileId: resolved.actorProfileId,
+			action: "environment.created",
+			targetType: "environment",
+			targetId: String(environment._id),
+			targetLabel: environment.name,
+			newRevision: environment.revision,
+			summary: `Environment "${environment.name}" created`,
+		});
+		return environment;
+	},
+	async replace(id, scope, expectedRevision, input) {
+		assertId(id);
+		const resolved = await resolveScope(scope);
+		assertScopeCapability(resolved, "writeEnvironments");
+		const current = await environmentRepository.findByIdInWorkspace(id, resolved.workspaceId);
+		if (!current) throw new AppError(404, "ENVIRONMENT_NOT_FOUND", "The requested environment does not exist.");
+		await ensureUniqueName(input.name, resolved.workspaceId, id);
+		const updated = await withNameConflictBoundary(() =>
+			environmentRepository.replaceWithRevisionInWorkspace(id, resolved.workspaceId, expectedRevision, {
+				...input,
+				nameKey: nameKey(input.name),
+				updatedByProfileId: resolved.actorProfileId,
 			}),
 		);
 		if (!updated)
-			throw new AppError(409, "ENVIRONMENT_REVISION_CONFLICT", "This environment changed since it was loaded. Reload before saving.");
+			await revisionConflict(
+				id,
+				resolved.workspaceId,
+				expectedRevision,
+				"This environment changed since it was loaded. Reload before saving.",
+			);
+		await recordWorkspaceActivity({
+			workspaceId: resolved.workspaceId,
+			actorProfileId: resolved.actorProfileId,
+			action: "environment.updated",
+			targetType: "environment",
+			targetId: String(id),
+			targetLabel: updated.name,
+			previousRevision: expectedRevision,
+			newRevision: updated.revision,
+			summary: `Environment "${updated.name}" saved`,
+		});
 		return updated;
 	},
-	async remove(id, ownerProfileId, expectedRevision) {
+	async remove(id, scope, expectedRevision) {
 		assertId(id);
-		const removed = await environmentRepository.removeWithRevision(id, ownerProfileId, expectedRevision);
+		const resolved = await resolveScope(scope);
+		assertScopeCapability(resolved, "writeEnvironments");
+		const removed = await environmentRepository.removeWithRevisionInWorkspace(id, resolved.workspaceId, expectedRevision);
 		if (!removed) {
-			const exists = await environmentRepository.findById(id, ownerProfileId);
+			const exists = await environmentRepository.findByIdInWorkspace(id, resolved.workspaceId);
 			if (!exists) throw new AppError(404, "ENVIRONMENT_NOT_FOUND", "The requested environment does not exist.");
-			throw new AppError(
-				409,
-				"ENVIRONMENT_REVISION_CONFLICT",
+			await revisionConflict(
+				id,
+				resolved.workspaceId,
+				expectedRevision,
 				"This environment changed since it was loaded. Reload before deleting.",
 			);
 		}
+		await recordWorkspaceActivity({
+			workspaceId: resolved.workspaceId,
+			actorProfileId: resolved.actorProfileId,
+			action: "environment.deleted",
+			targetType: "environment",
+			targetId: String(id),
+			targetLabel: removed.name,
+			previousRevision: removed.revision,
+			summary: `Environment "${removed.name}" deleted`,
+		});
 		return removed;
 	},
+	// Secret aliases are resolved against the *requesting* profile. A shared environment
+	// stores only the alias, so a collaborator who is not authorized for that alias sees
+	// it as unconfigured and any send using it fails closed.
 	secretAliases(ownerProfileId) {
 		return getConfig()
 			.secretAliases.filter((entry) => entry.profileIds.length === 0 || entry.profileIds.includes(ownerProfileId))

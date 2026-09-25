@@ -5,7 +5,12 @@
  * documented demo state "leaving no extra data behind". Regression guard: every
  * persisted Mongoose model must be cleared by the seed reset block — models
  * added by later phases (runs, cookies, examples, minimizations, local-runtime
- * approvals) previously survived the reset.
+ * approvals, workspaces) previously survived the reset.
+ *
+ * The reset now spans two files: the baseline `src/scripts/seed.js` (a HackerRank
+ * read-only path) and the collaboration wrapper `src/features/workspaces/seed.js`
+ * that `bun run seed` actually executes. Both are inspected so the contract still
+ * covers every registered model end to end.
  */
 import { describe, expect, test } from "bun:test";
 import { readdirSync } from "node:fs";
@@ -16,7 +21,10 @@ import mongoose from "mongoose";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const featuresDir = join(here, "..", "features");
-const seedSource = readFileSync(join(here, "seed.js"), "utf8");
+const seedSource = [
+	readFileSync(join(here, "seed.js"), "utf8"),
+	readFileSync(join(featuresDir, "workspaces", "seed.js"), "utf8"),
+].join("\n");
 
 function collectModelFiles(dir, out = []) {
 	for (const entry of readdirSync(dir, { withFileTypes: true })) {

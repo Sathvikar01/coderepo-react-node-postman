@@ -36,7 +36,7 @@ const sendSchema = z
 export async function sendExecution(request, response, next) {
 	try {
 		const input = sendSchema.parse(request.body);
-		response.json({ data: await executionService.send(request.profileId, input) });
+		response.json({ data: await executionService.send(request.profileId, input, { workspaceId: request.workspaceId ?? null }) });
 	} catch (error) {
 		next(error);
 	}

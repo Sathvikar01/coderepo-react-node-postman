@@ -21,6 +21,7 @@ export function WorkspaceHeader({
 	onToggleTheme,
 	profile,
 	theme,
+	workspaceSwitcher = null,
 }) {
 	const environmentOptions = [
 		{ value: "", label: "No environment", hint: "Variables resolve from collection defaults" },
@@ -42,6 +43,7 @@ export function WorkspaceHeader({
 					<small>Execute · investigate · verify</small>
 				</div>
 			</div>
+			{workspaceSwitcher}
 			<nav aria-label="Workspace commands" className="app-header-actions rail-primary">
 				<button aria-label="Open collections" className="icon-button rail-command" title="Collections" type="button" onClick={onToggleSidebar}>
 					<MaterialIcon size={21}>tune</MaterialIcon>

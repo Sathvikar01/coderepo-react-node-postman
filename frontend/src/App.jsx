@@ -55,18 +55,31 @@ import {
 	clearSession,
 	hasProfileToken,
 	hasSessionToken,
+	readActiveWorkspaceId,
 	readStoredProfileId,
+	setActiveWorkspaceId,
 	setProfileToken,
 	setSessionToken,
 	setStoredProfileId,
 } from "./shared/api/client.js";
 import { OUTCOME_LABELS } from "./shared/utils/format.js";
 import { applyTheme, readTheme } from "./shared/utils/theme.js";
-import { createDraftTab, createInitialState, findOpenTab, MAX_TABS, workspaceReducer } from "./features/workspace/workspace-reducer.js";
+import {
+	createDraftTab,
+	createInitialState,
+	findOpenTab,
+	MAX_TABS,
+	workspaceReducer,
+} from "./features/workspace/workspace-reducer.js";
 import { useExecutionReconciliation } from "./features/workspace/useExecutionReconciliation.js";
 import { isExecutionActive, tabKeyIntent, workspaceHasUnsettledWork } from "./features/workspace/workspace-workflow.js";
 import { WorkspaceDialogs } from "./features/workspace/WorkspaceDialogs.jsx";
 import { WorkspaceHeader } from "./features/workspace/WorkspaceHeader.jsx";
+import { WorkspaceActivityPanel } from "./features/workspaces/WorkspaceActivityPanel.jsx";
+import { WorkspaceDialog } from "./features/workspaces/WorkspaceDialog.jsx";
+import { WorkspaceSwitcher } from "./features/workspaces/WorkspaceSwitcher.jsx";
+import { workspaceApi } from "./features/workspaces/workspace.api.js";
+import { resolveCapabilities } from "./features/workspaces/workspace-permissions.js";
 import { TracerSymbol } from "./shared/components/TracerBrand.jsx";
 import { useRovingTabs } from "./shared/hooks/useRovingTabs.js";
 import { useSplitPane } from "./shared/hooks/useSplitPane.js";
@@ -123,6 +136,15 @@ export default function App() {
 	const [localRuntime, setLocalRuntime] = useState(EMPTY_LOCAL_RUNTIME);
 	const [localRuntimeBusy, setLocalRuntimeBusy] = useState(false);
 	const [localRuntimeError, setLocalRuntimeError] = useState("");
+	// Phase 24 — collaboration state. `workspaces` is the membership list for the
+	// signed-in profile; `workspaceDetail` is the fully expanded active workspace
+	// (members included) used by the Manage dialog.
+	const [workspaces, setWorkspaces] = useState([]);
+	const [activeWorkspaceId, setActiveWorkspace] = useState(readActiveWorkspaceId());
+	const [workspaceDetail, setWorkspaceDetail] = useState(null);
+	const [workspaceDialog, setWorkspaceDialog] = useState(null);
+	const [workspaceError, setWorkspaceError] = useState("");
+	const [workspaceActivityVersion, setWorkspaceActivityVersion] = useState(0);
 	const tabs = useRovingTabs();
 	const sidebarTabs = useRovingTabs();
 	const splitContainer = useRef(null);
@@ -138,6 +160,12 @@ export default function App() {
 	const activeLocalHost = activeTab
 		? approvedHostForUrl(activeTab.request?.urlTemplate, localRuntime.targets.map((target) => target.host))
 		: null;
+	// Phase 24 — the active workspace, the caller's role in it, and the effective
+	// capability set. Capabilities are fail-closed: before the membership list
+	// arrives nothing is granted, so a write control can never enable optimistically.
+	const activeWorkspace = workspaces.find((entry) => entry._id === activeWorkspaceId) ?? null;
+	const workspaceRole = activeWorkspace?.role ?? null;
+	const workspaceCapabilities = resolveCapabilities(activeWorkspace);
 
 	const toast = useCallback((message, tone = "info") => {
 		const id = crypto.randomUUID();
@@ -190,9 +218,22 @@ export default function App() {
 		return () => window.removeEventListener("request-desk-session-expired", expire);
 	}, []);
 
-	const loadWorkspace = useCallback(async () => {
+	const loadWorkspace = useCallback(async (requestedWorkspaceId = null) => {
 		setLoadingCollections(true);
 		try {
+			// The workspace list is resolved first because every subsequent request
+			// carries the chosen workspace in the `x-workspace-id` header. Switching
+			// workspaces must therefore never leave a stale header behind.
+			const membership = await workspaceApi.list();
+			setWorkspaces(membership);
+			const requested = requestedWorkspaceId || readActiveWorkspaceId();
+			const resolved =
+				(requested && membership.some((entry) => entry._id === requested) ? requested : null) ??
+				membership.find((entry) => entry.isActive)?._id ??
+				membership[0]?._id ??
+				"";
+			setActiveWorkspace(resolved);
+			setActiveWorkspaceId(resolved);
 			const [summaries, environmentSummaries, preferences, localRuntimeSettings] = await Promise.all([
 				collectionApi.list(),
 				environmentApi.list(),
@@ -319,6 +360,11 @@ export default function App() {
 		setLocalRuntime(EMPTY_LOCAL_RUNTIME);
 		setLocalRuntimeBusy(false);
 		setLocalRuntimeError("");
+		setWorkspaces([]);
+		setActiveWorkspace("");
+		setWorkspaceDetail(null);
+		setWorkspaceDialog(null);
+		setWorkspaceError("");
 		setDialog(null);
 		setDialogError("");
 		setSidebarOpen(false);
@@ -389,6 +435,112 @@ export default function App() {
 		} finally {
 			setLocalRuntimeBusy(false);
 		}
+	};
+
+	// Phase 24 — workspace collaboration handlers. Every mutation refreshes the
+	// workspace detail (so member/revision state stays truthful) and bumps the
+	// activity feed. Nothing here resolves or displays a secret value.
+	const reloadWorkspaceDetail = useCallback(async (workspaceId = activeWorkspaceId) => {
+		if (!workspaceId) {
+			setWorkspaceDetail(null);
+			return null;
+		}
+		try {
+			const detail = await workspaceApi.get(workspaceId);
+			setWorkspaceDetail(detail);
+			setWorkspaceError("");
+			return detail;
+		} catch (error) {
+			setWorkspaceError(error.message);
+			return null;
+		}
+	}, [activeWorkspaceId]);
+
+	const openWorkspaceDialog = useCallback(
+		async (mode) => {
+			setWorkspaceError("");
+			setWorkspaceDialog(mode);
+			if (mode === "manage") await reloadWorkspaceDetail();
+		},
+		[reloadWorkspaceDetail],
+	);
+
+	// Not memoized: the body is only evaluated on user action, by which point
+	// `releaseAllExecutions` (declared later in this component) is initialized.
+	const performWorkspaceSwitch = async (workspaceId) => {
+		releaseAllExecutions();
+		dispatch({ type: "session/clear" });
+		setCollections([]);
+		setEnvironments([]);
+		setWorkspaceDetail(null);
+		setActiveWorkspace(workspaceId);
+		setActiveWorkspaceId(workspaceId);
+		await loadWorkspace(workspaceId);
+		await savePreferences({ activeWorkspaceId: workspaceId });
+	};
+
+	const selectWorkspace = (workspaceId) => {
+		if (!workspaceId || workspaceId === activeWorkspaceId) return;
+		if (workspaceHasUnsettledWork(state.tabs)) {
+			setDialogError("");
+			setDialog({ kind: "switch-workspace", workspaceId });
+			return;
+		}
+		performWorkspaceSwitch(workspaceId);
+	};
+
+	const createWorkspace = async (name) => {
+		setBusy(true);
+		try {
+			const created = await workspaceApi.create(name);
+			setWorkspaceDialog(null);
+			setWorkspaceError("");
+			toast(`Workspace “${created.name}” created.`);
+			await performWorkspaceSwitch(created._id);
+		} catch (error) {
+			setWorkspaceError(error.message);
+		} finally {
+			setBusy(false);
+		}
+	};
+
+	const runWorkspaceMutation = async (operation) => {
+		setBusy(true);
+		try {
+			const updated = await operation();
+			setWorkspaceDetail(updated);
+			setWorkspaceError("");
+			setWorkspaceActivityVersion((current) => current + 1);
+			setWorkspaces((current) =>
+				current.map((entry) =>
+					entry._id === updated._id
+						? { ...entry, name: updated.name, revision: updated.revision, memberCount: updated.members.length, role: updated.role, isPersonal: updated.isPersonal, capabilities: updated.capabilities }
+						: entry,
+				),
+			);
+			return true;
+		} catch (error) {
+			setWorkspaceError(error.message);
+			if (error.status === 409) await reloadWorkspaceDetail();
+			return false;
+		} finally {
+			setBusy(false);
+		}
+	};
+
+	const addWorkspaceMember = (email, role) =>
+		runWorkspaceMutation(() => workspaceApi.addMember(workspaceDetail._id, workspaceDetail.revision, email, role));
+
+	const changeWorkspaceMemberRole = (profileId, role) => {
+		runWorkspaceMutation(() => workspaceApi.changeRole(workspaceDetail._id, workspaceDetail.revision, profileId, role));
+	};
+
+	const removeWorkspaceMember = (profileId) => {
+		runWorkspaceMutation(() => workspaceApi.removeMember(workspaceDetail._id, workspaceDetail.revision, profileId));
+	};
+
+	const renameWorkspace = (name) => {
+		runWorkspaceMutation(() => workspaceApi.rename(workspaceDetail._id, workspaceDetail.revision, name));
 	};
 
 	const openCollection = useCallback(
@@ -1082,6 +1234,11 @@ export default function App() {
 			setDialog(null);
 			performProfileSwitch();
 		},
+		confirmWorkspaceSwitch() {
+			const pendingWorkspaceId = dialog?.workspaceId ?? null;
+			setDialog(null);
+			if (pendingWorkspaceId) performWorkspaceSwitch(pendingWorkspaceId);
+		},
 		async clearHistory() {
 			setBusy(true);
 			try {
@@ -1205,6 +1362,28 @@ export default function App() {
 		/>
 	) : null;
 
+	const workspaceDialogNode = workspaceDialog ? (
+		<WorkspaceDialog
+			activityRefreshToken={workspaceActivityVersion}
+			busy={busy}
+			capabilities={workspaceCapabilities}
+			detail={workspaceDetail}
+			error={workspaceError}
+			mode={workspaceDialog}
+			role={workspaceRole}
+			onAddMember={addWorkspaceMember}
+			onCancel={() => {
+				setWorkspaceDialog(null);
+				setWorkspaceError("");
+			}}
+			onChangeRole={changeWorkspaceMemberRole}
+			onCreate={createWorkspace}
+			onReload={() => reloadWorkspaceDetail()}
+			onRemoveMember={removeWorkspaceMember}
+			onRename={renameWorkspace}
+		/>
+	) : null;
+
 	return (
 		<div className="app-shell">
 			{exampleDialogNode}
@@ -1214,6 +1393,7 @@ export default function App() {
 			{runnerNode}
 			{investigationNode}
 			{whyInspectorNode}
+			{workspaceDialogNode}
 			<WorkspaceHeader
 				account={account}
 				activeEnvironmentId={state.activeEnvironmentId}
@@ -1221,6 +1401,22 @@ export default function App() {
 				localRuntime={localRuntime}
 				profile={profile}
 				theme={theme}
+				workspaceSwitcher={
+					<WorkspaceSwitcher
+						activeWorkspaceId={activeWorkspaceId}
+						capabilities={workspaceCapabilities}
+						role={workspaceRole}
+						workspaces={workspaces}
+						onCreate={() => openWorkspaceDialog("create")}
+						onManage={() => openWorkspaceDialog("manage")}
+						onOpenActivity={() => {
+							setWorkspaceActivityVersion((current) => current + 1);
+							setSidebarTab("activity");
+							setSidebarOpen(true);
+						}}
+						onSelectWorkspace={selectWorkspace}
+					/>
+				}
 				onEnvironmentChange={(environmentId) => {
 					savePreferences({ activeEnvironmentId: environmentId || null });
 					if (environmentId) dispatch({ type: "environment/select", environmentId });
@@ -1299,11 +1495,32 @@ export default function App() {
 						>
 							<MaterialIcon size={18}>bookmark</MaterialIcon> Examples
 						</button>
+						<button
+							aria-selected={sidebarTab === "activity"}
+							className="sidebar-tab"
+							role="tab"
+							tabIndex={sidebarTab === "activity" ? 0 : -1}
+							type="button"
+							onClick={() => {
+								setWorkspaceActivityVersion((current) => current + 1);
+								setSidebarTab("activity");
+							}}
+						>
+							<MaterialIcon size={18}>history</MaterialIcon> Activity
+						</button>
 					</div>
+					{workspaceRole === "VIEWER" && (
+						<p className="workspace-readonly-banner" role="status">
+							<MaterialIcon size={16}>visibility</MaterialIcon>
+							You have read-only access to {activeWorkspace?.name ?? "this workspace"}. You can inspect shared definitions and
+							requests, but you cannot change or run them.
+						</p>
+					)}
 					{sidebarTab === "collections" ? (
 						<CollectionsSidebar
 							activeCollectionId={activeTab?.collectionId ?? null}
 							activeRequestId={activeTab?.request.id ?? null}
+							can={workspaceCapabilities}
 							collections={collections}
 							collectionOrder={state.collectionOrder}
 							loading={loadingCollections}
@@ -1395,6 +1612,15 @@ export default function App() {
 						/>
 					) : sidebarTab === "cookies" ? (
 						<CookiePanel refreshToken={historyRefresh} />
+					) : sidebarTab === "activity" ? (
+						<div className="sidebar-panel">
+							<div className="sidebar-section-label">
+								<span>Workspace activity</span>
+							</div>
+							<div className="sidebar-scroll">
+								<WorkspaceActivityPanel refreshToken={workspaceActivityVersion} workspaceId={activeWorkspaceId} />
+							</div>
+						</div>
 					) : (
 						<ExamplesPanel
 							refreshToken={examplesVersion}
@@ -1467,6 +1693,8 @@ export default function App() {
 							<div className="request-pane-top" style={{ flexBasis: `${split.ratio * 100}%` }}>
 								<RequestBuilder
 									authOverride={authOverrides[activeTab.id] ?? null}
+									canExecute={workspaceCapabilities.execute === true}
+									canWrite={workspaceCapabilities.writeCollections === true}
 									collectionAuth={activeCollectionAuth}
 									draftVersion={activeTab.draftVersion}
 									environments={environments}
@@ -1556,6 +1784,7 @@ export default function App() {
 			{dialog?.kind === "environments" && (
 				<EnvironmentsDrawer
 					activeEnvironmentId={state.activeEnvironmentId}
+					canWrite={workspaceCapabilities.writeEnvironments === true}
 					onClose={() => setDialog(null)}
 					onDeleted={(environmentId) => {
 						setEnvironments((current) => current.filter((item) => item._id !== environmentId));

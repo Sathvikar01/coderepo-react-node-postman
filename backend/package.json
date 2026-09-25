@@ -8,7 +8,7 @@
 	"scripts": {
 		"start": "bun src/index.js",
 		"dev": "bun --watch src/index.js",
-		"seed": "bun src/scripts/seed.js",
+		"seed": "bun src/features/workspaces/seed.js",
 		"tracer": "bun src/features/cli/main.js",
 		"test": "bun test"
 	},

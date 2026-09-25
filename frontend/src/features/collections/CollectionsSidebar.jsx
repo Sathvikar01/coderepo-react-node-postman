@@ -6,7 +6,8 @@ function methodClass(method) {
 	return `method-tag ${(method || "").toLowerCase()}`;
 }
 
-function RequestRow({ active, folders, onDelete, onDuplicate, onMove, onMoveToFolder, onOpen, request }) {
+function RequestRow({ active, can, folders, onDelete, onDuplicate, onMove, onMoveToFolder, onOpen, request }) {
+	const canWrite = can?.writeCollections === true;
 	return (
 		<div className={`tree-row ${active ? "active" : ""}`}>
 			<span style={{ width: 26 }} />
@@ -17,13 +18,13 @@ function RequestRow({ active, folders, onDelete, onDuplicate, onMove, onMoveToFo
 			<span className="tree-actions">
 				<Menu
 					items={[
-						{ icon: "arrow_drop_up", label: "Move up", onSelect: () => onMove(request.id, -1) },
-						{ icon: "arrow_drop_down", label: "Move down", onSelect: () => onMove(request.id, 1) },
+						{ disabled: !canWrite, icon: "arrow_drop_up", label: "Move up", onSelect: () => onMove(request.id, -1) },
+						{ disabled: !canWrite, icon: "arrow_drop_down", label: "Move down", onSelect: () => onMove(request.id, 1) },
 						{ separator: true },
-						{ icon: "content_copy", label: "Duplicate", onSelect: () => onDuplicate(request.id) },
+						{ disabled: !canWrite, icon: "content_copy", label: "Duplicate", onSelect: () => onDuplicate(request.id) },
 						{ separator: true },
 						{
-							disabled: !request.folderId,
+							disabled: !canWrite || !request.folderId,
 							icon: "drive_file_move",
 							label: "Move to collection root",
 							onSelect: () => onMoveToFolder(request.id, null),
@@ -31,12 +32,13 @@ function RequestRow({ active, folders, onDelete, onDuplicate, onMove, onMoveToFo
 						...folders
 							.filter((folder) => folder.id !== request.folderId)
 							.map((folder) => ({
+								disabled: !canWrite,
 								icon: "drive_file_move",
 								label: `Move to ${folder.name}`,
 								onSelect: () => onMoveToFolder(request.id, folder.id),
 							})),
 						{ separator: true },
-						{ danger: true, icon: "delete", label: "Delete request", onSelect: () => onDelete(request.id) },
+						{ disabled: !canWrite, danger: true, icon: "delete", label: "Delete request", onSelect: () => onDelete(request.id) },
 					]}
 					label={`Actions for ${request.name}`}
 				/>
@@ -48,6 +50,7 @@ function RequestRow({ active, folders, onDelete, onDuplicate, onMove, onMoveToFo
 export function CollectionsSidebar({
 	activeCollectionId,
 	activeRequestId,
+	can,
 	collections,
 	collectionOrder,
 	loading,
@@ -73,6 +76,11 @@ export function CollectionsSidebar({
 	onRunFolder,
 }) {
 	const [expanded, setExpanded] = useState({});
+	// Phase 24 — the workspace capability set. `can` is fail-closed: an absent,
+	// partial, or viewer capability set hides every mutating affordance rather
+	// than relying on the server's 403 to correct the UI after the fact.
+	const canWrite = can?.writeCollections === true;
+	const canExecute = can?.execute === true;
 	const ordered = useMemo(() => {
 		const byId = new Map(collections.map((collection) => [String(collection._id), collection]));
 		const result = [];
@@ -93,7 +101,14 @@ export function CollectionsSidebar({
 		<div className="sidebar-panel">
 			<div className="sidebar-section-label">
 				<span>Collections</span>
-				<button aria-label="New collection" className="icon-button small" type="button" onClick={onNewCollection}>
+				<button
+					aria-label="New collection"
+					className="icon-button small"
+					disabled={!canWrite}
+					title={canWrite ? "New collection" : "Your workspace role cannot change collections"}
+					type="button"
+					onClick={onNewCollection}
+				>
 					<MaterialIcon size={18}>add</MaterialIcon>
 				</button>
 			</div>
@@ -140,24 +155,45 @@ export function CollectionsSidebar({
 										<Menu
 											items={[
 												{
-													disabled: index === 0,
+													disabled: index === 0 || !canWrite,
 													icon: "arrow_drop_up",
 													label: "Move up",
 													onSelect: () => onReorderCollection(collection._id, -1),
 												},
 												{
-													disabled: index === ordered.length - 1,
+													disabled: index === ordered.length - 1 || !canWrite,
 													icon: "arrow_drop_down",
 													label: "Move down",
 													onSelect: () => onReorderCollection(collection._id, 1),
 												},
 												{ separator: true },
-												{ icon: "add", label: "New folder", onSelect: () => onNewFolder(collection) },
-												{ icon: "tune", label: "Edit defaults", onSelect: () => onEditCollection(collection) },
-												{ icon: "description", label: "Documentation", onSelect: () => onOpenDocs(collection) },
-												{ icon: "play_arrow", label: "Run collection", onSelect: () => onRunCollection(collection) },
-												{ icon: "edit", label: "Rename", onSelect: () => onRenameCollection(collection) },
 												{
+													disabled: !canWrite,
+													icon: "add",
+													label: "New folder",
+													onSelect: () => onNewFolder(collection),
+												},
+												{
+													disabled: !canWrite,
+													icon: "tune",
+													label: "Edit defaults",
+													onSelect: () => onEditCollection(collection),
+												},
+												{ icon: "description", label: "Documentation", onSelect: () => onOpenDocs(collection) },
+												{
+													disabled: !canExecute,
+													icon: "play_arrow",
+													label: "Run collection",
+													onSelect: () => onRunCollection(collection),
+												},
+												{
+													disabled: !canWrite,
+													icon: "edit",
+													label: "Rename",
+													onSelect: () => onRenameCollection(collection),
+												},
+												{
+													disabled: !canWrite,
 													icon: "content_copy",
 													label: "Duplicate",
 													onSelect: () => onDuplicateCollection(collection),
@@ -165,6 +201,7 @@ export function CollectionsSidebar({
 												{ separator: true },
 												{
 													danger: true,
+													disabled: !canWrite,
 													icon: "delete",
 													label: "Delete collection",
 													onSelect: () => onDeleteCollection(collection),
@@ -188,13 +225,13 @@ export function CollectionsSidebar({
 														<Menu
 															items={[
 																{
-																	disabled: folders.findIndex((item) => item.id === folder.id) === 0,
+																	disabled: !canWrite || folders.findIndex((item) => item.id === folder.id) === 0,
 																	icon: "arrow_drop_up",
 																	label: "Move folder up",
 																	onSelect: () => onMoveFolder(collection, folder.id, -1),
 																},
 																{
-																	disabled: folders.findIndex((item) => item.id === folder.id) === folders.length - 1,
+																	disabled: !canWrite || folders.findIndex((item) => item.id === folder.id) === folders.length - 1,
 																	icon: "arrow_drop_down",
 																	label: "Move folder down",
 																	onSelect: () => onMoveFolder(collection, folder.id, 1),
@@ -202,24 +239,28 @@ export function CollectionsSidebar({
 																{ separator: true },
 																{
 																	icon: "content_copy",
-																	label: "Duplicate folder",
+																	disabled: !canWrite,
+															label: "Duplicate folder",
 																	onSelect: () => onDuplicateFolder(collection, folder),
 																},
 																{
 																	icon: "edit",
-																	label: "Rename folder",
+																	disabled: !canWrite,
+															label: "Rename folder",
 																	onSelect: () => onRenameFolder(collection, folder),
 																},
 																	{
 																		icon: "play_arrow",
-																		label: "Run folder",
+																		disabled: !canExecute,
+															label: "Run folder",
 																		onSelect: () => onRunFolder(collection, folder),
 																	},
 																{ separator: true },
 																{
 																	danger: true,
 																	icon: "delete",
-																	label: "Delete folder",
+																	disabled: !canWrite,
+															label: "Delete folder",
 																	onSelect: () => onDeleteFolder(collection, folder),
 																},
 															]}
@@ -233,6 +274,8 @@ export function CollectionsSidebar({
 														.map((request) => (
 															<RequestRow
 																active={activeRequestId === request.id}
+									can={can}
+								can={can}
 																folders={folders}
 																key={request.id}
 																request={request}
@@ -252,6 +295,8 @@ export function CollectionsSidebar({
 										{rootRequests.map((request) => (
 											<RequestRow
 												active={activeRequestId === request.id}
+									can={can}
+								can={can}
 												folders={folders}
 												key={request.id}
 												request={request}
