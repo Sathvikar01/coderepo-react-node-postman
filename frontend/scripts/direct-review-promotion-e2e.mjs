@@ -11,6 +11,7 @@ import { readFileSync } from "node:fs";
 
 const CDP = process.env.TRACER_CDP_URL || "http://127.0.0.1:9222";
 const APP = process.env.TRACER_APP_URL || "http://127.0.0.1:3000";
+const API = process.env.TRACER_API_URL || "http://127.0.0.1:8000";
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const repoRootUrl = process.env.TRACER_REPO_ROOT
@@ -172,6 +173,19 @@ await click('[aria-label^="Continue as"]', "profile");
 await waitFor('document.querySelector(".app-shell") !== null', "workspace");
 pass("login -> profile -> workspace");
 
+const pageToken = await evaluate("localStorage.getItem('request-desk-profile-token') || localStorage.getItem('request-desk-session-token')");
+if (!pageToken) throw new Error("Could not read the authenticated profile token");
+const importPreflight = await fetch(API + "/api/v1/verification-proofs/import", {
+	method: "POST",
+	headers: { "content-type": "application/json", authorization: "Bearer " + pageToken },
+	body: JSON.stringify({ text: artifactText }),
+});
+const importPreflightBody = await importPreflight.json().catch(() => null);
+if (importPreflight.status !== 200) {
+	throw new Error("Backend refused the proof artifact before the UI flow: " + importPreflight.status + " " + JSON.stringify(importPreflightBody).slice(0, 600));
+}
+pass("backend accepts the exact proof artifact used by the UI flow");
+
 const before = await api("/reviews");
 if (before.status !== 200) throw new Error("Could not read reviews before flow: " + before.status);
 const beforeCount = (before.body?.data ?? []).length;
@@ -181,7 +195,18 @@ await waitFor('document.querySelector(".verification-proof-dialog") !== null', "
 await clickText('.verification-proof-dialog [role="tab"]', "Import & Verify", "Import & Verify tab");
 await setInput('textarea[aria-label="Verification proof artifact JSON"]', artifactText);
 await clickText(".verification-proof-dialog button", "Verify", "Verify proof");
-await waitFor('[...document.querySelectorAll(".verification-proof-dialog [role=tab]")].some((node) => node.getAttribute("aria-selected") === "true" && node.textContent.includes("Proof"))', "Proof tab after import");
+await retry(async () => {
+	const state = await evaluate(`
+		(() => ({
+			selected: [...document.querySelectorAll(".verification-proof-dialog [role=tab]")]
+				.find((node) => node.getAttribute("aria-selected") === "true")?.textContent.trim() || "",
+			error: document.querySelector(".verification-proof-dialog .dialog-error")?.textContent.trim() || "",
+			notice: document.querySelector(".verification-proof-dialog .proof-notice")?.textContent.trim() || "",
+		}))()
+	`);
+	if (state.error) throw new Error("Verification Proof UI rejected the backend-accepted artifact: " + state.error);
+	return state.selected.includes("Proof") ? state : null;
+}, "Proof tab after import");
 pass("backend-built proof imported and validated");
 
 await waitFor('[...document.querySelectorAll(".verification-proof-dialog button")].some((node) => node.textContent.includes("Promote proof"))', "Promote proof action");
