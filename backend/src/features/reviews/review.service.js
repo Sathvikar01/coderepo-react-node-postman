@@ -451,7 +451,6 @@ export const reviewService = {
 		if (role !== "OWNER") throw forbidden("Only workspace owners may change review status.");
 		const review = await reviewRepository.findByIdInWorkspace(reviewId, workspace._id);
 		if (!review) throw notFound();
-		requireCurrentOpenDecision(review);
 
 		const previous = { ...review };
 		const patch = { status };
@@ -523,6 +522,7 @@ export const reviewService = {
 		if (!reason || !String(reason).trim()) throw new AppError(400, "VALIDATION_ERROR", "A waiver requires a reason.");
 		const review = await reviewRepository.findByIdInWorkspace(reviewId, workspace._id);
 		if (!review) throw notFound();
+		requireCurrentOpenDecision(review);
 
 		const previous = { ...review };
 		const updated = await reviewRepository.replaceWithRevision(review._id, workspace._id, expectedRevision, {
