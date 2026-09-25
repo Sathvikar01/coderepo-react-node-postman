@@ -35,7 +35,7 @@ export function WorkspaceLogin({ error = "", loading = false, onLogin = () => {}
 					</div>
 					<div className="outlined-input">
 						<input
-							autoComplete="off"
+							autoComplete="current-password"
 							disabled={loading}
 							id="workspace-password"
 							name="password"
