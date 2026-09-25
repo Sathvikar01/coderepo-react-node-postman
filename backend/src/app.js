@@ -16,6 +16,7 @@ import { historyRouter } from "./features/history/history.routes.js";
 import { localRuntimeRouter } from "./features/local-runtime/local-runtime.routes.js";
 import { mockRouteRouter, mockRouter } from "./features/mocks/mock.routes.js";
 import { preferenceRouter, profileRouter } from "./features/profiles/profile.routes.js";
+import { reviewRouter } from "./features/reviews/review.routes.js";
 import { verificationProofRouter } from "./features/verification-proof-api/verification-proof.routes.js";
 import { collectionVersionsRouter, environmentVersionsRouter } from "./features/versions/versions.routes.js";
 import { whyInspectorRouter } from "./features/why-inspector/why-inspector.routes.js";
@@ -183,6 +184,20 @@ export function createApp() {
 	// Capability-token mock routes stay unauthenticated by design and never reach the execution pipeline.
 	app.use("/api/v1/mocks", express.json({ limit: LIMITS.jsonBodyDefault }), mockRouteRouter);
 	app.use("/api/v1/mocks", express.json({ limit: LIMITS.jsonBodyExecution }), requireWorkspaceAuth, resolveProfileContext, mockRouter);
+
+	// Phase 50 — Review & Decision Workflow. Mounted AFTER the unauthenticated
+	// capability-token mock routes so the workspace auth chain here can never
+	// short-circuit them. Every request re-resolves current membership and role,
+	// so a removed member loses review mutation access immediately. Reviews never
+	// touch execution, persistence, or verification pipelines.
+	app.use(
+		"/api/v1",
+		express.json({ limit: LIMITS.jsonBodyDefault }),
+		requireWorkspaceAuth,
+		resolveProfileContext,
+		resolveWorkspaceContext,
+		reviewRouter,
+	);
 
 	app.use(notFoundHandler);
 	app.use(errorHandler);

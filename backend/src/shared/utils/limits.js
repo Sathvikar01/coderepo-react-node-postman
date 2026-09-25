@@ -69,6 +69,8 @@ export const LIMITS = {
 	assertionName: 200,
 	assertionPathBytes: 1024,
 	assertionValueBytes: 4 * 1024,
+	// Phase 50 — bounded human review queue per workspace.
+	openReviewsPerWorkspace: 50,
 };
 
 export const utf8Bytes = (value) => Buffer.byteLength(String(value ?? ""), "utf8");

@@ -27,6 +27,7 @@ import { FlightRecorderDialog } from "./features/execution-intelligence/FlightRe
 import { InvestigationDialog } from "./features/execution-intelligence/InvestigationDialog.jsx";
 import { VerificationProofDialog } from "./features/verification-proof/VerificationProofDialog.jsx";
 import { WhyInspectorDialog } from "./features/why-inspector/WhyInspectorDialog.jsx";
+import { ReviewsPanel } from "./features/reviews/ReviewsPanel.jsx";
 import { capsuleDraftTab } from "./features/execution-intelligence/flight-recorder-model.js";
 import { exampleApi } from "./features/examples/example.api.js";
 import { ExampleActions } from "./features/examples/ExampleActions.jsx";
@@ -638,6 +639,13 @@ export default function App() {
 			if (action === "environment.updated" || action === "environment.restored") {
 				toast(`${event.actorName ?? "A collaborator"} updated the environment${event.revision ? ` · v${event.revision}` : ""}.`, "info");
 			}
+			return;
+		}
+		if (action.startsWith("review.")) {
+			// Phase 50 — review events are metadata-only freshness signals. Bump
+			// the shared refresh token so the Reviews surface reloads canonical
+			// server state with no manual reload; persistence stays authoritative.
+			setWorkspaceActivityVersion((current) => current + 1);
 			return;
 		}
 		if (action.startsWith("member.") || action.startsWith("workspace.")) {
@@ -1683,6 +1691,19 @@ export default function App() {
 						>
 							<MaterialIcon size={18}>history</MaterialIcon> Activity
 						</button>
+						<button
+							aria-selected={sidebarTab === "reviews"}
+							className="sidebar-tab"
+							role="tab"
+							tabIndex={sidebarTab === "reviews" ? 0 : -1}
+							type="button"
+							onClick={() => {
+								setWorkspaceActivityVersion((current) => current + 1);
+								setSidebarTab("reviews");
+							}}
+						>
+							<MaterialIcon size={18}>rate_review</MaterialIcon> Reviews
+						</button>
 					</div>
 					{workspaceRole === "VIEWER" && (
 						<p className="workspace-readonly-banner" role="status">
@@ -1795,6 +1816,14 @@ export default function App() {
 						/>
 					) : sidebarTab === "cookies" ? (
 						<CookiePanel refreshToken={historyRefresh} />
+					) : sidebarTab === "reviews" ? (
+						<ReviewsPanel
+							liveTick={workspaceActivityVersion}
+							profileId={profile?._id ?? null}
+							role={workspaceRole}
+							workspaceId={activeWorkspaceId}
+							onToast={toast}
+						/>
 					) : sidebarTab === "activity" ? (
 						<div className="sidebar-panel">
 							<div className="sidebar-section-label">

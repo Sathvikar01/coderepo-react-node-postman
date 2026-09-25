@@ -243,10 +243,14 @@ flowchart LR
 | Saved collection/environment revision | resource CAS in backend services | keep local draft, never silently merge |
 | Version history / restore | immutable version rows + CAS restore | inspect/compare/request restore |
 | Live update event | SSE broker (advisory only) | reload canonical state |
+| Human review decision (APPROVED / CHANGES_REQUESTED / WAIVED) | **review participants** (OWNER/EDITOR) | record beside evidence; never rewrite it |
+| Review freshness (CURRENT / STALE) | frozen-evidence comparison | display; re-review from current evidence |
 
 The rule to remember:
 
 > **Missing evidence never becomes a pass.**
+
+> **Machines determine technical truth; humans determine what the team chooses to do about that truth.** `technicalState != reviewDecision`: a `WAIVED` review on `BLOCKED` evidence still displays BLOCKED.
 
 ## Why this is not just a Postman clone
 
@@ -269,6 +273,11 @@ The differentiators are the linked evidence workflows:
 - WHY Inspector across the full chain
 - live multi-user workspace synchronization with conflict-safe drafts
 - immutable collection/environment version history with compare + restore-as-new-revision
+- human review & decision workflow bound to frozen evidence (Reviews tab)
+
+### Review queue in one minute
+
+Open the sidebar **Reviews** tab: the Needs Attention summary counts breaking findings, blocked states, and items assigned to you. Promotion starts from a validated Verification Proof artifact — the backend derives machine-owned technical state and evidence fingerprints, so a reviewer cannot type a fake BREAKING/BLOCKED state into existence. Open a review to see four sections — **Finding | Evidence | Discussion | Decision**. Approve or waive a `BLOCKED` item and watch the technical state stay `BLOCKED`: the decision is recorded beside the evidence, never over it. Change the underlying resource and recheck freshness: persisted resource revisions are checked directly; for stateless verification/contract/drift evidence, provide the current Verification Proof so Tracer compares validated identities rather than trusting caller-supplied fingerprints. The review goes `STALE` with changed fields named, old comments and decisions intact, and **Create re-review** requires current proof evidence and links a fresh review forward.
 
 ## Likely reviewer questions
 
