@@ -471,6 +471,10 @@ describe.skipIf(!ready)("review security boundaries", () => {
 			reviewService.setStatus({ workspaceId: ws._id, profileId: CASEY, reviewId: review._id, expectedRevision: review.revision, status: "IN_REVIEW" }),
 			{ code: "REVIEW_FORBIDDEN" },
 		);
+		await expectRejection(
+			reviewService.refresh({ workspaceId: ws._id, profileId: CASEY, reviewId: review._id, current: {} }),
+			{ code: "REVIEW_FORBIDDEN" },
+		);
 	});
 
 	mtest("an editor assignee cannot approve unless they are the designated reviewer", async () => {
@@ -509,6 +513,46 @@ describe.skipIf(!ready)("review security boundaries", () => {
 			decision: "APPROVED",
 		});
 		expect(approved.decision).toBe("APPROVED");
+	});
+
+	mtest("editors cannot clear another member's assignment or reviewer role", async () => {
+		const ws = await workspaceService.create({ name: "Review Team" }, ALEX);
+		await workspaceService.addMember(ws._id, ALEX, { email: "jordan.lee@example.test", role: "EDITOR", expectedRevision: ws.revision });
+		let review = await reviewService.create({ workspaceId: ws._id, profileId: ALEX, input: createInput() });
+		review = await reviewService.assign({
+			workspaceId: ws._id,
+			profileId: ALEX,
+			reviewId: review._id,
+			expectedRevision: review.revision,
+			assigneeProfileId: String(ALEX),
+		});
+		review = await reviewService.setReviewer({
+			workspaceId: ws._id,
+			profileId: ALEX,
+			reviewId: review._id,
+			expectedRevision: review.revision,
+			reviewerProfileId: String(ALEX),
+		});
+		await expectRejection(
+			reviewService.assign({
+				workspaceId: ws._id,
+				profileId: JORDAN,
+				reviewId: review._id,
+				expectedRevision: review.revision,
+				assigneeProfileId: null,
+			}),
+			{ code: "REVIEW_FORBIDDEN" },
+		);
+		await expectRejection(
+			reviewService.setReviewer({
+				workspaceId: ws._id,
+				profileId: JORDAN,
+				reviewId: review._id,
+				expectedRevision: review.revision,
+				reviewerProfileId: null,
+			}),
+			{ code: "REVIEW_FORBIDDEN" },
+		);
 	});
 
 	mtest("waive requires owner authority and a non-empty reason", async () => {
