@@ -63,7 +63,7 @@ export const VERIFICATION_WORKFLOW = Object.freeze([
 	{ id: "rehearse", label: "Rehearse", hint: "Run the affected workflow through the normal execution pipeline." },
 	{ id: "contract", label: "Contract Check", hint: "Check that response contracts are still compatible." },
 	{ id: "verify", label: "Verify", hint: "Combine the evidence into a verification state." },
-	{ id: "proof", label: "Proof", hint: "Export a tamper-evident, secret-free Verification Proof." },
+	{ id: "proof", label: "Proof", hint: "Export a tamper-evident Verification Proof with bounded, credential-minimized evidence." },
 ]);
 
 // The investigation workflow, used by the Understand surfaces.
