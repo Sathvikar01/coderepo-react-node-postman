@@ -106,7 +106,7 @@ export const CONCEPTS = Object.freeze({
 	proof: {
 		label: "Verification Proof",
 		short: "A tamper-evident, secret-free record of what was verified.",
-		long: "A proof commits the snapshot identity, environment identity, rehearsal run, counts, contracts, and drift, then signs the content. It contains no request or response bodies.",
+		long: "A proof commits the snapshot identity, environment identity, rehearsal run, counts, contracts, and drift, then authenticates the canonical content with an HMAC-SHA256 keyed fingerprint. Verification requires a Tracer instance holding the same fingerprint key; it is not an independently verifiable asymmetric signature. It contains no request or response bodies.",
 	},
 	verified: {
 		label: "Verified",
@@ -185,7 +185,7 @@ export const SECURITY_FACTS = Object.freeze([
 	{
 		id: "hmac",
 		title: "Integrity for proofs",
-		body: "Proof content is canonicalized and signed with a server-held key. A modified artifact fails its integrity check and is reported as invalid.",
+		body: "Proof content is canonicalized and authenticated with HMAC-SHA256 using a server-held fingerprint key. Verification requires a Tracer instance with that same key; a modified artifact fails its integrity check and is reported as invalid.",
 	},
 	{
 		id: "failclosed",
@@ -205,7 +205,7 @@ export const DATA_CATEGORIES = Object.freeze([
 	{ id: "snapshots", label: "Workspace snapshots", body: "A fingerprinted record of the workspace state a verification is about. It stores identity and references, not response bodies." },
 	{ id: "investigation", label: "Investigation evidence", body: "Execution passports, comparison results, minimization jobs, and redacted reproduction capsules." },
 	{ id: "rehearsal", label: "Rehearsal checkpoints", body: "Rehearsal plan and run identity with per-step outcome references so a run is resumable and auditable." },
-	{ id: "proofs", label: "Verification Proof artifacts", body: "A signed record of counts, contracts, drift, and evidence references. It carries no bodies and no secret values." },
+	{ id: "proofs", label: "Verification Proof artifacts", body: "A keyed, tamper-evident record of counts, contracts, drift, and evidence references. It carries no bodies and no secret values." },
 ]);
 
 export const DATA_MINIMIZATION = Object.freeze([
