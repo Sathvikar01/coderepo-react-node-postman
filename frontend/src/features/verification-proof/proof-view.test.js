@@ -11,6 +11,7 @@ import {
 	looksLikeProofArtifact,
 	proofErrorMessage,
 	proofFromArtifactText,
+	reviewPromotionOptions,
 	reasonText,
 	rehearsalLine,
 	reportHeadline,
@@ -195,6 +196,48 @@ describe("Phase 47C proof view model — evidence rows", () => {
 
 	test("an absent proof yields no rows", () => {
 		expect(evidenceRows(null)).toEqual([]);
+	});
+});
+
+describe("Phase 50 polish — direct review promotion options", () => {
+	test("offers exact BREAKING, BLOCKED, and proof review actions from committed proof facts", () => {
+		const options = reviewPromotionOptions({
+			proofId: "proof-50",
+			state: PROOF_STATES.BLOCKED,
+			identity: { snapshot: { snapshotId: "snap-50" } },
+			contracts: { classes: { breaking: 2 } },
+		});
+		expect(options.map((item) => item.findingType)).toEqual([
+			"contract_breaking",
+			"verification_blocked",
+			"verification_proof",
+		]);
+		expect(options[0].title).toContain("2 breaking contract findings");
+		expect(options[1].findingSummary).toContain("BLOCKED");
+	});
+
+	test("never invents a BREAKING action when the proof has no breaking contracts", () => {
+		const options = reviewPromotionOptions({
+			proofId: "proof-ok",
+			state: PROOF_STATES.VERIFIED,
+			identity: { snapshot: { snapshotId: "snap-ok" } },
+			contracts: { classes: { breaking: 0 } },
+		});
+		expect(options.map((item) => item.findingType)).toEqual(["verification_proof"]);
+	});
+
+	test("UNKNOWN maps to the explicit verification_unknown review type", () => {
+		const options = reviewPromotionOptions({
+			proofId: "proof-unknown",
+			state: PROOF_STATES.UNKNOWN,
+			identity: { snapshot: { snapshotId: "snap-unknown" } },
+			contracts: { classes: { breaking: 0 } },
+		});
+		expect(options.map((item) => item.findingType)).toEqual(["verification_unknown", "verification_proof"]);
+	});
+
+	test("no proof means no promotion actions", () => {
+		expect(reviewPromotionOptions(null)).toEqual([]);
 	});
 });
 
