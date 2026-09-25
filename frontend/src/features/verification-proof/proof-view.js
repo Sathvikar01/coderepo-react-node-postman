@@ -176,8 +176,8 @@ export function contractRows(contracts) {
 // review finding types that are explicitly present in the backend proof.
 export function reviewPromotionOptions(proof) {
 	if (!proof) return [];
-	const proofId = proof.proofId ?? "verification proof";
-	const snapshotId = proof.identity?.snapshot?.snapshotId ?? "the recorded snapshot";
+	const proofId = String(proof.proofId ?? "verification proof").slice(0, 64);
+	const snapshotId = String(proof.identity?.snapshot?.snapshotId ?? "the recorded snapshot").slice(0, 64);
 	const options = [];
 
 	const breaking = proof.contracts?.classes?.breaking ?? 0;
