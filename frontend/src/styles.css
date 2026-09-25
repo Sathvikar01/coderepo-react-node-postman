@@ -457,47 +457,6 @@ pre {
 	align-items: center;
 	gap: 10px;
 }
-
-/*
- * The shipped feature set added more header commands after the original
- * Graphite + Electric Mint + Bone shell was designed. Keep those commands,
- * but present them inside the original horizontal Tracer header instead of
- * re-skinning the entire application as the Phase 30 Instrument Workbench.
- */
-.app-header .rail-primary,
-.app-header .rail-secondary {
-	display: flex;
-	width: auto;
-	align-items: center;
-	gap: 6px;
-}
-
-.app-header .rail-command-label {
-	display: none;
-}
-
-.app-header .rail-command.button {
-	width: 36px;
-	height: 36px;
-	min-height: 36px;
-	padding: 0;
-	border: 0;
-	border-radius: 50%;
-	background: transparent;
-	color: var(--muted);
-}
-
-.app-header .rail-command.button:hover:not(:disabled),
-.app-header .rail-command.icon-button:hover:not(:disabled) {
-	background: var(--hover);
-	color: var(--ink-strong);
-}
-
-.app-header .rail-command.local-runtime-on {
-	background: var(--warning-container);
-	color: var(--warning);
-}
-
 .app-header-spacer {
 	flex: 1;
 }
@@ -2636,34 +2595,23 @@ dialog::backdrop {
 		--header-height: 104px;
 	}
 	.app-header {
-		display: grid;
 		height: var(--header-height);
-		grid-template-columns: auto minmax(0, 1fr);
-		grid-template-rows: 44px 44px;
+		flex-wrap: wrap;
 		align-content: center;
-		gap: 4px 8px;
 		padding: 6px 10px;
 	}
 	.app-header-spacer {
 		display: none;
 	}
-	.app-brand {
-		grid-column: 1;
-		grid-row: 1;
+	.app-header-actions {
+		width: 100%;
+		justify-content: flex-end;
 	}
 	.app-brand > div {
 		display: none;
 	}
-	.app-header .rail-secondary {
-		min-width: 0;
-		grid-column: 2;
-		grid-row: 1;
-		justify-content: flex-end;
-	}
-	.app-header .rail-primary {
-		grid-column: 1 / -1;
-		grid-row: 2;
-		justify-content: flex-start;
+	.app-header {
+		gap: 6px;
 	}
 	.environment-picker {
 		min-width: 92px;
