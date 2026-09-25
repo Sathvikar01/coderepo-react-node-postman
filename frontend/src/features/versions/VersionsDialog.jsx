@@ -123,7 +123,7 @@ export function VersionsDialog({ canRestore, currentRevision, onClose, onRestore
 										<strong>v{row.revision}</strong>
 										{row.revision === currentRevision && <span className="versions-current">current</span>}
 										<span className="versions-meta">
-											{ACTION_LABEL[row.action] ?? row.action} · {formatWhen(row.createdAt)}
+											{ACTION_LABEL[row.action] ?? row.action} · {row.actorName ?? "Unknown actor"} · {formatWhen(row.createdAt)}
 										</span>
 									</button>
 								</li>
@@ -134,7 +134,7 @@ export function VersionsDialog({ canRestore, currentRevision, onClose, onRestore
 							{selected && (
 								<>
 									<p className="versions-detail-head">
-										v{selected.revision} · {ACTION_LABEL[selected.action] ?? selected.action}
+										v{selected.revision} · {ACTION_LABEL[selected.action] ?? selected.action} · {selected.actorName ?? "Unknown actor"}
 										{selected.action === "RESTORED" && selected.sourceRevision != null ? ` from v${selected.sourceRevision}` : ""}
 									</p>
 									<p className="versions-fingerprint" title={selected.fingerprint}>
