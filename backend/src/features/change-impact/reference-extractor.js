@@ -54,6 +54,106 @@ function reset(...patterns) {
 	for (const pattern of patterns) pattern.lastIndex = 0;
 }
 
+
+// Change impact is intentionally a bounded static analysis, not a JavaScript
+// parser. The exact regexes above cover the supported canonical API forms. This
+// fallback scans uses of the sandbox's `pm` object and marks any variable-scope
+// access that is not one of those canonical direct calls as unknown. That means
+// aliasing, destructuring, bracket notation, optional chaining, or passing `pm`
+// through a helper can never disappear silently from impact evidence.
+function codeStartMask(source) {
+	const mask = new Uint8Array(source.length);
+	mask.fill(1);
+	let cursor = 0;
+	while (cursor < source.length) {
+		const ch = source[cursor];
+		if (ch === "/" && source[cursor + 1] === "/") {
+			const end = source.indexOf("\n", cursor + 2);
+			const stop = end === -1 ? source.length : end;
+			mask.fill(0, cursor, stop);
+			cursor = stop;
+			continue;
+		}
+		if (ch === "/" && source[cursor + 1] === "*") {
+			const close = source.indexOf("*/", cursor + 2);
+			const stop = close === -1 ? source.length : close + 2;
+			mask.fill(0, cursor, stop);
+			cursor = stop;
+			continue;
+		}
+		if (ch === '"' || ch === "'" || ch === "`") {
+			const quote = ch;
+			let end = cursor + 1;
+			while (end < source.length) {
+				if (source[end] === "\\") {
+					end += 2;
+					continue;
+				}
+				if (source[end] === quote) {
+					end += 1;
+					break;
+				}
+				end += 1;
+			}
+			mask.fill(0, cursor, Math.min(end, source.length));
+			cursor = Math.max(end, cursor + 1);
+			continue;
+		}
+		cursor += 1;
+	}
+	return mask;
+}
+
+function unrecognizedPmVariableAccesses(text) {
+	const mask = codeStartMask(text);
+	const unknown = [];
+	const seen = new Set();
+	const push = (scope) => {
+		const normalized = scope === "variables" ? "merged" : scope ?? "unknown";
+		if (seen.has(normalized)) return;
+		seen.add(normalized);
+		unknown.push({ scope: normalized });
+	};
+	const pmPattern = /\bpm\b/g;
+	let match = pmPattern.exec(text);
+	while (match !== null) {
+		if (mask[match.index] !== 1) {
+			match = pmPattern.exec(text);
+			continue;
+		}
+		const tail = text.slice(pmPattern.lastIndex);
+		const dot = /^\s*\.\s*(variables|environment|collection)\b/.exec(tail);
+		if (dot) {
+			const scope = dot[1];
+			const afterScope = tail.slice(dot[0].length);
+			const method = /^\s*\.\s*(get|set|unset|toObject)\s*\(/.exec(afterScope)?.[1] ?? null;
+			const supported =
+				scope === "variables"
+					? new Set(["get", "set", "unset", "toObject"])
+					: new Set(["get", "toObject"]);
+			if (!method || !supported.has(method)) push(scope);
+			match = pmPattern.exec(text);
+			continue;
+		}
+		const optional = /^\s*\?\.\s*(variables|environment|collection)\b/.exec(tail);
+		if (optional) {
+			push(optional[1]);
+			match = pmPattern.exec(text);
+			continue;
+		}
+		const bracket = /^\s*(?:\?\.)?\[\s*(?:"(variables|environment|collection)"|'(variables|environment|collection)'|`(variables|environment|collection)`)\s*\]/.exec(tail);
+		if (bracket) {
+			push(bracket[1] ?? bracket[2] ?? bracket[3]);
+			match = pmPattern.exec(text);
+			continue;
+		}
+		const knownNonVariable = /^\s*\.\s*(console|request|response|expect|test|phase)\b/.test(tail);
+		if (!knownNonVariable) push("unknown");
+		match = pmPattern.exec(text);
+	}
+	return unknown;
+}
+
 // Scan one script phase for literal reads and writes. Non-literal arguments are
 // surfaced as dynamic counts, never as named edges.
 export function scanScript(source) {
@@ -62,6 +162,7 @@ export function scanScript(source) {
 	const writes = [];
 	const dynamicReads = [];
 	const dynamicWrites = [];
+	const unknownAccesses = [];
 	const seenReads = new Set();
 	const seenWrites = new Set();
 
@@ -105,7 +206,8 @@ export function scanScript(source) {
 		match = TO_OBJECT_CALL.exec(text);
 	}
 
-	return { reads, writes, dynamicReads, dynamicWrites };
+	unknownAccesses.push(...unrecognizedPmVariableAccesses(text));
+	return { reads, writes, dynamicReads, dynamicWrites, unknownAccesses };
 }
 
 // The exact set of fields the request compiler interpolates, mirrored here so a
