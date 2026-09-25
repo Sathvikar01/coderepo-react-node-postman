@@ -35,6 +35,15 @@ function forbidden(message = "Your workspace role does not allow this review act
 	return new AppError(403, "REVIEW_FORBIDDEN", message);
 }
 
+function requireCurrentOpenDecision(review) {
+	if (review.freshness === REVIEW_FRESHNESS.STALE) {
+		throw new AppError(409, "REVIEW_STALE_REQUIRES_REREVIEW", "This review is stale. Create a re-review from current evidence before recording a new decision.");
+	}
+	if (review.status === REVIEW_STATUS.CLOSED) {
+		throw new AppError(409, "REVIEW_CLOSED", "This review is closed. Reopen it before recording a new decision.");
+	}
+}
+
 async function workspaceOrThrow(workspaceId) {
 	if (!mongoose.isValidObjectId(workspaceId)) throw notFound();
 	const workspace = await Workspace.findById(workspaceId).lean();
@@ -442,6 +451,7 @@ export const reviewService = {
 		if (role !== "OWNER") throw forbidden("Only workspace owners may change review status.");
 		const review = await reviewRepository.findByIdInWorkspace(reviewId, workspace._id);
 		if (!review) throw notFound();
+		requireCurrentOpenDecision(review);
 
 		const previous = { ...review };
 		const patch = { status };
@@ -471,6 +481,7 @@ export const reviewService = {
 		const role = requireMembership(workspace, profileId);
 		const review = await reviewRepository.findByIdInWorkspace(reviewId, workspace._id);
 		if (!review) throw notFound();
+		requireCurrentOpenDecision(review);
 		if (role === "VIEWER") throw forbidden("Viewers may not record review decisions.");
 		if (role === "EDITOR") {
 			const isReviewer = review.reviewerProfileId && String(review.reviewerProfileId) === String(profileId);
