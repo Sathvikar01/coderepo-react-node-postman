@@ -73,6 +73,24 @@ function aggregateFromSnapshot(resourceType, snapshot) {
 	return { name: snapshot.name, variables: snapshot.variables ?? [] };
 }
 
+async function withActorName(row) {
+	if (!row) return null;
+	if (!row.actorProfileId) return { ...row, actorName: "System" };
+	const profile = await Profile.findById(row.actorProfileId).select("name").lean();
+	return { ...row, actorName: profile?.name ?? "Former member" };
+}
+
+async function withActorNames(rows) {
+	if (!Array.isArray(rows) || rows.length === 0) return [];
+	const ids = [...new Set(rows.map((row) => row.actorProfileId).filter(Boolean).map(String))];
+	const profiles = ids.length > 0 ? await Profile.find({ _id: { $in: ids } }).select("name").lean() : [];
+	const names = new Map(profiles.map((profile) => [String(profile._id), profile.name]));
+	return rows.map((row) => ({
+		...row,
+		actorName: row.actorProfileId ? (names.get(String(row.actorProfileId)) ?? "Former member") : "System",
+	}));
+}
+
 export const versionsService = {
 	// Written AFTER the authoritative CAS mutation succeeds. The saved resource
 	// stays the authority; a version-record failure is reported explicitly with a
@@ -118,7 +136,8 @@ export const versionsService = {
 		assertScopeCapability(resolved, "read");
 		await loadResource(resourceType, id, resolved.workspaceId);
 		const rows = await versionRepository.list(resourceType, String(id), { limit });
-		return rows.filter((row) => String(row.workspaceId) === String(resolved.workspaceId));
+		const visible = rows.filter((row) => String(row.workspaceId) === String(resolved.workspaceId));
+		return withActorNames(visible);
 	},
 
 	async get(resourceType, id, revision, scope) {
@@ -130,7 +149,7 @@ export const versionsService = {
 		if (!row || String(row.workspaceId) !== String(resolved.workspaceId) || String(row.resourceId) !== String(id)) {
 			throw new AppError(404, "VERSION_NOT_FOUND", `Version ${revision} of this ${resourceType} does not exist.`);
 		}
-		return row;
+		return withActorName(row);
 	},
 
 	async compare(resourceType, id, revisionA, revisionB, scope) {
@@ -142,8 +161,20 @@ export const versionsService = {
 		return {
 			resourceType,
 			resourceId: String(id),
-			before: { revision: before.revision, fingerprint: before.fingerprint, actorProfileId: before.actorProfileId, createdAt: before.createdAt },
-			after: { revision: after.revision, fingerprint: after.fingerprint, actorProfileId: after.actorProfileId, createdAt: after.createdAt },
+			before: {
+				revision: before.revision,
+				fingerprint: before.fingerprint,
+				actorProfileId: before.actorProfileId,
+				actorName: before.actorName,
+				createdAt: before.createdAt,
+			},
+			after: {
+				revision: after.revision,
+				fingerprint: after.fingerprint,
+				actorProfileId: after.actorProfileId,
+				actorName: after.actorName,
+				createdAt: after.createdAt,
+			},
 			identical: before.fingerprint === after.fingerprint,
 			changes,
 			truncated,
@@ -185,7 +216,7 @@ export const versionsService = {
 			activityAction: resourceType === "collection" ? "collection.restored" : "environment.restored",
 			activitySummary: `${resourceType === "collection" ? "Collection" : "Environment"} "${aggregate.name}" restored from v${sourceRevision} as v${expectedCurrentRevision + 1}`,
 		});
-		const version = await versionRepository.get(resourceType, String(id), restored.revision);
+		const version = await withActorName(await versionRepository.get(resourceType, String(id), restored.revision));
 		return { resource: restored, version };
 	},
 };
