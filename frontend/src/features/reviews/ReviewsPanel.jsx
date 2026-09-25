@@ -206,7 +206,8 @@ function ReviewDetail({ members, onBack, onChanged, onToast, profileId, review, 
 	const isEditor = role === "EDITOR";
 	const isAssignee = String(detail.assigneeProfileId ?? "") === String(profileId ?? "");
 	const isReviewer = String(detail.reviewerProfileId ?? "") === String(profileId ?? "");
-	const canDecide = isOwner || (isEditor && isReviewer);
+	const decisionable = detail.freshness !== "STALE" && detail.status !== "CLOSED";
+	const canDecide = decisionable && (isOwner || (isEditor && isReviewer));
 	const assignee = members.find((m) => String(m.profileId) === String(detail.assigneeProfileId));
 	const reviewer = members.find((m) => String(m.profileId) === String(detail.reviewerProfileId));
 
@@ -288,6 +289,13 @@ function ReviewDetail({ members, onBack, onChanged, onToast, profileId, review, 
 
 			<section aria-label="Decision">
 				<h4>Decision</h4>
+				{!decisionable && (
+					<p className="reviews-error" role="note">
+						{detail.freshness === "STALE"
+							? "This review is stale. Create a re-review from current evidence before recording a new decision."
+							: "This review is closed. Reopen it before recording a new decision."}
+					</p>
+				)}
 				<p>
 					Assignee: {memberLabel(assignee)} · Reviewer: {memberLabel(reviewer)} · Status: {detail.status}
 				</p>
