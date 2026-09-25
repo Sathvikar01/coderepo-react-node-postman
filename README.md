@@ -7,20 +7,52 @@
 
 Tracer is a full-stack React and Express application. Requests execute through the Express API on the server and results are persisted in MongoDB, so a signed-in profile can build a real HTTP request, send it, inspect the response, save it into a collection, switch environments, and reopen it from history.
 
-## The mental model
+## Reviewer in 60 seconds
+
+**Tracer is an API execution, investigation, and change-verification workspace.** The request builder is the substrate; the differentiator is the evidence system around each execution.
 
 ```text
 Execute → Understand → Compare → Verify
+   \____________ Why? ____________/
 ```
 
-| Step | Question it answers | Where it lives |
-| --- | --- | --- |
-| **Execute** | "What does this endpoint return right now?" | Workspace, Collections, Environments, History |
-| **Understand** | "Why did this stop working?" | History, Execution Passport, Flight Recorder |
-| **Compare** | "What does this change affect?" | Workspace snapshots, Change impact, Environment drift, Contracts |
-| **Verify** | "Can I treat this exact state as known-good?" | Rehearsal, Compatibility, Verification Proof |
+- **Execute** sends a real request through one backend-owned transport pipeline.
+- **Understand** records an immutable, secret-redacted Execution Passport and supports evidence-driven investigation.
+- **Compare** explains what changed and what is affected without promoting correlation into causation.
+- **Verify** rehearses the affected workflow, checks compatibility, and produces a tamper-evident proof.
+- **Why?** is a read-only projection over the evidence already produced by those systems. It creates no new truth.
 
-Tracer keeps one pipeline for all of it: there is no second transport, no second history, and no place where the UI decides a verification state on its own.
+The signature verification story is:
+
+```text
+edit → snapshot identity → impact → drift → rehearse → contract → verify → proof
+```
+
+Clicking **Why?** explains the same result as an evidence chain:
+
+```text
+configuration → execution → impact → drift → rehearsal → contract → verification → proof
+```
+
+### Truth ownership
+
+Tracer deliberately keeps authority out of React. The UI renders backend-owned evidence and fails closed when evidence is missing.
+
+| Question | Authoritative source |
+| --- | --- |
+| What configuration actually executed? | Request compiler + immutable execution receipt |
+| What happened on the wire? | Execution pipeline + history / Execution Passport |
+| What changed or is affected? | Change-impact evidence (Phase 39) |
+| What differs across environments? | Drift evidence (Phase 40) |
+| What was rehearsed? | Rehearsal plan/run/checkpoints (Phase 46) |
+| Is the response contract compatible? | Contract compatibility (Phase 43) |
+| Is the state VERIFIED / BLOCKED / NEEDS_REHEARSAL / UNKNOWN? | **Phase 41 only** |
+| Is the proof CURRENT / STALE / MISMATCH / INVALID / UNKNOWN? | Verification Proof verification (Phase 47) |
+| Why did Tracer reach this result? | WHY Inspector projection over the sources above |
+
+If no linked Phase 41 result exists, **Why? reports `UNKNOWN`**. Passing assertions or a permissive target policy are observations, not substitutes for verification.
+
+For a reviewer-oriented walkthrough and talking points, see **[`docs/REVIEWER_GUIDE.md`](docs/REVIEWER_GUIDE.md)**.
 
 ## Why Tracer is different
 
@@ -53,11 +85,35 @@ bun run demo:investigation
 edit → snapshot → impact → drift → rehearse → contract check → verify → proof
 ```
 
-A **Workspace Snapshot** freezes the exact state a verification is about. **Change impact** says which requests and references a change can reach. **Environment drift** compares the snapshot's environment against the target environment path by path, and a blocking finding prevents a clean verification instead of being averaged away. A **Rehearsal** runs the affected workflow through the *same* compile → policy → DNS → transport → capture → normalize → history pipeline as any other send, changing nothing in your collections. **Contract compatibility** checks a response contract for removed fields, changed types, unexpected statuses, and missing required headers. **Verify** combines that evidence into a state.
+Verification evidence is bound to an explicit **snapshot identity/fingerprint** so Tracer can distinguish the state that was checked from today's editable workspace. **Change impact** says which requests and references a change can reach. **Environment drift** compares the source/target configuration evidence path by path, and a blocking finding prevents a clean verification instead of being averaged away. A **Rehearsal** runs the affected workflow through the *same* compile → policy → DNS → transport → capture → normalize → history pipeline as any other send. **Contract compatibility** records breaking, non-breaking, and unknown compatibility findings. **Phase 41** alone turns the linked evidence into `VERIFIED`, `BLOCKED`, `NEEDS_REHEARSAL`, or `UNKNOWN`.
 
 A **Verification Proof** is the result: a tamper-evident, secret-free record that commits the snapshot identity, environment identity, rehearsal run, counts, contracts, and drift, then signs the content. It contains no request or response bodies. Verification states are always the backend's answer — `VERIFIED`, `BLOCKED`, `NEEDS_REHEARSAL`, or `UNKNOWN` — and a report is `VALID`, `STALE`, `MISMATCH`, `INVALID`, or `UNKNOWN`. The frontend never infers, upgrades, or recomputes any of them: a `STALE` artifact is shown as stale, never as a green pass, and a missing currency signal yields `UNKNOWN` rather than a pass.
 
 Imported proof artifacts are inspection-only. Importing never executes, sends, or saves anything, and the UI reports that explicitly.
+
+### Explain: the WHY Inspector
+
+The **Why?** action is available from execution history and the investigation/Passport surfaces. With no linked proof, it shows only what can be proven from the execution and persisted evidence, and verification remains `UNKNOWN` when no Phase 41 result is linked.
+
+The Evidence tab can attach a Verification Proof **for that read only**. Tracer sends the opaque artifact to the backend, where the existing proof importer verifies integrity and identity. React does not parse, validate, persist, or upgrade the proof.
+
+A linked explanation can therefore show the full chain:
+
+```text
+Configuration
+  ↓
+Execution
+  ↓
+Impact → Drift
+  ↓
+Rehearsal → Contract
+  ↓
+Phase 41 Verification
+  ↓
+Phase 47 Proof
+```
+
+Link states such as `not_recorded`, `identity_mismatch`, `STALE`, and `INVALID` remain visible. A stale proof is never rendered as a current green verification.
 
 ## API Flight Recorder
 
@@ -137,33 +193,67 @@ Every backend domain keeps routes, controllers, services, repositories, and mode
 
 ## Architecture
 
-Tracer is one Bun workspace with two applications and one database. The browser never executes HTTP requests against a target: every send goes through the Express API, so the security policy, secret handling, and evidence capture are enforced in one place.
+Tracer is one Bun workspace with a React browser client, one Express API, and MongoDB. **The browser never sends target HTTP directly.** Manual sends, collection runs, CLI runs, investigation probes, and rehearsals all converge on the same backend execution boundary.
 
 ```mermaid
 flowchart LR
-    subgraph FE["Browser - React 19 + Vite, port 3000"]
-        UI["Workspace UI<br/>request composer, collections, environments<br/>history, cookies, examples and mocks, docs<br/>Collection Runner, Flight Recorder"]
+    UI["React / Vite UI<br/>Workspace · History · Runner<br/>Flight Recorder · Proof · Why?"]
+    API["Express API<br/>Auth · profile scope · Zod boundaries"]
+
+    subgraph CORE["One execution path"]
+      COMP["Compile<br/>variables · auth · headers · body"]
+      POL["Target policy<br/>SSRF · allowlists · limits"]
+      DNS["DNS resolve + pin"]
+      NET["Native transport<br/>node:net / node:tls"]
+      CAP["Capture + normalize"]
+      HIST["History + Execution Passport"]
+      COMP --> POL --> DNS --> NET --> CAP --> HIST
     end
 
-    subgraph BE["Express 5 API, port 8000"]
-        Routes["Routes and controllers<br/>Zod validation, auth, error mapping"]
-        Services["Domain services<br/>auth, profiles, collections, environments<br/>executions, history, cookies, examples, mocks<br/>scripts, runner, local-runtime, projects<br/>execution-intelligence"]
-        Pipeline["Execution pipeline<br/>compile to policy to DNS to transport<br/>to capture to normalize to history"]
-        Demo["Demo target /demo/v1<br/>real HTTP, MongoDB-backed orders"]
-        CLI["Headless CLI - bun run tracer<br/>reuses the same runner and pipeline"]
+    subgraph EVID["Investigation + verification evidence"]
+      INV["Flight Recorder / Investigation<br/>compare · isolate · reproduce"]
+      IMP["Impact"]
+      DRIFT["Drift"]
+      REH["Rehearsal + checkpoints"]
+      CONTRACT["Contract compatibility"]
+      VERIFY["Phase 41 verification"]
+      PROOF["Phase 47 Verification Proof"]
+      WHY["Why? read-model<br/>projection only"]
+      IMP --> VERIFY
+      DRIFT --> VERIFY
+      REH --> VERIFY
+      CONTRACT --> VERIFY
+      VERIFY --> PROOF
+      HIST --> INV
+      HIST --> WHY
+      IMP --> WHY
+      DRIFT --> WHY
+      REH --> WHY
+      CONTRACT --> WHY
+      VERIFY --> WHY
+      PROOF --> WHY
     end
 
-    DB[("MongoDB - request_desk_demo")]
-    Targets["External HTTP targets"]
+    DB[("MongoDB")]
+    TARGET["Approved HTTP targets"]
+    DEMO["Seeded /demo/v1 target"]
 
-    UI -->|fetch /api/v1| Routes
-    Routes --> Services
-    Services --> DB
-    Services --> Pipeline
-    Pipeline -->|approved public targets| Targets
-    Pipeline -->|loopback with Local Runtime only| Demo
-    CLI --> Services
+    UI -->|/api/v1| API
+    API --> COMP
+    HIST --> DB
+    API --> DB
+    NET --> TARGET
+    NET --> DEMO
 ```
+
+The architectural rule that matters most for review is **single authority, single execution path**:
+
+- React presents state; it does not invent verification truth.
+- The execution pipeline owns target access and evidence capture.
+- Investigation consumes immutable receipts instead of re-executing through a second transport.
+- Verification composes bounded evidence and fails closed.
+- Verification Proof commits the exact identities/evidence it covers.
+- Why? only explains those artifacts; it cannot make an unavailable result look verified.
 
 How the layers fit together:
 
@@ -246,18 +336,38 @@ These credentials exist only for local evaluation. Tracer generates its own sign
 
 Each profile owns an **Orders API** collection (with `Read` and `Write` folders and five saved requests) and an **HTTP Examples** collection, plus **Local** and **Staging** environments. Both environments point at the in-process demo target at `http://127.0.0.1:8000/demo/v1`, which serves genuine HTTP responses backed by MongoDB and requires a bearer token.
 
-### Ten-minute product walkthrough
+### Reviewer walkthrough
 
-After `bun start` and signing in as `alex.morgan@example.test` / `password123`, this sequence exercises every capability with real requests and real persistence. Nothing here is a canned response.
+After `bun start`, sign in as `alex.morgan@example.test` / `password123`.
 
-1. **Execute.** Open **Orders API → Read → List orders** and press `Ctrl/Cmd+Enter`. Read status, timing, size, headers, and body in the response pane.
-2. **Understand.** Open the **History** sidebar tab and choose **Passport** on the run you just made. The Flight Recorder opens on its **Passport** section with the compiled request evidence, variable and auth sources, policy decision, and the response contract.
-3. **Compare.** Change `GET /orders` to `GET /orders?status=pending` (or send **Get order** with an id that does not exist), send it, then open **Compare** between the two runs. Tracer reports the ordered differences and the first meaningful divergence.
-4. **Isolate and reproduce.** Use **Minimize** on the failing run and watch bounded probes reduce it to the smallest still-failing request, then **Export Capsule** and **Import Capsule** — the capsule opens as an unsent, unsaved dirty draft that you send yourself.
-5. **Verify.** Rehearse the affected collection against **Staging** from the **Run collection** action, then open **Verification Proof** from the header and follow its **Import & Verify** section. The state shown (`VERIFIED`, `BLOCKED`, `NEEDS_REHEARSAL`, or `UNKNOWN`) and the report status (`VALID`, `STALE`, `MISMATCH`, `INVALID`, or `UNKNOWN`) are the backend's answer, never the UI's guess.
-6. **Learn in place.** Open the header's **info** menu at any point for **Getting Started**, **About**, **Security & Safety**, **Data Handling**, and **Responsible Use**.
+#### If you only have two minutes
 
-Two deterministic scripts replay parts of this automatically: `bun run demo:flight-recorder` (Passport → Compare → Minimize → Capsule → Reproduce) and `bun run demo:investigation` (the eight-question investigation). Both require the app to be running.
+1. **Execute.** Open **Orders API → Read → List orders** and send it.
+2. **Explain execution.** In **History**, click **Why?**. Show the effective configuration, variable/auth provenance, execution stages, and the explicit `UNKNOWN` verification state when no Phase 41 result is linked.
+3. **Open Passport.** Cross-link to the Execution Passport to show the immutable execution evidence and response contract.
+4. **State the thesis.** “The UI does not decide whether this is verified; it can only render evidence the backend actually recorded.”
+
+That already demonstrates the product's central design: a request is not just a response body; it becomes explainable evidence.
+
+#### Five-minute differentiator demo
+
+1. **Execute** a seeded Orders request and open its Passport.
+2. **Compare / Investigate** a passing and failing run to show first divergence versus experimentally verified cause.
+3. **Minimize** a failure and export a redacted reproduction capsule; importing opens an unsent, unsaved draft.
+4. **Rehearse / verify** the affected workflow and obtain a Verification Proof.
+5. **Open Why? → Evidence** and attach the exported proof for this read. Walk the reviewer through Impact → Drift → Rehearsal → Contract → **Phase 41 Verification** → Proof.
+6. Change the relevant snapshot/environment identity and verify that the previous proof becomes **STALE**, not green.
+
+The proof attachment is intentionally read-scoped: it is validated by the backend's Phase 47 importer and is never persisted or interpreted by React.
+
+#### Deterministic demos
+
+```bash
+bun run demo:flight-recorder   # Passport → Compare → Minimize → Capsule → Reproduce
+bun run demo:investigation     # eight-question investigation workflow
+```
+
+For the exact reviewer script, likely questions, and architecture explanation, see **[`docs/REVIEWER_GUIDE.md`](docs/REVIEWER_GUIDE.md)**.
 
 ## Run Instructions
 
@@ -351,34 +461,31 @@ The [Tracer CLI workflow](.github/workflows/tracer-cli.yml) runs the same scenar
 
 ## Testing
 
-Tests live next to the code they cover as `*.test.js` files and run on Bun's built-in test runner. From the repo root, `bun test` discovers every suite — backend and frontend together. The full suite is 84 test files and 920 tests, with the current Linux CI run reporting 920 pass / 0 fail.
+Tests live beside the code they cover as `*.test.js` files and run with Bun's test runner. The README intentionally does **not** hard-code a single suite total because the count changes as acceptance coverage grows; the final executed evidence is recorded in **[`docs/final-submission-readiness.md`](docs/final-submission-readiness.md)** and the phase-specific reports.
 
 ```bash
-bun test                       # everything: 84 files, 920 tests
-bun run test                   # backend only (cd backend && bun test)
-cd frontend && bun test        # frontend only
+bun test                       # repository-wide test discovery
+bun run test                   # backend tests
+cd frontend && bun test        # frontend tests
+cd frontend && bun run build   # production frontend build
 ```
 
-What the suites cover:
+Important acceptance surfaces include:
 
-| Area                         | Examples of what is proven                                                                 |
-| ---------------------------- | ------------------------------------------------------------------------------------------ |
-| Execution core               | request compiler, target/address policy (SSRF), DNS pinning, transport, response capture/normalization, history CAS |
-| Persistence & projects       | ownership, revisions/CAS, restart/reset, portable `TracerProjectV1` round-trip, git-native layout, seed reset |
-| Cookies, examples, mocks     | Set-Cookie parsing and matching, jar replay through real execution, example persistence, deterministic mock matching |
-| Scripts & assertions         | sandbox capability blocks, timeouts, variable writes, assertion semantics and diagnostics |
-| Collection Runner            | run plan/order, failure policy, iteration, run summary, variable propagation |
-| CLI                          | argument/exit-code contract, JSON/JUnit reports, secret safety (resolved on the wire, never in artifacts), timeouts, CI parity against a real local server |
-| Flight Recorder              | execution receipts, run comparison, repro capsules, failure minimizer, end-to-end acceptance |
-| Frontend workflows           | workspace reducer and tab/draft workflows, import (cURL) parsing and drafts, export snippets, response body/JSON/markup views, docs model/view, dialog stack, design contracts |
+| Area | What is exercised |
+| --- | --- |
+| Execution core | compiler, SSRF/target policy, DNS pinning, transport, capture, normalization, history |
+| Persistence | profile ownership, revisions/CAS, seed/reset, history invariants |
+| Runner + CLI | deterministic plans, execution, cancellation, reports, secret safety |
+| Flight Recorder | Passport, comparisons, investigation, minimization, reproduction capsules |
+| Verification | impact/drift evidence, rehearsal/checkpoints, contract compatibility, Phase 41 states |
+| Verification Proof | build/export/import/verify, integrity, current/stale/mismatch/invalid states |
+| WHY Inspector | v2 read-model, Phase 41 authority, proof linkage, identity mismatch, secret exclusion |
+| Browser acceptance | responsive widths, dark/light, dialogs, keyboard/Escape/focus, overflow and console checks |
 
-Test infrastructure notes:
+The merged acceptance history includes dedicated real-browser suites for Investigation, Verification Proof, product surfaces, and WHY v2, plus the repository's Baseline Gate, Tracer CLI, and Phase 30 E2E + Load workflows.
 
-- Tests are self-contained: fake adapters or in-process `Bun.serve` targets stand in for the network, so the suite needs no MongoDB and no hosted service.
-- `backend/.env` (written by `setup.sh`) is auto-loaded by Bun when tests run inside `backend/`; suites that need their own secret-alias configuration merge it explicitly rather than depending on ambient values.
-- Two deterministic end-to-end proofs run outside `bun test`: `bash examples/ci/ci-demo.sh` (CLI pass/fail parity against a local target, no database) and `bun run demo:flight-recorder` (the full Passport → Compare → Minimize → Capsule → Reproduce demo against the seeded app).
-
-Continuous integration runs the same gates on every pull request: the **Baseline Gate** (`.github/workflows/baseline-gate.yml`) runs `bun install --frozen-lockfile`, `bun test`, backend syntax checks, the frontend build, a seeded start with a runtime health smoke; the **Tracer CLI** workflow (`.github/workflows/tracer-cli.yml`) runs the headless runner scenario and uploads JSON and JUnit reports.
+For the final submission-state caveats and exact latest rerun results, use the final readiness report rather than an older number copied into this README.
 
 ## Product Limits and Behavior
 
