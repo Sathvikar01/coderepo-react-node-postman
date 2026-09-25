@@ -194,7 +194,7 @@ await click('[aria-label="View Verification Proof"]', "Verification Proof comman
 await waitFor('document.querySelector(".verification-proof-dialog") !== null', "Verification Proof dialog");
 await clickText('.verification-proof-dialog [role="tab"]', "Import & Verify", "Import & Verify tab");
 await setInput('textarea[aria-label="Verification proof artifact JSON"]', artifactText);
-await clickText(".verification-proof-dialog button", "Verify", "Verify proof");
+await clickText(".verification-proof-dialog .recorder-actions button", "Verify", "Verify proof");
 await retry(async () => {
 	const state = await evaluate(`
 		(() => ({
