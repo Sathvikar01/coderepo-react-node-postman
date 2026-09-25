@@ -326,6 +326,10 @@ export function buildDependencyGraph(workspace) {
 				addUnknown({ code: "dynamic-variable-write", collectionId: collection.id, requestId: info.request.id, field: "scripts.preRequest", op: dynamic.op });
 			for (const dynamic of info.testScript.dynamicWrites)
 				addUnknown({ code: "dynamic-variable-write", collectionId: collection.id, requestId: info.request.id, field: "scripts.test", op: dynamic.op });
+			for (const access of info.preScript.unknownAccesses ?? [])
+				addUnknown({ code: "unrecognized-script-variable-access", collectionId: collection.id, requestId: info.request.id, field: "scripts.preRequest", scope: access.scope ?? "unknown" });
+			for (const access of info.testScript.unknownAccesses ?? [])
+				addUnknown({ code: "unrecognized-script-variable-access", collectionId: collection.id, requestId: info.request.id, field: "scripts.test", scope: access.scope ?? "unknown" });
 		}
 	}
 
