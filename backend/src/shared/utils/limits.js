@@ -23,6 +23,17 @@ export const LIMITS = {
 	workspaceName: 80,
 	workspaceActivityPageMax: 50,
 	workspaceActivityRetention: 500,
+	// Phase 24B — immutable resource version history keeps only the newest N
+	// versions per collection/environment so history can never grow unbounded.
+	resourceVersionRetention: 20,
+	resourceVersionPageMax: 20,
+	// Deterministic compare bounds: the diff surface stays small and render-safe.
+	versionDiffMaxChanges: 200,
+	versionDiffPathBytes: 256,
+	versionDiffValueBytes: 512,
+	// Live workspace event stream: heartbeat interval and in-memory replay ring.
+	workspaceEventHeartbeatMs: 15000,
+	workspaceEventReplay: 50,
 	localRuntimeTargets: 20,
 	openTabs: 10,
 	jsonBodyCollection: 3 * 1024 * 1024,

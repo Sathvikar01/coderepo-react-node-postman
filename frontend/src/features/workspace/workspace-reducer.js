@@ -146,6 +146,18 @@ export function workspaceReducer(state, action) {
 						: tab,
 				),
 			};
+		// Phase 24B — a collaborator saved a newer revision. Clean tabs follow the
+		// tip; dirty tabs keep their stale revision so a later save still meets the
+		// server's attributed 409 instead of silently merging.
+		case "collection/remote-updated":
+			return {
+				...state,
+				tabs: state.tabs.map((tab) =>
+					tab.collectionId === action.collectionId && !tab.dirty
+						? { ...tab, collectionName: action.name, collectionRevision: action.revision }
+						: tab,
+				),
+			};
 		case "environment/select":
 			return { ...state, activeEnvironmentId: action.environmentId };
 		case "preferences/set":

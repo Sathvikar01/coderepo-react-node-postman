@@ -358,4 +358,29 @@ describe("collection reconciliation", () => {
 
 		expect(tabById(state, opened.tab.id)).toMatchObject({ collectionId: "col-1", collectionRevision: 3 });
 	});
+
+	test("collection/remote-updated follows the tip on clean tabs and preserves stale dirty tabs", () => {
+		let state = createInitialState();
+		const clean = openTab(state, request({ id: "req-1" }));
+		state = clean.state;
+		const dirty = openTab(state, request({ id: "req-2" }));
+		state = dirty.state;
+		for (const opened of [clean, dirty]) {
+			state = workspaceReducer(state, {
+				type: "draft/saved",
+				tabId: opened.tab.id,
+				request: request({ id: opened.tab.request.id }),
+				savedDraftVersion: tabById(state, opened.tab.id).draftVersion,
+				collectionId: "col-1",
+				collectionName: "Orders",
+				collectionRevision: 3,
+			});
+		}
+		state = workspaceReducer(state, { type: "draft/update", tabId: dirty.tab.id, patch: { name: "Local edit" } });
+
+		state = workspaceReducer(state, { type: "collection/remote-updated", collectionId: "col-1", name: "Orders", revision: 4 });
+
+		expect(tabById(state, clean.tab.id)).toMatchObject({ collectionRevision: 4, dirty: false });
+		expect(tabById(state, dirty.tab.id)).toMatchObject({ collectionRevision: 3, dirty: true });
+	});
 });

@@ -164,7 +164,7 @@ function EnvironmentEditor({ aliases, canWrite = true, environment, onCancel, on
 	);
 }
 
-export function EnvironmentsDrawer({ activeEnvironmentId, canWrite = false, onClose, onDeleted, onSaved, onSelect }) {
+export function EnvironmentsDrawer({ activeEnvironmentId, canWrite = false, onClose, onDeleted, onOpenVersions, onSaved, onSelect }) {
 	const [environments, setEnvironments] = useState([]);
 	const [aliases, setAliases] = useState([]);
 	const [editing, setEditing] = useState(null);
@@ -256,6 +256,11 @@ export function EnvironmentsDrawer({ activeEnvironmentId, canWrite = false, onCl
 										{environment.name}
 									</button>
 									<small>rev {environment.revision}</small>
+									{onOpenVersions && (
+										<button className="text-button" type="button" onClick={() => onOpenVersions(environment)}>
+											Versions
+										</button>
+									)}
 									<button
 										className="text-button"
 										type="button"

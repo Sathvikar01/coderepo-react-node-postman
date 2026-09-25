@@ -592,8 +592,13 @@ await (async () => {
 	pass("16. Alex removes Jordan through the Manage dialog");
 	await alex.escape();
 
+	// Phase 24B added an automatic fallback: a removed member's client clears the
+	// shared workspace and switches to an authorized one. The gate assertion must
+	// therefore scope to the team workspace explicitly instead of relying on the
+	// removed client's (now private) active workspace.
+	const teamWsId = await alex.evaluate(`localStorage.getItem("request-desk-workspace-id")`);
 	const removedAccess = await jordan.evaluate(apiBase(`
-		const res = await fetch(base + "/collections", { headers });
+		const res = await fetch(base + "/collections", { headers: { ...headers, "x-workspace-id": "${teamWsId}" } });
 		return res.status;
 	`));
 	if (removedAccess === 200) throw new Error("A removed member can still read the workspace");

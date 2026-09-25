@@ -74,6 +74,9 @@ import {
 import { useExecutionReconciliation } from "./features/workspace/useExecutionReconciliation.js";
 import { isExecutionActive, tabKeyIntent, workspaceHasUnsettledWork } from "./features/workspace/workspace-workflow.js";
 import { WorkspaceDialogs } from "./features/workspace/WorkspaceDialogs.jsx";
+import { RemoteChangeBanner } from "./features/versions/RemoteChangeBanner.jsx";
+import { useWorkspaceEvents } from "./features/versions/useWorkspaceEvents.js";
+import { VersionsDialog } from "./features/versions/VersionsDialog.jsx";
 import { WorkspaceHeader } from "./features/workspace/WorkspaceHeader.jsx";
 import { WorkspaceActivityPanel } from "./features/workspaces/WorkspaceActivityPanel.jsx";
 import { WorkspaceDialog } from "./features/workspaces/WorkspaceDialog.jsx";
@@ -145,6 +148,11 @@ export default function App() {
 	const [workspaceDialog, setWorkspaceDialog] = useState(null);
 	const [workspaceError, setWorkspaceError] = useState("");
 	const [workspaceActivityVersion, setWorkspaceActivityVersion] = useState(0);
+	// Phase 24B — live collaboration state. `remoteNotices` keys dirty drafts whose
+	// canonical resource moved remotely (`collection:<id>`); the draft is never
+	// overwritten. `versionsDialog` opens history for one resource.
+	const [remoteNotices, setRemoteNotices] = useState({});
+	const [versionsDialog, setVersionsDialog] = useState(null);
 	const tabs = useRovingTabs();
 	const sidebarTabs = useRovingTabs();
 	const splitContainer = useRef(null);
@@ -539,6 +547,138 @@ export default function App() {
 		runWorkspaceMutation(() => workspaceApi.removeMember(workspaceDetail._id, workspaceDetail.revision, profileId));
 	};
 
+	// Phase 24B — live workspace synchronization. Stream events are advisory
+	// freshness signals: every handler reloads canonical server state and never
+	// trusts the event as truth. Dirty local drafts are never overwritten; the
+	// user picks Compare, Reload remote, or Keep editing from a banner.
+	const refreshCollections = async () => {
+		try {
+			const summaries = await collectionApi.list();
+			const aggregates = await Promise.all(summaries.map((summary) => collectionApi.get(summary._id)));
+			setCollections(aggregates);
+			return aggregates;
+		} catch {
+			return null;
+		}
+	};
+
+	const refreshEnvironments = async () => {
+		try {
+			const summaries = await environmentApi.list();
+			setEnvironments(summaries);
+			return summaries;
+		} catch {
+			return null;
+		}
+	};
+
+	const handleWorkspaceLoss = async () => {
+		releaseAllExecutions();
+		dispatch({ type: "session/clear" });
+		setCollections([]);
+		setEnvironments([]);
+		setRemoteNotices({});
+		setVersionsDialog(null);
+		try {
+			const membership = await workspaceApi.list();
+			setWorkspaces(membership);
+			const fallback = membership[0]?._id ?? "";
+			setWorkspaceDetail(null);
+			setActiveWorkspace(fallback);
+			setActiveWorkspaceId(fallback);
+			if (fallback) await loadWorkspace(fallback);
+		} catch {
+			setWorkspaceDetail(null);
+		}
+		toast("You no longer have access to this workspace.", "warning");
+	};
+
+	const handleWorkspaceEvent = async (event) => {
+		if (!event?.action) return;
+		const { action } = event;
+		if (action === "stream.forbidden") {
+			await handleWorkspaceLoss();
+			return;
+		}
+		if (action.startsWith("collection.")) {
+			setWorkspaceActivityVersion((current) => current + 1);
+			if (action === "collection.deleted") {
+				setCollections((current) => current.filter((item) => item._id !== event.resourceId));
+				if (state.tabs.some((tab) => tab.collectionId === event.resourceId)) {
+					toast(
+						`This collection was deleted by ${event.actorName ?? "a collaborator"}. Your open drafts are preserved — use Save As to keep them.`,
+						"warning",
+					);
+				}
+				return;
+			}
+			const aggregates = await refreshCollections();
+			const fresh = aggregates?.find((item) => item._id === event.resourceId) ?? null;
+			if (!fresh) return;
+			if (state.tabs.some((tab) => tab.collectionId === fresh._id && tab.dirty)) {
+				setRemoteNotices((current) => ({
+					...current,
+					[`collection:${fresh._id}`]: { actorName: event.actorName, revision: fresh.revision, resourceName: fresh.name },
+				}));
+				return;
+			}
+			dispatch({ type: "collection/remote-updated", collectionId: fresh._id, name: fresh.name, revision: fresh.revision });
+			if (action === "collection.updated" || action === "collection.restored") {
+				toast(`${event.actorName ?? "A collaborator"} updated ${fresh.name} · v${fresh.revision}.`, "info");
+			}
+			return;
+		}
+		if (action.startsWith("environment.")) {
+			setWorkspaceActivityVersion((current) => current + 1);
+			if (action === "environment.deleted") {
+				setEnvironments((current) => current.filter((item) => item._id !== event.resourceId));
+				return;
+			}
+			await refreshEnvironments();
+			if (action === "environment.updated" || action === "environment.restored") {
+				toast(`${event.actorName ?? "A collaborator"} updated the environment${event.revision ? ` · v${event.revision}` : ""}.`, "info");
+			}
+			return;
+		}
+		if (action.startsWith("member.") || action.startsWith("workspace.")) {
+			const detail = await reloadWorkspaceDetail();
+			// Role and capabilities render from the membership list entry, not the
+			// detail — merge the fresh detail so a remote role change (or rename)
+			// takes effect immediately without a reload. The backend stays
+			// authoritative regardless of UI timing.
+			if (detail) {
+				setWorkspaces((current) =>
+					current.map((entry) =>
+						entry._id === detail._id
+							? {
+									...entry,
+									name: detail.name,
+									revision: detail.revision,
+									memberCount: detail.members?.length ?? entry.memberCount,
+									role: detail.role ?? entry.role,
+									isPersonal: detail.isPersonal ?? entry.isPersonal,
+									// Capabilities re-derive from the fresh role: keeping the
+									// previous entry's object would shadow a demotion.
+									capabilities: detail.capabilities ?? undefined,
+								}
+							: entry,
+					),
+				);
+			}
+			setWorkspaceActivityVersion((current) => current + 1);
+			const selfId = readStoredProfileId();
+			if (action === "member.removed" && event.resourceId && event.resourceId === selfId) {
+				await handleWorkspaceLoss();
+				return;
+			}
+			if (action === "member.role_changed" && event.resourceId && event.resourceId === selfId) {
+				toast("Your workspace role changed. Controls updated immediately.", "info");
+			}
+		}
+	};
+
+	useWorkspaceEvents({ workspaceId: activeWorkspaceId, enabled: Boolean(profile && activeWorkspaceId), onEvent: handleWorkspaceEvent });
+
 	const renameWorkspace = (name) => {
 		runWorkspaceMutation(() => workspaceApi.rename(workspaceDetail._id, workspaceDetail.revision, name));
 	};
@@ -871,7 +1011,10 @@ export default function App() {
 		}
 		setBusy(true);
 		try {
-			const result = await collectionApi.update(collection._id, collection.revision, {
+			// The draft carries the revision it was based on. A clean tab tracks the
+			// tip, so this equals the sidebar revision; a stale dirty draft sends its
+			// older base and meets the server's attributed 409 — no silent merge.
+			const result = await collectionApi.update(collection._id, activeTab.collectionRevision ?? collection.revision, {
 				name: collection.name,
 				description: collection.description ?? "",
 				variables: collection.variables ?? [],
@@ -1362,6 +1505,37 @@ export default function App() {
 		/>
 	) : null;
 
+	const versionsDialogNode = versionsDialog ? (
+		<VersionsDialog
+			canRestore={
+				versionsDialog.resourceType === "collection"
+					? workspaceCapabilities.writeCollections === true
+					: workspaceCapabilities.writeEnvironments === true
+			}
+			currentRevision={versionsDialog.currentRevision}
+			resourceId={versionsDialog.resourceId}
+			resourceName={versionsDialog.resourceName}
+			resourceType={versionsDialog.resourceType}
+			onClose={() => setVersionsDialog(null)}
+			onRestored={async (result) => {
+				if (versionsDialog.resourceType === "collection") {
+					const aggregates = await refreshCollections();
+					const fresh = aggregates?.find((item) => item._id === versionsDialog.resourceId) ?? result.resource;
+					dispatch({ type: "collection/reconciled", collectionId: fresh._id, name: fresh.name, revision: fresh.revision });
+					setRemoteNotices((current) => {
+						const next = { ...current };
+						delete next[`collection:${fresh._id}`];
+						return next;
+					});
+				} else {
+					await refreshEnvironments();
+				}
+				setWorkspaceActivityVersion((current) => current + 1);
+				toast(`Restored as v${result.resource.revision}. History was not rewritten.`, "success");
+			}}
+		/>
+	) : null;
+
 	const workspaceDialogNode = workspaceDialog ? (
 		<WorkspaceDialog
 			activityRefreshToken={workspaceActivityVersion}
@@ -1394,6 +1568,7 @@ export default function App() {
 			{investigationNode}
 			{whyInspectorNode}
 			{workspaceDialogNode}
+			{versionsDialogNode}
 			<WorkspaceHeader
 				account={account}
 				activeEnvironmentId={state.activeEnvironmentId}
@@ -1557,6 +1732,14 @@ export default function App() {
 							onMoveRequestToFolder={(collection, requestId, folderId) =>
 								runAggregateEdit(collection, (item) => moveRequestToFolder(item, requestId, folderId))
 							}
+							onOpenVersions={(collection) =>
+								setVersionsDialog({
+									resourceType: "collection",
+									resourceId: collection._id,
+									resourceName: collection.name,
+									currentRevision: collection.revision,
+								})
+							}
 							onNewCollection={() => openDialog({ kind: "new-collection" })}
 							onNewFolder={(collection) => openDialog({ kind: "new-folder", collection })}
 							onOpenCollection={openCollection}
@@ -1618,7 +1801,26 @@ export default function App() {
 								<span>Workspace activity</span>
 							</div>
 							<div className="sidebar-scroll">
-								<WorkspaceActivityPanel refreshToken={workspaceActivityVersion} workspaceId={activeWorkspaceId} />
+								<WorkspaceActivityPanel
+									refreshToken={workspaceActivityVersion}
+									workspaceId={activeWorkspaceId}
+									onOpenVersions={async ({ resourceType, resourceId }) => {
+										try {
+											const fresh =
+												resourceType === "collection"
+													? await collectionApi.get(resourceId)
+													: await environmentApi.get(resourceId);
+											setVersionsDialog({
+												resourceType,
+												resourceId,
+												resourceName: fresh.name,
+												currentRevision: fresh.revision,
+											});
+										} catch (error) {
+											toast(error.message, "error");
+										}
+									}}
+								/>
 							</div>
 						</div>
 					) : (
@@ -1691,6 +1893,37 @@ export default function App() {
 					{activeTab ? (
 						<div className="request-pane" ref={splitContainer}>
 							<div className="request-pane-top" style={{ flexBasis: `${split.ratio * 100}%` }}>
+								{activeTab.collectionId && remoteNotices[`collection:${activeTab.collectionId}`] && (
+									<RemoteChangeBanner
+										actorName={remoteNotices[`collection:${activeTab.collectionId}`].actorName}
+										resourceName={remoteNotices[`collection:${activeTab.collectionId}`].resourceName}
+										revision={remoteNotices[`collection:${activeTab.collectionId}`].revision}
+										onCompare={() => {
+											const collection = collections.find((item) => item._id === activeTab.collectionId);
+											setVersionsDialog({
+												resourceType: "collection",
+												resourceId: activeTab.collectionId,
+												resourceName: collection?.name ?? "Collection",
+												currentRevision: collection?.revision ?? activeTab.collectionRevision,
+											});
+										}}
+										onKeepEditing={() =>
+											setRemoteNotices((current) => {
+												const next = { ...current };
+												delete next[`collection:${activeTab.collectionId}`];
+												return next;
+											})
+										}
+										onReload={async () => {
+											await reloadCollection(activeTab.collectionId, activeTab.id);
+											setRemoteNotices((current) => {
+												const next = { ...current };
+												delete next[`collection:${activeTab.collectionId}`];
+												return next;
+											});
+										}}
+									/>
+								)}
 								<RequestBuilder
 									authOverride={authOverrides[activeTab.id] ?? null}
 									canExecute={workspaceCapabilities.execute === true}
@@ -1790,6 +2023,14 @@ export default function App() {
 						setEnvironments((current) => current.filter((item) => item._id !== environmentId));
 						if (state.activeEnvironmentId === environmentId) savePreferences({ activeEnvironmentId: null });
 					}}
+					onOpenVersions={(environment) =>
+						setVersionsDialog({
+							resourceType: "environment",
+							resourceId: environment._id,
+							resourceName: environment.name,
+							currentRevision: environment.revision,
+						})
+					}
 					onSaved={(environment) => {
 						setEnvironments((current) => {
 							const summary = { _id: environment._id, name: environment.name, revision: environment.revision };

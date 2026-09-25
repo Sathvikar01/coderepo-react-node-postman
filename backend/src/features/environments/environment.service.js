@@ -4,6 +4,8 @@ import { getConfig } from "../../shared/config/index.js";
 import { LIMITS } from "../../shared/utils/limits.js";
 import { nameKey } from "../../shared/utils/names.js";
 import { Profile } from "../profiles/profile.model.js";
+import { versionsService } from "../versions/versions.service.js";
+import { versionRepository } from "../versions/version.repository.js";
 import { recordWorkspaceActivity } from "../workspaces/workspace-activity.js";
 import { assertScopeCapability, resolveScope } from "../workspaces/workspace-scope.js";
 import { environmentRepository } from "./environment.repository.js";
@@ -96,6 +98,15 @@ export const environmentService = {
 			}),
 		);
 		const environment = created.toObject ? created.toObject() : created;
+		await versionsService.recordVersion({
+			workspaceId: resolved.workspaceId,
+			resourceType: "environment",
+			resourceId: String(environment._id),
+			revision: environment.revision,
+			actorProfileId: resolved.actorProfileId,
+			action: "CREATED",
+			aggregate: environment,
+		});
 		await recordWorkspaceActivity({
 			workspaceId: resolved.workspaceId,
 			actorProfileId: resolved.actorProfileId,
@@ -108,7 +119,7 @@ export const environmentService = {
 		});
 		return environment;
 	},
-	async replace(id, scope, expectedRevision, input) {
+	async replace(id, scope, expectedRevision, input, provenance = {}) {
 		assertId(id);
 		const resolved = await resolveScope(scope);
 		assertScopeCapability(resolved, "writeEnvironments");
@@ -129,16 +140,29 @@ export const environmentService = {
 				expectedRevision,
 				"This environment changed since it was loaded. Reload before saving.",
 			);
+		await versionsService.recordVersion({
+			workspaceId: resolved.workspaceId,
+			resourceType: "environment",
+			resourceId: String(id),
+			revision: updated.revision,
+			actorProfileId: resolved.actorProfileId,
+			action: provenance.versionAction ?? "UPDATED",
+			aggregate: updated,
+			sourceRevision: provenance.versionSourceRevision ?? null,
+			previousRevision: expectedRevision,
+		});
 		await recordWorkspaceActivity({
 			workspaceId: resolved.workspaceId,
 			actorProfileId: resolved.actorProfileId,
-			action: "environment.updated",
+			action: provenance.activityAction ?? "environment.updated",
 			targetType: "environment",
 			targetId: String(id),
 			targetLabel: updated.name,
 			previousRevision: expectedRevision,
 			newRevision: updated.revision,
-			summary: `Environment "${updated.name}" saved`,
+			summary:
+				provenance.activitySummary ??
+				`Environment "${updated.name}" saved`,
 		});
 		return updated;
 	},
@@ -157,6 +181,7 @@ export const environmentService = {
 				"This environment changed since it was loaded. Reload before deleting.",
 			);
 		}
+		await versionRepository.removeAllForResource("environment", String(id));
 		await recordWorkspaceActivity({
 			workspaceId: resolved.workspaceId,
 			actorProfileId: resolved.actorProfileId,

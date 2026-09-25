@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { LIMITS } from "../../shared/utils/limits.js";
+import { replayAfter, subscribeWorkspace } from "./workspace-events.js";
 import { workspaceService } from "./workspace.service.js";
 
 const roleEnum = z.enum(["OWNER", "EDITOR", "VIEWER"]);
@@ -100,6 +102,74 @@ export async function listWorkspaceActivity(request, response, next) {
 		const { limit, before } = activityQuerySchema.parse(request.query);
 		response.json({
 			data: await workspaceService.listActivity(request.params.workspaceId, request.profileId, { limit, before }),
+		});
+	} catch (error) {
+		next(error);
+	}
+}
+
+// Phase 24B — authenticated live workspace event stream. The browser uses
+// streaming fetch() with Authorization + profile headers (never EventSource,
+// never a token in the URL). Membership is verified before the first byte;
+// the payload carries metadata only, never bodies, secrets, or credentials.
+export async function streamWorkspaceEvents(request, response, next) {
+	try {
+		const { workspace } = await workspaceService.resolveContext({
+			profileId: request.profileId,
+			requestedWorkspaceId: request.params.workspaceId,
+		});
+		const workspaceId = String(workspace._id);
+		const profileId = String(request.profileId);
+
+		response.writeHead(200, {
+			"Content-Type": "text/event-stream",
+			"Cache-Control": "no-cache, no-transform",
+			Connection: "keep-alive",
+			"X-Accel-Buffering": "no",
+		});
+		response.flushHeaders?.();
+
+		const write = (event) => {
+			response.write(`id: ${event.id}\n`);
+			response.write(`event: ${event.action}\n`);
+			response.write(`data: ${JSON.stringify(event)}\n\n`);
+		};
+
+		// Resume after the caller's last seen event; a client that missed events
+		// still reloads canonical state, so replay is a convenience, not truth.
+		const lastEventId = request.get("Last-Event-ID") || request.query?.lastEventId || null;
+		for (const event of replayAfter(workspaceId, lastEventId)) write(event);
+
+		let closed = false;
+		const unsubscribe = subscribeWorkspace(workspaceId, profileId, {
+			send: (event) => {
+				if (!closed) write(event);
+			},
+			close: () => {
+				if (closed) return;
+				closed = true;
+				clearInterval(heartbeat);
+				try {
+					response.end();
+				} catch {}
+			},
+		});
+		const heartbeat = setInterval(() => {
+			if (closed) return;
+			try {
+				response.write(": heartbeat\n\n");
+			} catch {
+				closed = true;
+				clearInterval(heartbeat);
+				unsubscribe();
+			}
+		}, LIMITS.workspaceEventHeartbeatMs);
+
+		request.on("close", () => {
+			if (closed) return;
+			closed = true;
+			clearInterval(heartbeat);
+			unsubscribe();
 		});
 	} catch (error) {
 		next(error);

@@ -8,6 +8,7 @@ import {
 	listWorkspaces,
 	removeWorkspaceMember,
 	renameWorkspace,
+	streamWorkspaceEvents,
 } from "./workspace.controller.js";
 
 export const workspaceRouter = Router();
@@ -19,3 +20,4 @@ workspaceRouter.post("/:workspaceId/members", addWorkspaceMember);
 workspaceRouter.put("/:workspaceId/members/:profileId", changeWorkspaceMemberRole);
 workspaceRouter.delete("/:workspaceId/members/:profileId", removeWorkspaceMember);
 workspaceRouter.get("/:workspaceId/activity", listWorkspaceActivity);
+workspaceRouter.get("/:workspaceId/events", streamWorkspaceEvents);

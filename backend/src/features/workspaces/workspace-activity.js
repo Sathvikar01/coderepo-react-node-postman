@@ -1,5 +1,7 @@
 import { utf8Bytes } from "../../shared/utils/limits.js";
+import { Profile } from "../profiles/profile.model.js";
 import { workspaceActivityRepository } from "./workspace-activity.repository.js";
+import { publishWorkspaceEvent } from "./workspace-events.js";
 
 // A single activity entry may carry at most this much free-form metadata. Anything
 // larger is dropped rather than truncated, so the feed can never become a covert
@@ -27,7 +29,7 @@ export function sanitizeActivityMetadata(metadata) {
 }
 
 export async function recordWorkspaceActivity(entry) {
-	return workspaceActivityRepository.record({
+	const created = await workspaceActivityRepository.record({
 		workspaceId: entry.workspaceId,
 		actorProfileId: entry.actorProfileId ?? null,
 		action: entry.action,
@@ -40,4 +42,27 @@ export async function recordWorkspaceActivity(entry) {
 		metadata: sanitizeActivityMetadata(entry.metadata),
 		createdAt: new Date(),
 	});
+	// Phase 24B — every persisted activity row also emits an advisory live event.
+	// The stream carries metadata only (never bodies, secrets, or credentials);
+	// persistence stays authoritative and missed events are harmless.
+	try {
+		let actorName = null;
+		if (entry.actorProfileId) {
+			const profile = await Profile.findById(entry.actorProfileId).select("name").lean();
+			actorName = profile?.name ?? null;
+		}
+		publishWorkspaceEvent({
+			workspaceId: entry.workspaceId,
+			action: entry.action,
+			resourceType: entry.targetType,
+			resourceId: entry.targetType === "workspace" ? String(entry.workspaceId) : entry.targetId ? String(entry.targetId) : null,
+			revision: entry.newRevision ?? entry.previousRevision ?? null,
+			actorProfileId: entry.actorProfileId ?? null,
+			actorName,
+			timestamp: created.createdAt instanceof Date ? created.createdAt.toISOString() : new Date().toISOString(),
+		});
+	} catch {
+		// Live delivery must never break the authoritative activity write.
+	}
+	return created;
 }

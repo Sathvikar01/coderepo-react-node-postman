@@ -57,16 +57,30 @@ export function clearSession() {
 export const hasSessionToken = () => Boolean(sessionToken || profileToken);
 export const hasProfileToken = () => Boolean(profileToken);
 
+export function apiUrl(path) {
+	return `${baseUrl}${path}`;
+}
+
+// Header builder shared by JSON requests and the Phase 24B live event stream,
+// so the streaming fetch authenticates exactly like every other API call:
+// profile/session bearer plus the active workspace boundary. Tokens never go
+// into a URL or query string.
+export function apiHeaders(extra = {}) {
+	return {
+		...(profileToken || sessionToken ? { Authorization: `Bearer ${profileToken || sessionToken}` } : {}),
+		...(workspaceId ? { "x-workspace-id": workspaceId } : {}),
+		...extra,
+	};
+}
+
 export async function request(path, options = {}) {
 	let response;
 	try {
-		response = await fetch(`${baseUrl}${path}`, {
+		response = await fetch(apiUrl(path), {
 			...options,
 			headers: {
 				"Content-Type": "application/json",
-				...(profileToken || sessionToken ? { Authorization: `Bearer ${profileToken || sessionToken}` } : {}),
-				...(workspaceId ? { "x-workspace-id": workspaceId } : {}),
-				...options.headers,
+				...apiHeaders(options.headers),
 			},
 		});
 	} catch (cause) {

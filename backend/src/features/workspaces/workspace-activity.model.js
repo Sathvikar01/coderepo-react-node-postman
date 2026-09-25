@@ -12,9 +12,11 @@ export const WORKSPACE_ACTIVITY_ACTIONS = [
 	"collection.created",
 	"collection.updated",
 	"collection.deleted",
+	"collection.restored",
 	"environment.created",
 	"environment.updated",
 	"environment.deleted",
+	"environment.restored",
 ];
 
 const workspaceActivitySchema = new mongoose.Schema(

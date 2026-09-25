@@ -4,6 +4,8 @@ import { LIMITS, utf8Bytes } from "../../shared/utils/limits.js";
 import { newId } from "../../shared/utils/ids.js";
 import { nameKey } from "../../shared/utils/names.js";
 import { Profile } from "../profiles/profile.model.js";
+import { versionsService } from "../versions/versions.service.js";
+import { versionRepository } from "../versions/version.repository.js";
 import { recordWorkspaceActivity } from "../workspaces/workspace-activity.js";
 import { assertScopeCapability, resolveScope } from "../workspaces/workspace-scope.js";
 import { collectionRepository } from "./collection.repository.js";
@@ -113,6 +115,15 @@ export const collectionService = {
 			}),
 		);
 		const collection = created.toObject ? created.toObject() : created;
+		await versionsService.recordVersion({
+			workspaceId: resolved.workspaceId,
+			resourceType: "collection",
+			resourceId: String(collection._id),
+			revision: collection.revision,
+			actorProfileId: resolved.actorProfileId,
+			action: "CREATED",
+			aggregate: collection,
+		});
 		await recordWorkspaceActivity({
 			workspaceId: resolved.workspaceId,
 			actorProfileId: resolved.actorProfileId,
@@ -125,7 +136,7 @@ export const collectionService = {
 		});
 		return collection;
 	},
-	async replace(id, scope, expectedRevision, input) {
+	async replace(id, scope, expectedRevision, input, provenance = {}) {
 		assertId(id);
 		const resolved = await resolveScope(scope);
 		assertScopeCapability(resolved, "writeCollections");
@@ -147,16 +158,29 @@ export const collectionService = {
 				expectedRevision,
 				"This collection changed since it was loaded. Reload or save as a new collection.",
 			);
+		await versionsService.recordVersion({
+			workspaceId: resolved.workspaceId,
+			resourceType: "collection",
+			resourceId: String(id),
+			revision: updated.revision,
+			actorProfileId: resolved.actorProfileId,
+			action: provenance.versionAction ?? "UPDATED",
+			aggregate: updated,
+			sourceRevision: provenance.versionSourceRevision ?? null,
+			previousRevision: expectedRevision,
+		});
 		await recordWorkspaceActivity({
 			workspaceId: resolved.workspaceId,
 			actorProfileId: resolved.actorProfileId,
-			action: "collection.updated",
+			action: provenance.activityAction ?? "collection.updated",
 			targetType: "collection",
 			targetId: String(id),
 			targetLabel: updated.name,
 			previousRevision: expectedRevision,
 			newRevision: updated.revision,
-			summary: `Collection "${updated.name}" saved`,
+			summary:
+				provenance.activitySummary ??
+				`Collection "${updated.name}" saved`,
 		});
 		return updated;
 	},
@@ -206,6 +230,15 @@ export const collectionService = {
 			}),
 		);
 		const collection = created.toObject ? created.toObject() : created;
+		await versionsService.recordVersion({
+			workspaceId: resolved.workspaceId,
+			resourceType: "collection",
+			resourceId: String(collection._id),
+			revision: collection.revision,
+			actorProfileId: resolved.actorProfileId,
+			action: "CREATED",
+			aggregate: collection,
+		});
 		await recordWorkspaceActivity({
 			workspaceId: resolved.workspaceId,
 			actorProfileId: resolved.actorProfileId,
@@ -234,6 +267,7 @@ export const collectionService = {
 				"This collection changed since it was loaded. Reload before deleting.",
 			);
 		}
+		await versionRepository.removeAllForResource("collection", String(id));
 		await recordWorkspaceActivity({
 			workspaceId: resolved.workspaceId,
 			actorProfileId: resolved.actorProfileId,
