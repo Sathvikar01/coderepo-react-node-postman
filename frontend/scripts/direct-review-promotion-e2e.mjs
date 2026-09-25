@@ -190,9 +190,25 @@ await waitFor('document.querySelector(".verification-proof-dialog") === null', "
 await waitFor('document.querySelector(".promote-form") !== null', "prefilled review form");
 pass("Promote proof opens Reviews directly");
 
-const formState = await evaluate(
-	"(() => { const form = document.querySelector('.promote-form'); const selects = [...form.querySelectorAll('select')]; const finding = selects[0]; return { title: form.querySelector('input[maxlength="120"]')?.value || '', summary: form.querySelector('textarea[maxlength="1000"]')?.value || '', finding: finding?.value || '', findingDisabled: Boolean(finding?.disabled), attached: form.querySelector('.review-attached-proof')?.textContent.replace(/\\s+/g, ' ').trim() || '', artifactTextarea: Boolean([...form.querySelectorAll('textarea')].find((node) => node.getAttribute('placeholder')?.includes('Paste the exported Tracer Verification Proof JSON'))) }; })()",
-);
+const formState = await evaluate(`
+	(() => {
+		const form = document.querySelector(".promote-form");
+		const selects = [...form.querySelectorAll("select")];
+		const finding = selects[0];
+		return {
+			title: form.querySelector('input[maxlength="120"]')?.value || "",
+			summary: form.querySelector('textarea[maxlength="1000"]')?.value || "",
+			finding: finding?.value || "",
+			findingDisabled: Boolean(finding?.disabled),
+			attached: form.querySelector(".review-attached-proof")?.textContent.replace(/\\s+/g, " ").trim() || "",
+			artifactTextarea: Boolean(
+				[...form.querySelectorAll("textarea")].find((node) =>
+					node.getAttribute("placeholder")?.includes("Paste the exported Tracer Verification Proof JSON"),
+				),
+			),
+		};
+	})()
+`);
 if (formState.finding !== "verification_proof" || !formState.findingDisabled) {
 	throw new Error("Direct promotion did not lock the intended finding type: " + JSON.stringify(formState));
 }
