@@ -244,11 +244,21 @@ describe.skipIf(!ready)("review decision workflow", () => {
 		expect(actions).toContain("review.changes_requested");
 	});
 
-	mtest("resource change marks the review STALE without rewriting history", async () => {
+	mtest("resource change marks an existing decision STALE without rewriting history", async () => {
 		const ws = await workspaceService.create({ name: "Review Team" }, ALEX);
 		let review = await reviewService.create({ workspaceId: ws._id, profileId: ALEX, input: createInput() });
 		const frozenManifest = { ...review.evidence };
 		const frozenFingerprint = review.evidenceFingerprint;
+
+		// The decision is valid against CURRENT evidence first.
+		review = await reviewService.decide({
+			workspaceId: ws._id,
+			profileId: ALEX,
+			reviewId: review._id,
+			expectedRevision: review.revision,
+			decision: "APPROVED",
+		});
+		expect(review.decision).toBe(REVIEW_DECISION.APPROVED);
 
 		await reviewService.comment({ workspaceId: ws._id, profileId: ALEX, reviewId: review._id, body: "Holding for the contract fix.", mentions: [] });
 
@@ -259,6 +269,7 @@ describe.skipIf(!ready)("review decision workflow", () => {
 			current: { revision: 8, contractVersion: "v15", contractFingerprint: "contract-fp-xyz789" },
 		});
 		expect(refreshed.freshness).toBe(REVIEW_FRESHNESS.STALE);
+		expect(refreshed.decision).toBe(REVIEW_DECISION.APPROVED);
 		expect(refreshed.staleChangedFields).toContain("revision");
 		expect(refreshed.staleChangedFields).toContain("contractVersion");
 		// Old manifest and fingerprint preserved, not silently followed.
@@ -270,16 +281,17 @@ describe.skipIf(!ready)("review decision workflow", () => {
 		const comments = await reviewService.listComments({ workspaceId: ws._id, profileId: ALEX, reviewId: review._id });
 		expect(comments).toHaveLength(1);
 
-		// A stale APPROVED stays APPROVED+STALE, never CURRENT, never unapproved.
-		const approved = await reviewService.decide({
-			workspaceId: ws._id,
-			profileId: ALEX,
-			reviewId: refreshed._id,
-			expectedRevision: refreshed.revision,
-			decision: "APPROVED",
-		});
-		expect(approved.decision).toBe(REVIEW_DECISION.APPROVED);
-		expect(approved.freshness).toBe(REVIEW_FRESHNESS.STALE);
+		// Existing decision is preserved, but a NEW decision on stale evidence is refused.
+		await expectRejection(
+			reviewService.decide({
+				workspaceId: ws._id,
+				profileId: ALEX,
+				reviewId: refreshed._id,
+				expectedRevision: refreshed.revision,
+				decision: "CHANGES_REQUESTED",
+			}),
+			{ code: "REVIEW_STALE_REQUIRES_REREVIEW" },
+		);
 	});
 
 	mtest("live version tip marks staleness even when the caller omits current revision", async () => {
