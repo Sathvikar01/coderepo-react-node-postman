@@ -177,7 +177,7 @@ Both were found by the real browser, not by inspection, and both were fixed with
 | No resolved secret in any projection | PASS | Projection unit tests + E2E check 12 (compares against the real generated demo tokens). |
 | Secret values never resolved by the read-model | PASS | The projection reads only receipt auth *evidence*; it does not call `resolveSecretAlias`. |
 | Profile isolation | PASS | Repository queries are `ownerProfileId`-scoped; a cross-profile execution returns typed 404 and a cross-profile investigation is never composed. |
-| Read-only surface | PASS | The router exposes only `GET`; the dialog has no send/save/mutate affordance (E2E check 14). |
+| Read-only surface | PASS | The router exposes `GET` plus an inspection-only `POST` that accepts an optional proof artifact for one read. Neither route persists, sends, or mutates product state; the dialog has no send/save/mutate affordance. |
 | No new execution triggered by inspection | PASS | E2E check 19 compares the newest history entry before and after. |
 | No LLM generation | PASS | The projection is deterministic pure code. |
 | Bounded response | PASS | `WHY_LIMITS` caps every list and every text field. |
@@ -186,7 +186,7 @@ Both were found by the real browser, not by inspection, and both were fixed with
 
 ## 8. What this phase deliberately does not do
 
-- It does not persist impact, drift, verification, or proof results, and therefore cannot show them where nothing recorded them — it says "not recorded" instead.
+- It does not persist an imported proof merely for the WHY view. Phase 49B can project Impact/Drift/Phase 41/Contract evidence carried by a caller-supplied Phase 47 proof for one read; when evidence is absent or cannot be identity-linked, it says `not_recorded`, `UNKNOWN`, or the specific mismatch state instead.
 - It does not add a workspace-snapshot engine (Phase 38 remained a docs-only record).
 - It does not resume Phase 10 or Phase 23, and it adds no Postman-parity capability.
 - It does not change execution, verification, impact, drift, contract, or proof semantics.
@@ -216,7 +216,7 @@ Both were found by the real browser, not by inspection, and both were fixed with
 
 ## 11. Phase 49B — verification-evidence linkage + v2 UI integration
 
-Branch `phase49/why-verification-integration` (PR #51, unmerged). No Phase 41 / Phase 47 / engine / persistence change: this is the missing frontend half of the v2 read-model.
+Phase 49B was completed and merged through PR #51. Final head: `9f6cd6d41ff267a6ebd6a0cd8a2be56f4667d017`; merge commit: `e100d62e337714718f3bdc5d120486a07e3e0a7d`. No Phase 41 / Phase 47 / engine / persistence semantics changed: this was the missing evidence-linkage and frontend half of the v2 read-model.
 
 ### 11.1 Backend (already on the branch)
 
