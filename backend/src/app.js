@@ -96,7 +96,6 @@ export function createApp() {
 		express.json({ limit: LIMITS.jsonBodyDefault }),
 		requireWorkspaceAuth,
 		resolveProfileContext,
-		resolveWorkspaceContext,
 		collectionRunnerRouter,
 	);
 	app.use(
@@ -119,7 +118,6 @@ export function createApp() {
 		express.json({ limit: LIMITS.jsonBodyExecution }),
 		requireWorkspaceAuth,
 		resolveProfileContext,
-		resolveWorkspaceContext,
 		executionRouter,
 	);
 	app.use(
