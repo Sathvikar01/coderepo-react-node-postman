@@ -347,7 +347,26 @@ export const reviewService = {
 		});
 		await publishReviewEvent({ workspaceId: workspace._id, action: "review.created", review, actorProfileId: profileId });
 		if (review.assigneeProfileId) {
+			await appendAudit({
+				workspaceId: workspace._id,
+				review,
+				action: "review.assigned",
+				actorProfileId: profileId,
+				previous: null,
+				summary: `${review.displayId} initially assigned to ${review.assigneeProfileId}`,
+			});
 			await publishReviewEvent({ workspaceId: workspace._id, action: "review.assigned", review, actorProfileId: profileId });
+		}
+		if (review.reviewerProfileId) {
+			await appendAudit({
+				workspaceId: workspace._id,
+				review,
+				action: "review.reviewer_changed",
+				actorProfileId: profileId,
+				previous: null,
+				summary: `${review.displayId} initial reviewer set to ${review.reviewerProfileId}`,
+			});
+			await publishReviewEvent({ workspaceId: workspace._id, action: "review.reviewer_changed", review, actorProfileId: profileId });
 		}
 		return review;
 	},
