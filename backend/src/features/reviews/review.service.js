@@ -679,7 +679,7 @@ export const reviewService = {
 		const live = { ...(review.evidence ?? {}), ...(current ?? {}) };
 		// Fill persisted resource revisions from the version tip when the frozen
 		// manifest binds a resource but the caller did not supply a current one.
-		if (review.evidence?.resourceType && review.evidence?.resourceId && live.revision === undefined) {
+		if (review.evidence?.resourceType && review.evidence?.resourceId && current?.revision === undefined) {
 			const tip = await ResourceVersion.findOne({
 				workspaceId: workspace._id,
 				resourceType: review.evidence.resourceType,
