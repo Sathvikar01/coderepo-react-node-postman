@@ -151,6 +151,28 @@ describe("security, data, and usage surfaces", () => {
 		expect(SECURITY_NOTE).toContain("not a certification");
 	});
 
+	test("proof integrity copy describes keyed HMAC rather than an asymmetric signature", () => {
+		const proofText = [
+			CONCEPTS.proof.short,
+			CONCEPTS.proof.long,
+			SECURITY_FACTS.find((fact) => fact.id === "hmac").body,
+			DATA_CATEGORIES.find((category) => category.id === "proofs").body,
+		].join(" ");
+		expect(proofText).toContain("HMAC-SHA256");
+		expect(proofText).toContain("server-held");
+		expect(proofText.toLowerCase()).toContain("not an asymmetric");
+		expect(proofText.toLowerCase()).not.toContain("signs the content");
+		expect(proofText.toLowerCase()).not.toContain("signed record");
+	});
+
+	test("security copy scopes redaction to implemented sensitive surfaces instead of claiming generic DLP", () => {
+		const secretFact = SECURITY_FACTS.find((fact) => fact.id === "secrets").body;
+		const proofFact = SECURITY_FACTS.find((fact) => fact.id === "proofs").body;
+		expect(secretFact).toContain("defined stored evidence surfaces");
+		expect(proofFact).toContain("structurally excludes");
+		expect(secretFact.toLowerCase()).not.toContain("everything");
+	});
+
 	test("data categories cover the persisted domains without promising a retention policy", () => {
 		expect(DATA_CATEGORIES.length).toBeGreaterThanOrEqual(6);
 		for (const category of DATA_CATEGORIES) {
