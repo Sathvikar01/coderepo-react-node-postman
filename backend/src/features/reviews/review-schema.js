@@ -115,16 +115,40 @@ export const evidenceManifestSchema = z
 	})
 	.strict();
 
+const proofArtifactText = z.string().min(1).max(3 * 1024 * 1024);
+
+const reviewResourceBindingSchema = z
+	.object({
+		resourceType: z.enum(["collection", "environment"]),
+		resourceId: manifestIdString,
+		revision: z.number().int().min(1),
+	})
+	.strict();
+
 export const createReviewSchema = z
 	.object({
 		title: z.string().trim().min(1).max(REVIEW_BOUNDS.titleMax),
 		findingType: z.enum(Object.values(REVIEW_FINDING_TYPES)),
 		findingSummary: z.string().trim().min(1).max(REVIEW_BOUNDS.summaryMax),
-		technicalState: z.string().trim().min(1).max(40),
-		evidence: evidenceManifestSchema,
+		// Technical truth is NEVER accepted as caller-authored fields. The
+		// backend imports this artifact, verifies its HMAC-backed integrity, and
+		// derives technicalState + evidence identities from the proof.
+		proofArtifact: proofArtifactText,
+		resource: reviewResourceBindingSchema.optional(),
 		assigneeProfileId: objectIdString.optional(),
 		reviewerProfileId: objectIdString.optional(),
 		supersedesReviewId: objectIdString.optional(),
+	})
+	.strict();
+
+export const reReviewSchema = z
+	.object({
+		title: z.string().trim().min(1).max(REVIEW_BOUNDS.titleMax).optional(),
+		findingSummary: z.string().trim().min(1).max(REVIEW_BOUNDS.summaryMax).optional(),
+		proofArtifact: proofArtifactText,
+		resource: reviewResourceBindingSchema.optional(),
+		assigneeProfileId: objectIdString.optional(),
+		reviewerProfileId: objectIdString.optional(),
 	})
 	.strict();
 
@@ -181,7 +205,10 @@ export const commentReviewSchema = z
 
 export const refreshReviewSchema = z
 	.object({
-		current: evidenceManifestSchema.partial(),
+		// Optional current proof: when omitted, refresh checks only authoritative
+		// persisted identities such as the bound resource revision. Stateless
+		// engine identities are never trusted from caller-authored fingerprints.
+		proofArtifact: proofArtifactText.optional(),
 	})
 	.strict();
 
