@@ -399,7 +399,7 @@ function ReviewDetail({ members, onBack, onChanged, onToast, profileId, review, 
 							</button>
 						</div>
 					)}
-					{isOwner && (
+					{isOwner && decisionable && (
 						<div className="decision-reason-row">
 							<input
 								aria-label="Waiver reason"
@@ -422,7 +422,8 @@ function ReviewDetail({ members, onBack, onChanged, onToast, profileId, review, 
 							Resolve
 						</button>
 					)}
-					<label className="current-proof-field">
+					{role !== "VIEWER" && (
+						<label className="current-proof-field">
 						Current Verification Proof
 						<textarea
 							value={currentProofArtifact}
@@ -430,18 +431,21 @@ function ReviewDetail({ members, onBack, onChanged, onToast, profileId, review, 
 							rows={3}
 							placeholder="Optional for freshness; required to create a re-review from current stateless evidence."
 						/>
-					</label>
-					<button
-						disabled={busy}
-						type="button"
-						onClick={() =>
-							run("Freshness rechecked.", () =>
-								reviewsApi.refresh(detail._id, currentProofArtifact.trim() || null),
-							)
-						}
-					>
-						Recheck freshness
-					</button>
+						</label>
+					)}
+					{role !== "VIEWER" && (
+						<button
+							disabled={busy}
+							type="button"
+							onClick={() =>
+								run("Freshness rechecked.", () =>
+									reviewsApi.refresh(detail._id, currentProofArtifact.trim() || null),
+								)
+							}
+						>
+							Recheck freshness
+						</button>
+					)}
 					{isOwner && (
 						<button
 							disabled={busy || !currentProofArtifact.trim()}
@@ -507,7 +511,7 @@ function PromoteForm({ members, onClose, onCreated, onToast }) {
 	return (
 		<form className="review-detail promote-form" onSubmit={submit} aria-label="Promote to review">
 			<h3>Promote to review</h3>
-			<p className="promote-hint">Explicit creation only. The review binds the exact evidence you name and never auto-sends, auto-saves, or re-executes.</p>
+			<p className="promote-hint">Explicit creation only. Paste a Verification Proof; the backend validates it and derives machine-owned technical state and evidence identities. Promotion never auto-sends, auto-saves, or re-executes.</p>
 			<label>
 				Title
 				<input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={120} required />
