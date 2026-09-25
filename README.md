@@ -522,7 +522,7 @@ For the final submission-state caveats and exact latest rerun results, use the f
 
 - **Execution budget:** 100–30,000 ms per request, 15,000 ms by default. Cancelling stops the local operation; it cannot undo effects that already reached the target.
 - **Collection runs:** 1–25 iterations over up to 100 selected requests, 200 executed steps and a 5-minute budget per run, one active run per profile, cancel and rerun at any time.
-- **Target policy:** only publicly routable HTTP and HTTPS addresses are permitted. Private, loopback, link-local, multicast, reserved, and NAT64/6to4 addresses are rejected before dispatch, except the seeded demo target on `127.0.0.1:8000/demo/v1`.
+- **Target policy:** Tracer permits publicly routable HTTP and HTTPS targets by default. Private, loopback, link-local, multicast, reserved, and NAT64/6to4 addresses are rejected before dispatch unless the target is the seeded demo endpoint or an exact host explicitly approved through Local Runtime.
 - **Body capture:** responses are captured up to 1 MiB encoded and 1 MiB decoded independently. A capture overflow reports the `size_limit` outcome; a history copy keeps at most the first 256 KiB of a body and says so.
 - **History retention:** every accepted send writes an immutable snapshot and its terminal outcome. Visible bodies are trimmed beyond the newest 200 completed sends per profile, and records expire after seven days. Deleting history removes stored bodies but keeps a minimal receipt so a duplicate execution id is never dispatched again.
 - **Collections:** up to 50 collections per workspace, 100 requests and 20 folders per collection, 2 MiB canonical JSON per collection. Collection and environment names are unique inside a workspace and reusable across workspaces.
