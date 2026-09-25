@@ -63,7 +63,7 @@ export const VERIFICATION_WORKFLOW = Object.freeze([
 	{ id: "rehearse", label: "Rehearse", hint: "Run the affected workflow through the normal execution pipeline." },
 	{ id: "contract", label: "Contract Check", hint: "Check that response contracts are still compatible." },
 	{ id: "verify", label: "Verify", hint: "Combine the evidence into a verification state." },
-	{ id: "proof", label: "Proof", hint: "Export a tamper-evident, secret-free Verification Proof." },
+	{ id: "proof", label: "Proof", hint: "Export a tamper-evident Verification Proof with bounded, credential-minimized evidence." },
 ]);
 
 // The investigation workflow, used by the Understand surfaces.
@@ -105,8 +105,8 @@ export const CONCEPTS = Object.freeze({
 	},
 	proof: {
 		label: "Verification Proof",
-		short: "A tamper-evident, secret-free record of what was verified.",
-		long: "A proof commits the snapshot identity, environment identity, rehearsal run, counts, contracts, and drift, then signs the content. It contains no request or response bodies.",
+		short: "A tamper-evident record of what was verified.",
+		long: "A proof commits the snapshot identity, environment identity, rehearsal run, counts, contracts, and drift, then authenticates the canonical content with an HMAC-SHA256 fingerprint under Tracer\'s server-held fingerprint key. It contains no raw request or response bodies, credentials, cookies, or resolved secret environment values. This is keyed integrity verification, not an asymmetric digital signature.",
 	},
 	verified: {
 		label: "Verified",
@@ -155,7 +155,7 @@ export const SECURITY_FACTS = Object.freeze([
 	{
 		id: "ssrf",
 		title: "Target and address validation",
-		body: "Only publicly routable HTTP and HTTPS addresses are permitted. Private, loopback, link-local, multicast, reserved, and NAT64/6to4 addresses are refused before dispatch, and the resolved IP is pinned to close DNS-rebinding gaps.",
+		body: "By default, Tracer permits publicly routable HTTP and HTTPS targets. Private, loopback, link-local, multicast, reserved, and NAT64/6to4 addresses are refused before dispatch unless an explicit seeded-demo or Local Runtime approval applies; the approved resolved IP is pinned for the transport connection.",
 	},
 	{
 		id: "bounded",
@@ -165,7 +165,7 @@ export const SECURITY_FACTS = Object.freeze([
 	{
 		id: "secrets",
 		title: "Secret-reference handling",
-		body: "Secret variables store only an alias. The value resolves on the server at send time, is never returned to the browser, and is redacted from stored bodies and history.",
+		body: "Secret variables store only an alias. Resolved secret values are handled server-side at send time and are excluded or redacted from the defined stored evidence surfaces that carry request/auth material, including execution history and exported proof/reproduction artifacts.",
 	},
 	{
 		id: "isolation",
@@ -180,12 +180,12 @@ export const SECURITY_FACTS = Object.freeze([
 	{
 		id: "proofs",
 		title: "No secret values in proofs",
-		body: "A Verification Proof references evidence by identity. It contains no request or response bodies, no credentials, and no resolved secret environment values.",
+		body: "A Verification Proof references evidence by identity and structurally excludes raw request/response bodies, credentials, cookies, and resolved secret environment values.",
 	},
 	{
 		id: "hmac",
 		title: "Integrity for proofs",
-		body: "Proof content is canonicalized and signed with a server-held key. A modified artifact fails its integrity check and is reported as invalid.",
+		body: "Proof content is canonicalized and authenticated with an HMAC-SHA256 fingerprint under a server-held key. A modified artifact fails its integrity check and is reported as invalid; this is not an asymmetric third-party-verifiable signature.",
 	},
 	{
 		id: "failclosed",
@@ -205,7 +205,7 @@ export const DATA_CATEGORIES = Object.freeze([
 	{ id: "snapshots", label: "Workspace snapshots", body: "A fingerprinted record of the workspace state a verification is about. It stores identity and references, not response bodies." },
 	{ id: "investigation", label: "Investigation evidence", body: "Execution passports, comparison results, minimization jobs, and redacted reproduction capsules." },
 	{ id: "rehearsal", label: "Rehearsal checkpoints", body: "Rehearsal plan and run identity with per-step outcome references so a run is resumable and auditable." },
-	{ id: "proofs", label: "Verification Proof artifacts", body: "A signed record of counts, contracts, drift, and evidence references. It carries no bodies and no secret values." },
+	{ id: "proofs", label: "Verification Proof artifacts", body: "A keyed, tamper-evident record of counts, contracts, drift, and evidence references. It structurally excludes raw bodies, credentials, cookies, and resolved secret environment values." },
 ]);
 
 export const DATA_MINIMIZATION = Object.freeze([

@@ -329,7 +329,7 @@ export function VerificationProofDialog({ onClose, onOpenHelp }) {
 						<p className="eyebrow">Verification proof</p>
 						<h2>Verification Proof</h2>
 						<p className="field-hint proof-headline-hint">
-							A signed record of what was verified. Tracer never upgrades a state — every state and status below is the backend's answer.
+							A keyed, tamper-evident record of what was verified. Tracer never upgrades a state — every state and status below is the backend's answer.
 						</p>
 					</div>
 					<div className="proof-header-actions">

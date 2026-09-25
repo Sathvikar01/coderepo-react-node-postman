@@ -211,7 +211,7 @@ function AboutSurface() {
 					<article>
 						<h4>Verification</h4>
 						<p>
-							Combining snapshot identity, environment drift, rehearsal outcome, and contract compatibility into a signed record. It
+							Combining snapshot identity, environment drift, rehearsal outcome, and contract compatibility into a keyed, tamper-evident record. It
 							answers “can I treat this exact state as known-good?” and never claims more than the evidence it cites.
 						</p>
 					</article>
