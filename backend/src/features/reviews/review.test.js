@@ -15,10 +15,11 @@ import { connectTestDatabase, disconnectTestDatabase } from "../../shared/utils/
 import { WorkspaceAccount } from "../auth/workspace-account.model.js";
 import { Profile } from "../profiles/profile.model.js";
 import { ResourceVersion } from "../versions/version.model.js";
+import { verificationProofApiService } from "../verification-proof-api/index.js";
 import { Workspace } from "../workspaces/workspace.model.js";
 import { workspaceService } from "../workspaces/workspace.service.js";
 import { reviewEvidenceFingerprintOf } from "./review-identity.js";
-import { REVIEW_DECISION, REVIEW_FRESHNESS, REVIEW_STATUS } from "./review-schema.js";
+import { createReviewSchema, REVIEW_DECISION, REVIEW_FRESHNESS, REVIEW_STATUS } from "./review-schema.js";
 import { Review, ReviewAudit, ReviewComment, ReviewCounter } from "./review.model.js";
 import { reviewService } from "./review.service.js";
 
@@ -88,6 +89,34 @@ function createInput(overrides = {}) {
 	};
 }
 
+function proofFixtureFor(workspaceId, overrides = {}) {
+	return {
+		proofId: "proof-phase50",
+		fingerprint: "proof-fingerprint-phase50",
+		state: "BLOCKED",
+		identity: {
+			workspaceId: String(workspaceId),
+			snapshot: { snapshotId: "snap-50", snapshotFingerprint: "snapshot-fp-50" },
+			targetEnvironment: { environmentId: "env-staging", environmentFingerprint: "env-fp-50" },
+			planFingerprint: "plan-fp-50",
+			runId: "run-50",
+			runIdentityFingerprint: "run-fp-50",
+		},
+		verification: { fingerprint: "verification-fp-50" },
+		impact: { resolved: true, truncated: false, unknownCount: 0, fingerprint: "impact-fp-50" },
+		drift: { blockingCount: 0, blocking: [], fingerprint: "drift-fp-50" },
+		rehearsal: { runId: "run-50", runState: "COMPLETED", identityFingerprint: "run-fp-50" },
+		contracts: { classes: { breaking: 1 } },
+		provenance: {
+			sources: [
+				{ source: "contract-compatibility", digest: "contract-fp-50" },
+				{ source: "cross-env-verification", digest: "verification-fp-50" },
+			],
+		},
+		...overrides,
+	};
+}
+
 describe.skipIf(!ready)("review decision workflow", () => {
 	beforeEach(async () => {
 		await Promise.all([
@@ -99,6 +128,65 @@ describe.skipIf(!ready)("review decision workflow", () => {
 			Workspace.deleteMany({ ownerProfileId: { $in: [ALEX, JORDAN, CASEY] } }),
 		]);
 		await seedProfiles();
+	});
+
+	mtest("production creation derives technical truth from a validated proof instead of caller fields", async () => {
+		const ws = await workspaceService.create({ name: "Review Team" }, ALEX);
+		const rejected = createReviewSchema.safeParse({
+			title: "forged",
+			findingType: "contract_breaking",
+			findingSummary: "caller tries to type machine truth",
+			technicalState: "BREAKING",
+			evidence: { contractFingerprint: "made-up" },
+		});
+		expect(rejected.success).toBe(false);
+
+		const originalImport = verificationProofApiService.importProof;
+		verificationProofApiService.importProof = () => ({ proof: proofFixtureFor(ws._id) });
+		try {
+			const review = await reviewService.createFromProof({
+				workspaceId: ws._id,
+				profileId: ALEX,
+				input: {
+					title: "POST /payments is breaking",
+					findingType: "contract_breaking",
+					findingSummary: "Derived from a verified proof artifact.",
+					proofArtifact: "{validated-test-artifact}",
+				},
+			});
+			expect(review.technicalState).toBe("BREAKING");
+			expect(review.evidence.proofId).toBe("proof-phase50");
+			expect(review.evidence.proofFingerprint).toBe("proof-fingerprint-phase50");
+			expect(review.evidence.snapshotFingerprint).toBe("snapshot-fp-50");
+			expect(review.evidence.contractFingerprint).toBe("contract-fp-50");
+		} finally {
+			verificationProofApiService.importProof = originalImport;
+		}
+	});
+
+	mtest("proof-derived creation rejects a finding the proof does not actually contain", async () => {
+		const ws = await workspaceService.create({ name: "Review Team" }, ALEX);
+		const originalImport = verificationProofApiService.importProof;
+		verificationProofApiService.importProof = () => ({
+			proof: proofFixtureFor(ws._id, { contracts: { classes: { breaking: 0 } } }),
+		});
+		try {
+			await expectRejection(
+				reviewService.createFromProof({
+					workspaceId: ws._id,
+					profileId: ALEX,
+					input: {
+						title: "not actually breaking",
+						findingType: "contract_breaking",
+						findingSummary: "Should fail closed.",
+						proofArtifact: "{validated-test-artifact}",
+					},
+				}),
+				{ code: "REVIEW_SOURCE_MISMATCH" },
+			);
+		} finally {
+			verificationProofApiService.importProof = originalImport;
+		}
 	});
 
 	mtest("promote binds the exact evidence fingerprint deterministically", async () => {
@@ -371,6 +459,44 @@ describe.skipIf(!ready)("review security boundaries", () => {
 			reviewService.setStatus({ workspaceId: ws._id, profileId: CASEY, reviewId: review._id, expectedRevision: review.revision, status: "IN_REVIEW" }),
 			{ code: "REVIEW_FORBIDDEN" },
 		);
+	});
+
+	mtest("an editor assignee cannot approve unless they are the designated reviewer", async () => {
+		const ws = await workspaceService.create({ name: "Review Team" }, ALEX);
+		await workspaceService.addMember(ws._id, ALEX, { email: "jordan.lee@example.test", role: "EDITOR", expectedRevision: ws.revision });
+		let review = await reviewService.create({ workspaceId: ws._id, profileId: ALEX, input: createInput() });
+		review = await reviewService.assign({
+			workspaceId: ws._id,
+			profileId: ALEX,
+			reviewId: review._id,
+			expectedRevision: review.revision,
+			assigneeProfileId: String(JORDAN),
+		});
+		await expectRejection(
+			reviewService.decide({
+				workspaceId: ws._id,
+				profileId: JORDAN,
+				reviewId: review._id,
+				expectedRevision: review.revision,
+				decision: "APPROVED",
+			}),
+			{ code: "REVIEW_FORBIDDEN" },
+		);
+		review = await reviewService.setReviewer({
+			workspaceId: ws._id,
+			profileId: ALEX,
+			reviewId: review._id,
+			expectedRevision: review.revision,
+			reviewerProfileId: String(JORDAN),
+		});
+		const approved = await reviewService.decide({
+			workspaceId: ws._id,
+			profileId: JORDAN,
+			reviewId: review._id,
+			expectedRevision: review.revision,
+			decision: "APPROVED",
+		});
+		expect(approved.decision).toBe("APPROVED");
 	});
 
 	mtest("waive requires owner authority and a non-empty reason", async () => {
