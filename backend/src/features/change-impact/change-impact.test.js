@@ -112,9 +112,45 @@ describe("reference extraction", () => {
 		expect(script.reads.map((read) => read.key)).toEqual(["BASE_URL"]);
 		expect(script.dynamicReads.length).toBe(1);
 	});
+
+	test("marks noncanonical pm variable access as unknown instead of dropping it", () => {
+		const bracket = scanScript('pm["variables"].get("TOKEN");');
+		expect(bracket.reads).toEqual([]);
+		expect(bracket.unknownAccesses).toEqual([{ scope: "merged" }]);
+
+		const alias = scanScript('const vars = pm.variables; vars.get("TOKEN");');
+		expect(alias.unknownAccesses).toEqual([{ scope: "merged" }]);
+
+		const destructured = scanScript('const { get } = pm.environment; get("BASE_URL");');
+		expect(destructured.unknownAccesses).toEqual([{ scope: "environment" }]);
+
+		const helper = scanScript('function read(scope) { return scope.get("X"); } read(pm);');
+		expect(helper.unknownAccesses).toEqual([{ scope: "unknown" }]);
+	});
+
+	test("does not downgrade canonical pm calls or pm mentions in strings and comments", () => {
+		const canonical = scanScript('pm.variables.get("TOKEN"); pm.variables.set("OUT", "1"); pm.environment.toObject();');
+		expect(canonical.unknownAccesses).toEqual([]);
+
+		const inert = scanScript('// pm.variables alias\npm.console.log("pm.variables");');
+		expect(inert.unknownAccesses).toEqual([]);
+	});
 });
 
 describe("change impact core", () => {
+	test("surfaces unrecognized script variable syntax as explicit unknown evidence", () => {
+		const workspace = baseWorkspace();
+		workspace.collections[0].requests[2].scripts.test = 'const vars = pm.variables; vars.get("MISSING_DYNAMIC");';
+		const graph = buildGraph(workspace);
+		expect(graph.unknowns).toContainEqual({
+			code: "unrecognized-script-variable-access",
+			collectionId: COL_ID,
+			requestId: "r-3",
+			field: "scripts.test",
+			scope: "merged",
+		});
+	});
+
 	test("direct variable reference affects every referencing request", () => {
 		const result = analyzeChange({
 			workspace: baseWorkspace(),
