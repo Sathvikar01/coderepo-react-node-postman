@@ -6160,3 +6160,46 @@ initial_reported_head=939647446ee0f7b45f18f64b32b0c94713a776cd
 final_head=cab52b213dd417723abe3d086753eeb903b17ee9
 merge_commit=735ba706f24a26795e57de3d2b7f54fd3c3d6095
 verdict=PHASE 50 VERDICT: PASS — REVIEW & DECISION WORKFLOW COMPLETE
+
+
+## [2026-09-26T01:14:00+05:30] Direct Promote to Review — Final UX Polish — GitHub Closure
+
+Final bounded polish after Phase 50: remove the copy/paste seam between Verification Proof and Review creation without adding a new engine, backend review semantic, dependency, or workflow state.
+
+Branch: `polish/direct-promote-to-review`. PR #63.
+
+Shipped behavior:
+- The Verification Proof view now exposes direct review actions only when the loaded proof actually commits the matching technical fact: BREAKING contract, BLOCKED/UNKNOWN Phase 41 verification, or the proof itself.
+- The exact validated Verification Proof artifact is carried internally into the Reviews surface. If the proof was loaded directly rather than imported from an artifact, Tracer uses the existing server export path to obtain the exact portable artifact before handoff.
+- The review form is prefilled with bounded human metadata (finding type, title, summary), locks the machine-derived finding type for the direct flow, and shows `Verification Proof attached` instead of exposing a JSON copy/paste textarea.
+- The backend Phase 50 boundary is unchanged and validates the artifact again on review creation; React does not own or manufacture technical truth.
+- VIEWER receives no direct Promote action. Manual proof-paste promotion remains available as a fallback.
+- README.md and docs/REVIEWER_GUIDE.md were updated to describe the direct evidence-to-review path.
+
+Verification added specifically for this UX seam:
+- Pure frontend tests pin proof-to-review option derivation: a BREAKING action appears only when the proof has a breaking contract count; BLOCKED/UNKNOWN map only to their exact states; a generic proof action remains available.
+- A dedicated headless-Chrome acceptance imports a real backend-built HMAC-valid proof, verifies the backend accepts that exact artifact, clicks `Promote proof`, confirms the Verification Proof dialog closes and Reviews opens directly, confirms the review form is prefilled, confirms the exact proof is attached internally with no artifact textarea, cancels, and proves no review was created merely by opening the flow.
+- The dedicated acceptance is now part of the existing Phase 30 browser CI job.
+
+The new browser gate caught two test-harness issues before merge: first, a JavaScript quoting error in one selector expression; second, the helper searched all dialog buttons for text containing `Verify` and accidentally clicked the already-selected `Import & Verify` tab instead of the import action. The test was corrected to target the Import card's recorder-action button. A diagnostic preflight additionally proved the exact artifact was accepted by the backend before the UI interaction. These were test defects, not product defects.
+
+Final exact PR head: `38a88f5f99fcf2f8f6809f35e0c9bf75c9cdb025`.
+Exact-head GitHub Actions:
+- Tracer CLI — success
+- Baseline Gate — success (full tests, backend syntax, frontend build, seed, runtime smoke)
+- Phase 30 E2E + Load — success
+  - existing Phase 30 browser E2E — success
+  - direct proof-to-review Chrome flow — success
+  - Locust light/moderate/burst load — success
+
+PR #63 merged into main as `24a32d74cc8b6d19e799362cb82eaed930e348ce`.
+
+Scope remained final-polish only: no backend review/domain changes, no AI, no new collaboration engine, no package/bun.lock change.
+
+Product status after this merge: stop major feature development. Future changes should be limited to reproducible bugs, visible UX defects, reviewer feedback, or demo/presentation polish.
+
+Context:
+branch=polish/direct-promote-to-review
+pr=63 MERGED
+final_head=38a88f5f99fcf2f8f6809f35e0c9bf75c9cdb025
+merge_commit=24a32d74cc8b6d19e799362cb82eaed930e348ce
