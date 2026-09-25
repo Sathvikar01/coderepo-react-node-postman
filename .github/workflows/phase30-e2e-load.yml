@@ -4,8 +4,12 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - "backend/**"
       - "frontend/**"
       - "tests/load/**"
+      - "package.json"
+      - "bun.lock"
+      - "setup.sh"
       - ".github/workflows/phase30-e2e-load.yml"
 
 jobs:
