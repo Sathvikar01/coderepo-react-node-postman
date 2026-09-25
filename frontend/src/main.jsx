@@ -5,7 +5,6 @@ import "@fontsource/roboto/latin-500.css";
 import App from "./App.jsx";
 import { ErrorBoundary } from "./shared/components/ErrorBoundary.jsx";
 import "./styles.css";
-import "./phase30-workbench.css";
 
 createRoot(document.getElementById("root")).render(
 	<StrictMode>
