@@ -5,6 +5,7 @@ import {
 	createReviewSchema,
 	decisionReviewSchema,
 	refreshReviewSchema,
+	reReviewSchema,
 	reviewerReviewSchema,
 	statusReviewSchema,
 	waiveReviewSchema,
@@ -19,7 +20,7 @@ export async function createReview(request, response, next) {
 	try {
 		const input = createReviewSchema.parse(request.body);
 		response.status(201).json({
-			data: await reviewService.create({
+			data: await reviewService.createFromProof({
 				workspaceId: request.workspaceId,
 				profileId: profileIdOf(request),
 				input,
@@ -209,13 +210,13 @@ export async function listReviewAudit(request, response, next) {
 
 export async function refreshReview(request, response, next) {
 	try {
-		const { current } = refreshReviewSchema.parse(request.body);
+		const { proofArtifact } = refreshReviewSchema.parse(request.body);
 		response.json({
-			data: await reviewService.refresh({
+			data: await reviewService.refreshFromProof({
 				workspaceId: request.workspaceId,
 				profileId: profileIdOf(request),
 				reviewId: request.params.reviewId,
-				current,
+				proofArtifact: proofArtifact ?? null,
 			}),
 		});
 	} catch (error) {
@@ -225,12 +226,13 @@ export async function refreshReview(request, response, next) {
 
 export async function reReview(request, response, next) {
 	try {
+		const input = reReviewSchema.parse(request.body ?? {});
 		response.status(201).json({
-			data: await reviewService.reReview({
+			data: await reviewService.reReviewFromProof({
 				workspaceId: request.workspaceId,
 				profileId: profileIdOf(request),
 				reviewId: request.params.reviewId,
-				input: request.body ?? {},
+				input,
 			}),
 		});
 	} catch (error) {
