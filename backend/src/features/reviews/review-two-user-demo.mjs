@@ -3,9 +3,10 @@
 // Two genuinely independent authenticated contexts (separate login sessions,
 // separate profile tokens, separate workspace headers) are driven over HTTP
 // against the real running API, following the Phase 24 two-user-demo pattern.
-// Nothing is stubbed: every claim below is the server's actual response,
-// including live SSE delivery (Jordan's stream and Alex's mention stream are
-// real streaming fetch connections, not polls).
+// Collaboration mutations and live SSE delivery use the real HTTP API. Review
+// creation/current-evidence seeding uses the trusted internal service primitive
+// because production POST /reviews intentionally refuses caller-authored
+// technical truth and requires a validated Verification Proof artifact.
 //
 // Re-run with the stack up:
 //   1. bun src/features/workspaces/seed.js   (from backend/)
@@ -19,6 +20,7 @@
 // script exits non-zero on the first failed expectation.
 import mongoose from "mongoose";
 import { initConfig } from "../../shared/config/index.js";
+import { reviewService } from "./review.service.js";
 
 const API = "http://127.0.0.1:8000/api/v1";
 
@@ -235,10 +237,25 @@ record("4. Casey joins as VIEWER", addCasey.status === 200 || addCasey.status ==
 await Jordan.waitForEvent(["__never__"], 500).catch(() => {});
 record("5. Jordan holds a live SSE stream (no manual reload needed later)", Boolean(Jordan.streamReader));
 
-// --- 6. BREAKING contract exists (represented as frozen review evidence) ---
-const promoted = await Alex.call("/reviews", {
+// --- 6. Production boundary refuses human-authored machine truth -------------
+const forged = await Alex.call("/reviews", {
 	method: "POST",
 	body: {
+		title: "forged",
+		findingType: "contract_breaking",
+		findingSummary: "caller-authored technical truth must be refused",
+		technicalState: "BREAKING",
+		evidence: { contractFingerprint: "made-up", technicalState: "BREAKING" },
+	},
+});
+record("6. Production review creation rejects caller-authored technical truth", forged.status === 400, `status=${forged.status}`);
+
+// Trusted acceptance fixture: this stands in for the output that production
+// createFromProof derives from a validated Phase 47 artifact.
+const promotedData = await reviewService.create({
+	workspaceId: WS,
+	profileId: Alex.profileId,
+	input: {
 		title: "POST /payments is BREAKING on v14",
 		findingType: "contract_breaking",
 		findingSummary: "v14 removed the currency field that checkout depends on.",
@@ -253,7 +270,8 @@ const promoted = await Alex.call("/reviews", {
 		},
 	},
 });
-record("6. BREAKING contract promoted to review", promoted.status === 201 && promoted.data.displayId === "RV-1", promoted.data?.displayId);
+const promoted = { status: 201, data: promotedData };
+record("7. BREAKING contract seeded as frozen authoritative review evidence", promoted.data.displayId === "RV-1", promoted.data?.displayId);
 const REVIEW = promoted.data._id;
 const FROZEN_FP = promoted.data.evidenceFingerprint;
 let alexRev = promoted.data.revision;
@@ -296,10 +314,15 @@ record(
 );
 
 // --- 13-15. Resource changes; original review goes STALE; history intact ---
-const stale = await Alex.call(`/reviews/${REVIEW}/refresh`, {
-	method: "POST",
-	body: { current: { revision: 8, contractVersion: "v15", contractFingerprint: "contract-fp-v15" } },
-});
+const stale = {
+	status: 200,
+	data: await reviewService.refresh({
+		workspaceId: WS,
+		profileId: Alex.profileId,
+		reviewId: REVIEW,
+		current: { revision: 8, contractVersion: "v15", contractFingerprint: "contract-fp-v15" },
+	}),
+};
 record(
 	"12. Changed resource marks the review STALE (manifest untouched)",
 	stale.data.freshness === "STALE" && stale.data.evidence.revision === 7 && stale.data.evidenceFingerprint === FROZEN_FP,
@@ -309,20 +332,25 @@ const oldComments = await Alex.call(`/reviews/${REVIEW}/comments`);
 record("13. Old comments survive staleness", oldComments.status === 200 && oldComments.data.length === 1, `comments=${oldComments.data?.length}`);
 
 // --- 16-17. Re-review on current evidence; reviewer approves ---
-const rereview = await Alex.call(`/reviews/${REVIEW}/rereview`, {
-	method: "POST",
-	body: {
-		technicalState: "VERIFIED",
-		evidence: {
-			resourceType: "collection",
-			resourceId: "col_payments",
-			revision: 8,
-			contractVersion: "v15",
-			contractFingerprint: "contract-fp-v15",
+const rereview = {
+	status: 201,
+	data: await reviewService.reReview({
+		workspaceId: WS,
+		profileId: Alex.profileId,
+		reviewId: REVIEW,
+		input: {
 			technicalState: "VERIFIED",
+			evidence: {
+				resourceType: "collection",
+				resourceId: "col_payments",
+				revision: 8,
+				contractVersion: "v15",
+				contractFingerprint: "contract-fp-v15",
+				technicalState: "VERIFIED",
+			},
 		},
-	},
-});
+	}),
+};
 record(
 	"14. Re-review links forward from current evidence",
 	rereview.status === 201 && String(rereview.data.supersedesReviewId) === String(REVIEW),
@@ -345,16 +373,20 @@ record(
 );
 
 // --- 18-19. OWNER waiver on a BLOCKED review; stale CAS gets 409 ---
-const blocked = await Alex.call("/reviews", {
-	method: "POST",
-	body: {
-		title: "Checkout verification BLOCKED on staging",
-		findingType: "verification_blocked",
-		findingSummary: "Rehearsal evidence missing for the staging target.",
-		technicalState: "BLOCKED",
-		evidence: { verificationFingerprint: "verification-fp-blocked", technicalState: "BLOCKED" },
-	},
-});
+const blocked = {
+	status: 201,
+	data: await reviewService.create({
+		workspaceId: WS,
+		profileId: Alex.profileId,
+		input: {
+			title: "Checkout verification BLOCKED on staging",
+			findingType: "verification_blocked",
+			findingSummary: "Rehearsal evidence missing for the staging target.",
+			technicalState: "BLOCKED",
+			evidence: { verificationFingerprint: "verification-fp-blocked", technicalState: "BLOCKED" },
+		},
+	}),
+};
 const waived = await Alex.call(`/reviews/${blocked.data._id}/waive`, {
 	method: "POST",
 	body: { expectedRevision: blocked.data.revision, reason: "Accepted risk for the staging demo; production rerun scheduled." },
