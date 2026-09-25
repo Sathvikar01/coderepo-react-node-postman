@@ -22,7 +22,7 @@ import { workspaceRouter } from "./features/workspaces/workspace.routes.js";
 import { errorHandler, notFoundHandler } from "./shared/middleware/error-handler.js";
 import { requireWorkspaceAuth } from "./shared/middleware/auth.js";
 import { resolveProfileContext } from "./shared/middleware/profile-context.js";
-import { requireWorkspaceCapability, resolveWorkspaceContext } from "./shared/middleware/workspace-context.js";
+import { resolveWorkspaceContext } from "./shared/middleware/workspace-context.js";
 import { LIMITS } from "./shared/utils/limits.js";
 
 const publicDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../public");
@@ -97,7 +97,6 @@ export function createApp() {
 		requireWorkspaceAuth,
 		resolveProfileContext,
 		resolveWorkspaceContext,
-		requireWorkspaceCapability("execute"),
 		collectionRunnerRouter,
 	);
 	app.use(
@@ -121,7 +120,6 @@ export function createApp() {
 		requireWorkspaceAuth,
 		resolveProfileContext,
 		resolveWorkspaceContext,
-		requireWorkspaceCapability("execute"),
 		executionRouter,
 	);
 	app.use(
