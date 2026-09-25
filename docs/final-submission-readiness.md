@@ -1,5 +1,10 @@
 # Final Submission Readiness — Tracer (API Flight Recorder)
 
+> **Post-freeze audit update — 2026-09-26:** current `main` includes audit-hardening PR #64 (`586c3bf9`). The exact patched tree passed the Baseline Gate (**2013 pass, 1 skip, 0 fail**), frontend production build, Tracer CLI, Phase 30 real-browser E2E, the direct Verification Proof → Review browser flow, and light/moderate/burst Locust jobs with zero request failures. PR #64 also broadens the browser/load workflow trigger so backend, lockfile, root manifest, and setup changes can no longer skip that end-to-end gate. The freeze evidence below is preserved as historical evidence for the earlier freeze commit.
+>
+> **Coverage clarification:** standalone historical browser harnesses such as Phase 24B/36/37/47C/49 are targeted acceptance scripts; they are **not all invoked by `bun test` or by the always-on Phase 30 workflow**. Their underlying service/view-model behavior has extensive automated test coverage, while their full browser journeys remain targeted regression harnesses.
+
+
 - Branch: `final/submission-freeze`
 - Base: `93cf3e0e1fb1a91c68c2a2365930423440c6888e` (origin/main at freeze time)
 - Date: 2026-09-25 (Asia/Kolkata). No new features were added on this branch.
@@ -76,7 +81,7 @@ covered by the passing demo check, not by a separate UI click-path here.
 | Collection Runner API (`/api/v1/collection-runs`) | Reachable 200 |
 | Flight Recorder demo | 43/47 (see §3) |
 | Investigation demo | Not re-run (host instability, see §11); covered by suite tests |
-| Phase 30/36/37/47C/48A/49 E2E suites | Included in `bun test` green run |
+| Related Phase 30/36/37/47C/48A/49 unit/integration coverage | Included in the green `bun test` run; standalone browser scripts were not all re-run in this freeze |
 | Load test (locust) / determinism checks | Not re-run in this window; no code changed to affect them |
 
 The single run-1 failure is load flakiness (spawned CLI child killed under a
