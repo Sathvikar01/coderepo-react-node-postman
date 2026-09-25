@@ -135,7 +135,10 @@ export function createExecutionService({
 } = {}) {
 	const targetPolicy = policy ?? createTargetPolicy();
 
-	async function resolveRequestContext(profileId, context, draftRequest) {
+	// `workspaceId` (when supplied by the API layer) widens the collection lookup from
+	// "owned by this profile" to "shared into this workspace", so a collaborator can
+	// send a request that someone else authored. Execution records stay profile-scoped.
+	async function resolveRequestContext(profileId, context, draftRequest, workspaceId = null) {
 		if (context.collectionId && context.replayHistoryId)
 			throw new AppError(400, "CONTEXT_CONFLICT", "Collection and history replay contexts cannot be combined.");
 		if (context.replayHistoryId) {
@@ -156,7 +159,10 @@ export function createExecutionService({
 			};
 		}
 		if (!context.collectionId) return { request: draftRequest, collection: null, source: { type: "scratch" } };
-		const collection = await collections.findById(context.collectionId, profileId);
+		const collection =
+			workspaceId && collections.findByIdInWorkspace
+				? await collections.findByIdInWorkspace(context.collectionId, workspaceId)
+				: await collections.findById(context.collectionId, profileId);
 		if (!collection) throw new AppError(404, "COLLECTION_NOT_FOUND", "The requested collection does not exist.");
 		if (context.collectionRevision !== undefined && context.collectionRevision !== collection.revision) {
 			throw new AppError(
@@ -178,9 +184,12 @@ export function createExecutionService({
 		};
 	}
 
-	async function resolveEnvironment(profileId, environmentId, environmentRevision) {
+	async function resolveEnvironment(profileId, environmentId, environmentRevision, workspaceId = null) {
 		if (!environmentId) return { environment: null, source: null };
-		const environment = await environments.findById(environmentId, profileId);
+		const environment =
+			workspaceId && environments.findByIdInWorkspace
+				? await environments.findByIdInWorkspace(environmentId, workspaceId)
+				: await environments.findById(environmentId, profileId);
 		if (!environment) throw new AppError(404, "ENVIRONMENT_NOT_FOUND", "The requested environment does not exist.");
 		if (environmentRevision !== undefined && environmentRevision !== environment.revision) {
 			throw new AppError(
@@ -216,10 +225,15 @@ export function createExecutionService({
 			getConfig().execution.maxTimeoutMs,
 		);
 
-		const resolved = await resolveRequestContext(profileId, context, request);
+		const resolved = await resolveRequestContext(profileId, context, request, internal.workspaceId ?? null);
 		const effectiveRequest = resolved.request;
 		if (!effectiveRequest) throw new AppError(404, "REQUEST_NOT_FOUND", "The request to send does not exist in this collection.");
-		const environment = await resolveEnvironment(profileId, context.environmentId, context.environmentRevision);
+		const environment = await resolveEnvironment(
+			profileId,
+			context.environmentId,
+			context.environmentRevision,
+			internal.workspaceId ?? null,
+		);
 
 		const preScript = scriptService.runPreRequest({
 			request: effectiveRequest,

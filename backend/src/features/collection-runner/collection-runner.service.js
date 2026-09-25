@@ -111,7 +111,7 @@ export function createCollectionRunnerService({
 		return count;
 	}
 
-	async function executeRun(profileId, record, plan, initialVariables, signal, entry) {
+	async function executeRun(profileId, workspaceId, record, plan, initialVariables, signal, entry) {
 		const steps = plan.steps.map((step) => ({
 			index: step.index,
 			iteration: step.iteration,
@@ -173,7 +173,7 @@ export function createCollectionRunnerService({
 								: {}),
 						},
 					},
-					{ rateLimit: false, runScope: { initial: initialVariables, writes: runWrites } },
+					{ rateLimit: false, workspaceId, runScope: { initial: initialVariables, writes: runWrites } },
 				);
 			} catch (error) {
 				failure = error;
@@ -219,7 +219,12 @@ export function createCollectionRunnerService({
 		});
 	}
 
-	async function start(profileId, input) {
+	// `scope` carries the resolved workspace when the run is started from the shared
+	// workspace API. Run *records* stay profile-scoped (a personal artifact), but the
+	// collection and environment being executed are looked up inside that workspace so
+	// an EDITOR can run a collection that a collaborator authored.
+	async function start(profileId, input, scope = null) {
+		const workspaceId = scope?.workspaceId ?? null;
 		if (active.size >= RUN_LIMITS.activeRunsPerProcess)
 			throw new AppError(429, "RUN_CONCURRENCY_LIMIT", "The server is already running the maximum number of collection runs.", {
 				limit: RUN_LIMITS.activeRunsPerProcess,
@@ -230,7 +235,10 @@ export function createCollectionRunnerService({
 				limit: RUN_LIMITS.activeRunsPerProfile,
 				scope: "profile",
 			});
-		const collection = await collections.findById(input.collectionId, profileId);
+		const collection =
+			workspaceId && collections.findByIdInWorkspace
+				? await collections.findByIdInWorkspace(input.collectionId, workspaceId)
+				: await collections.findById(input.collectionId, profileId);
 		if (!collection) throw new AppError(404, "COLLECTION_NOT_FOUND", "The requested collection does not exist.");
 		if (input.collectionRevision !== undefined && input.collectionRevision !== collection.revision)
 			throw new AppError(
@@ -240,7 +248,10 @@ export function createCollectionRunnerService({
 			);
 		let environment = null;
 		if (input.environmentId) {
-			environment = await environments.findById(input.environmentId, profileId);
+			environment =
+				workspaceId && environments.findByIdInWorkspace
+					? await environments.findByIdInWorkspace(input.environmentId, workspaceId)
+					: await environments.findById(input.environmentId, profileId);
 			if (!environment) throw new AppError(404, "ENVIRONMENT_NOT_FOUND", "The requested environment does not exist.");
 			if (input.environmentRevision !== undefined && input.environmentRevision !== environment.revision)
 				throw new AppError(
@@ -299,7 +310,7 @@ export function createCollectionRunnerService({
 		// Register before the loop starts so cancellation can reach the in-flight
 		// execution immediately.
 		active.set(key(profileId, runId), entry);
-		entry.promise = executeRun(profileId, { ...created, input: storedInput }, plan, initialVariables, controller.signal, entry)
+		entry.promise = executeRun(profileId, workspaceId, { ...created, input: storedInput }, plan, initialVariables, controller.signal, entry)
 			.catch(async (error) => {
 				const steps = skippedSteps(
 					(await repository.get(profileId, runId))?.results ?? [],
@@ -356,7 +367,7 @@ export function createCollectionRunnerService({
 		return status(profileId, runId);
 	}
 
-	async function rerun(profileId, runId) {
+	async function rerun(profileId, runId, scope = null) {
 		const record = await repository.get(profileId, runId);
 		if (!record) throw new AppError(404, "RUN_NOT_FOUND", "The requested collection run does not exist.");
 		// A rerun re-pins the current collection and environment revisions and keeps
@@ -368,7 +379,7 @@ export function createCollectionRunnerService({
 			stopOnFailure: record.input?.stopOnFailure !== false,
 			variables: record.input?.variables ?? [],
 			...(record.environmentId ? { environmentId: record.environmentId } : {}),
-		});
+		}, scope);
 	}
 
 	async function list(profileId, query = {}) {

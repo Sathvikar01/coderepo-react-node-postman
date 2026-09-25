@@ -57,7 +57,7 @@ export const parseRunStartInput = (value) => startSchema.parse(value);
 export async function startRun(request, response, next) {
 	try {
 		const input = parseRunStartInput(request.body);
-		response.status(201).json({ data: await collectionRunnerService.start(request.profileId, input) });
+		response.status(201).json({ data: await collectionRunnerService.start(request.profileId, input, request.workspaceScope) });
 	} catch (error) {
 		next(error);
 	}
@@ -84,7 +84,7 @@ export async function cancelRun(request, response, next) {
 export async function rerunRun(request, response, next) {
 	try {
 		const runId = runIdSchema.parse(request.params.runId);
-		response.status(201).json({ data: await collectionRunnerService.rerun(request.profileId, runId) });
+		response.status(201).json({ data: await collectionRunnerService.rerun(request.profileId, runId, request.workspaceScope) });
 	} catch (error) {
 		next(error);
 	}

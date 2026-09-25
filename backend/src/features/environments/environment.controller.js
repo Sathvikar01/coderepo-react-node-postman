@@ -14,7 +14,7 @@ const deleteQuerySchema = z.object({ revision: revisionSchema }).strict();
 
 export async function listEnvironments(request, response, next) {
 	try {
-		response.json({ data: await environmentService.list(request.profileId) });
+		response.json({ data: await environmentService.list(request.workspaceScope) });
 	} catch (error) {
 		next(error);
 	}
@@ -22,7 +22,7 @@ export async function listEnvironments(request, response, next) {
 
 export async function getEnvironment(request, response, next) {
 	try {
-		response.json({ data: await environmentService.get(request.params.environmentId, request.profileId) });
+		response.json({ data: await environmentService.get(request.params.environmentId, request.workspaceScope) });
 	} catch (error) {
 		next(error);
 	}
@@ -30,7 +30,7 @@ export async function getEnvironment(request, response, next) {
 
 export async function createEnvironment(request, response, next) {
 	try {
-		response.status(201).json({ data: await environmentService.create(createSchema.parse(request.body), request.profileId) });
+		response.status(201).json({ data: await environmentService.create(createSchema.parse(request.body), request.workspaceScope) });
 	} catch (error) {
 		next(error);
 	}
@@ -40,7 +40,7 @@ export async function updateEnvironment(request, response, next) {
 	try {
 		const { expectedRevision, environment } = updateSchema.parse(request.body);
 		response.json({
-			data: await environmentService.replace(request.params.environmentId, request.profileId, expectedRevision, environment),
+			data: await environmentService.replace(request.params.environmentId, request.workspaceScope, expectedRevision, environment),
 		});
 	} catch (error) {
 		next(error);
@@ -50,7 +50,7 @@ export async function updateEnvironment(request, response, next) {
 export async function deleteEnvironment(request, response, next) {
 	try {
 		const { revision } = deleteQuerySchema.parse(request.query);
-		await environmentService.remove(request.params.environmentId, request.profileId, revision);
+		await environmentService.remove(request.params.environmentId, request.workspaceScope, revision);
 		response.status(204).send();
 	} catch (error) {
 		next(error);

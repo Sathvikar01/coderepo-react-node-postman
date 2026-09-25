@@ -48,8 +48,12 @@ configure_secrets() {
     ensure_secret backend/.env "EXECUTION_FINGERPRINT_KEY"
     ensure_secret backend/.env "DEMO_LOCAL_TOKEN"
     ensure_secret backend/.env "DEMO_STAGING_TOKEN"
-    if grep -q "^SERVER_SECRET_ALIASES_JSON=$" backend/.env; then
-        local aliases='[{"alias":"local_token","env":"DEMO_LOCAL_TOKEN","profileIds":[]},{"alias":"staging_token","env":"DEMO_STAGING_TOKEN","profileIds":[]}]'
+    ensure_secret backend/.env "DEMO_ALEX_PRIVATE_TOKEN"
+    # Registered on every setup run so the collaboration demo always has: two shared
+    # aliases every profile may resolve, plus one deliberately profile-scoped alias that
+    # proves credential isolation between collaborating profiles.
+    local aliases='[{"alias":"local_token","env":"DEMO_LOCAL_TOKEN","profileIds":[]},{"alias":"staging_token","env":"DEMO_STAGING_TOKEN","profileIds":[]},{"alias":"alex_private_token","env":"DEMO_ALEX_PRIVATE_TOKEN","profileIds":["64b00000000000000000a002"]}]'
+    if grep -q "^SERVER_SECRET_ALIASES_JSON=" backend/.env; then
         sed -i.bak "s|^SERVER_SECRET_ALIASES_JSON=.*|SERVER_SECRET_ALIASES_JSON=${aliases}|" backend/.env && rm -f backend/.env.bak
         log_info "Registered demo secret aliases in backend/.env"
     fi

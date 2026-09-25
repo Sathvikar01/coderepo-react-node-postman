@@ -41,6 +41,42 @@ describe("Phase 30 workbench contracts", () => {
 	});
 });
 
+describe("Phase 24 collaboration contracts", () => {
+	const workspaceCss = readFileSync(fileURLToPath(new URL("../workspaces/workspace.css", import.meta.url)), "utf8");
+	const switcher = readFileSync(fileURLToPath(new URL("../workspaces/WorkspaceSwitcher.jsx", import.meta.url)), "utf8");
+
+	test("the workspace stylesheet never reintroduces a banned class name", () => {
+		expect(workspaceCss).not.toContain(".request-url-row");
+		expect(workspaceCss).not.toContain(".request-editor-tab");
+		expect(workspaceCss).not.toContain(".response-tab");
+		expect(workspaceCss).not.toContain("--header-height: 100vh");
+	});
+
+	test("the workspace surfaces inherit the shared theme tokens and respect reduced motion", () => {
+		expect(workspaceCss).toContain("var(--surface");
+		expect(workspaceCss).toContain("var(--border");
+		expect(workspaceCss).toContain("@media (prefers-reduced-motion: reduce)");
+	});
+
+	test("the active-workspace control is reachable from the header rail", () => {
+		expect(app).toContain("<WorkspaceSwitcher");
+		expect(app).toContain("workspaceSwitcher={");
+		expect(header).toContain("{workspaceSwitcher}");
+		expect(switcher).toContain('ariaLabel="Active workspace"');
+	});
+
+	test("read-only roles still get an explicit, non-destructive explanation", () => {
+		expect(app).toContain("workspace-readonly-banner");
+		expect(app).toContain("read-only access");
+	});
+
+	test("the Activity view and Manage dialog are wired into the shell", () => {
+		expect(app).toContain("WorkspaceActivityPanel");
+		expect(app).toContain("WorkspaceDialog");
+		expect(app).toContain('setSidebarTab("activity")');
+	});
+});
+
 describe("Phase 48A product identity contracts", () => {
 	test("the header exposes product information through the existing menu control", () => {
 		expect(header).toContain("onOpenProduct");

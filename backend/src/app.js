@@ -18,9 +18,11 @@ import { mockRouteRouter, mockRouter } from "./features/mocks/mock.routes.js";
 import { preferenceRouter, profileRouter } from "./features/profiles/profile.routes.js";
 import { verificationProofRouter } from "./features/verification-proof-api/verification-proof.routes.js";
 import { whyInspectorRouter } from "./features/why-inspector/why-inspector.routes.js";
+import { workspaceRouter } from "./features/workspaces/workspace.routes.js";
 import { errorHandler, notFoundHandler } from "./shared/middleware/error-handler.js";
 import { requireWorkspaceAuth } from "./shared/middleware/auth.js";
 import { resolveProfileContext } from "./shared/middleware/profile-context.js";
+import { requireWorkspaceCapability, resolveWorkspaceContext } from "./shared/middleware/workspace-context.js";
 import { LIMITS } from "./shared/utils/limits.js";
 
 const publicDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../public");
@@ -62,11 +64,23 @@ export function createApp() {
 	app.use("/api/v1/auth", express.json({ limit: LIMITS.jsonBodyDefault }), authRouter);
 	app.use("/api/v1/profiles", express.json({ limit: LIMITS.jsonBodyDefault }), requireWorkspaceAuth, profileRouter);
 
+	// Shared-workspace collaboration: membership, roles, sharing, and the bounded
+	// activity feed. The workspace router resolves its own membership per route, so it
+	// does not mount `resolveWorkspaceContext`.
+	app.use(
+		"/api/v1/workspaces",
+		express.json({ limit: LIMITS.jsonBodyDefault }),
+		requireWorkspaceAuth,
+		resolveProfileContext,
+		workspaceRouter,
+	);
+
 	app.use(
 		"/api/v1/preferences",
 		express.json({ limit: LIMITS.jsonBodyEnvironment }),
 		requireWorkspaceAuth,
 		resolveProfileContext,
+		resolveWorkspaceContext,
 		preferenceRouter,
 	);
 	app.use(
@@ -74,6 +88,7 @@ export function createApp() {
 		express.json({ limit: LIMITS.jsonBodyCollection }),
 		requireWorkspaceAuth,
 		resolveProfileContext,
+		resolveWorkspaceContext,
 		collectionRouter,
 	);
 	app.use(
@@ -81,6 +96,8 @@ export function createApp() {
 		express.json({ limit: LIMITS.jsonBodyDefault }),
 		requireWorkspaceAuth,
 		resolveProfileContext,
+		resolveWorkspaceContext,
+		requireWorkspaceCapability("execute"),
 		collectionRunnerRouter,
 	);
 	app.use(
@@ -88,6 +105,7 @@ export function createApp() {
 		express.json({ limit: LIMITS.jsonBodyEnvironment }),
 		requireWorkspaceAuth,
 		resolveProfileContext,
+		resolveWorkspaceContext,
 		environmentRouter,
 	);
 	app.use(
@@ -102,6 +120,8 @@ export function createApp() {
 		express.json({ limit: LIMITS.jsonBodyExecution }),
 		requireWorkspaceAuth,
 		resolveProfileContext,
+		resolveWorkspaceContext,
+		requireWorkspaceCapability("execute"),
 		executionRouter,
 	);
 	app.use(

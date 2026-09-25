@@ -13,10 +13,11 @@ Proven from a pristine worktree at the freeze commit
 | Step | Command | Result |
 |---|---|---|
 | Install | `bun install --frozen-lockfile` (bun 1.3.9) | 294 packages, 5.44s |
-| Seed/reset | `bash setup.sh --seed` under **Git Bash** | Accounts 1, Profiles 2, Collections 4, Environments 4, Preferences 2, Demo orders 10, Histories 0 |
+| Seed/reset | `bash setup.sh --seed` under **Git Bash** | Login accounts 2, Profiles 2, Workspaces 3, Collections 4, Environments 4, Activity 4, Preferences 2, Demo orders 10, Histories 0 |
 | Backend boot | `bun src/index.js` with `PORT=8100` | `{"status":"ok","database":"connected"}` |
 | Login | `POST /api/v1/auth/login` demo creds | 200 + JWT |
-| Profile flow | `GET /api/v1/profiles` → `POST /api/v1/auth/switch-profile` → `GET /api/v1/collections\|environments\|history` | 2 profiles, 2 collections, 2 envs, history 200 |
+| Profile flow | `GET /api/v1/profiles` → `POST /api/v1/auth/switch-profile` → `GET /api/v1/collections\|environments\|history` | 1 profile per account, 2 shared collections, 2 shared envs, history 200 |
+| Workspace flow | `GET /api/v1/workspaces` → `GET /api/v1/workspaces/:id` → `GET /api/v1/workspaces/:id/activity` | Alex `OWNER` / Jordan `EDITOR` on the seeded team workspace, activity 200 |
 | Frontend build | `bun run build` (vite 8.2.2) | 113 modules, ~800ms, dist emitted |
 | Frontend serve | `vite preview` | HTTP 200 on `/` |
 
@@ -109,9 +110,10 @@ machine with a real browser; Phase 30's merged E2E is the standing evidence.
 README verified accurate: product identity ("API execution, investigation,
 and change-verification workspace"), ports 3000/8000, Git Bash requirement,
 `bun install && bash setup.sh --seed`, demo login
-`alex.morgan@example.test / password123`, seeded content (Orders API +
-HTTP Examples × 2 profiles = 4 collections), WHY Inspector in the mental
-model. `hackerrank.yml` (install/run/readonly-paths/default-open-files),
+`alex.morgan@example.test` and `jordan.lee@example.test` (both
+`password123`), seeded content (a shared team workspace with Orders API +
+HTTP Examples and 2 environments, plus a personal workspace per account),
+the workspace/role model, and the WHY Inspector in the mental model. `hackerrank.yml` (install/run/readonly-paths/default-open-files),
 package scripts, `.gitignore`, `.gitattributes` (skills + GUIDELINES
 export-ignored, archive-safe), and lockfile untouched. No HackerRank contract
 changes.

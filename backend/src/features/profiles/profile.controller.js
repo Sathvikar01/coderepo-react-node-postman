@@ -6,6 +6,7 @@ import { profileService, preferenceService } from "./profile.service.js";
 const preferenceSchema = z
 	.object({
 		activeEnvironmentId: z.union([z.string().regex(/^[a-f\d]{24}$/i), z.null()]).optional(),
+		activeWorkspaceId: z.union([z.string().regex(/^[a-f\d]{24}$/i), z.null()]).optional(),
 		lastSavedRequest: z
 			.object({ collectionId: z.union([z.string().regex(/^[a-f\d]{24}$/i), z.null()]), requestId: z.union([z.uuid(), z.null()]) })
 			.strict()
@@ -41,7 +42,12 @@ export async function listProfiles(request, response, next) {
 
 export async function getPreferences(request, response, next) {
 	try {
-		response.json({ data: { preferences: await preferenceService.get(request.profileId), executionPolicy: executionPolicy() } });
+		response.json({
+			data: {
+				preferences: await preferenceService.get(request.profileId, request.workspaceId ?? null),
+				executionPolicy: executionPolicy(),
+			},
+		});
 	} catch (error) {
 		next(error);
 	}
@@ -51,7 +57,10 @@ export async function updatePreferences(request, response, next) {
 	try {
 		const input = preferenceSchema.parse(request.body);
 		response.json({
-			data: { preferences: await preferenceService.update(request.profileId, input), executionPolicy: executionPolicy() },
+			data: {
+				preferences: await preferenceService.update(request.profileId, input, request.workspaceId ?? null),
+				executionPolicy: executionPolicy(),
+			},
 		});
 	} catch (error) {
 		next(error);

@@ -312,29 +312,34 @@ Tracer stores everything it needs in the `request_desk_demo` database: accounts,
 
 **Seeded baseline (restored by every full start):**
 
-| Record             | Count                             |
-| ------------------ | --------------------------------- |
-| Workspace account  | 1                                 |
-| Profiles           | 2                                 |
-| Collections        | 4 (2 per profile)                 |
-| Environments       | 4 (Local and Staging per profile) |
-| Preference records | 2                                 |
-| Demo orders        | 10 (5 per dataset)                |
-| Execution history  | 0                                 |
+| Record                | Count                                          |
+| --------------------- | ---------------------------------------------- |
+| Workspace accounts    | 2 (`alex.morgan@example.test`, `jordan.lee@example.test`) |
+| Profiles              | 2 (one per account)                            |
+| Shared workspaces     | 3 (one shared team workspace, one personal per account) |
+| Collections           | 4 (2 shared in the team workspace, 2 personal) |
+| Environments          | 4 (Local and Staging, shared in the team workspace; 2 personal) |
+| Workspace activity    | 4 seeded events                                |
+| Preference records    | 2                                              |
+| Demo orders           | 10 (5 per dataset)                             |
+| Execution history     | 0                                              |
 
 A full `bun start` intentionally reseeds this baseline. Data survives browser reloads and backend-only restarts (`bun run dev` inside `backend/`), but a full start restores the seeded state.
 
 ## Seeded Access
 
-Sign in with the demo account, then choose either profile:
+Two independent login accounts are seeded, and each account authorizes only its own profile. Sign in with one of them (a private/incognito window lets you sign in as both at once):
 
-| Email                      | Password      |
-| -------------------------- | ------------- |
-| `alex.morgan@example.test` | `password123` |
+| Email                      | Password      | Team workspace role |
+| -------------------------- | ------------- | ------------------- |
+| `alex.morgan@example.test` | `password123` | `OWNER`             |
+| `jordan.lee@example.test`  | `password123` | `EDITOR`            |
+
+Both accounts are members of the seeded **API Platform Team** workspace, so either one can open the same shared collections and environments, edit them, and see the other's changes. Jordan is seeded as an `EDITOR`; use the workspace's **Manage** dialog as Alex to try `VIEWER` (read-only) or to remove and re-add Jordan and watch access change immediately.
 
 These credentials exist only for local evaluation. Tracer generates its own signing secret, fingerprint key, and demo target tokens at setup time; no secret is committed to the repository.
 
-Each profile owns an **Orders API** collection (with `Read` and `Write` folders and five saved requests) and an **HTTP Examples** collection, plus **Local** and **Staging** environments. Both environments point at the in-process demo target at `http://127.0.0.1:8000/demo/v1`, which serves genuine HTTP responses backed by MongoDB and requires a bearer token.
+Each account owns a personal workspace, and the team workspace shares an **Orders API** collection (with `Read` and `Write` folders and five saved requests), an **HTTP Examples** collection, and **Local** and **Staging** environments. All environments point at the in-process demo target at `http://127.0.0.1:8000/demo/v1`, which serves genuine HTTP responses backed by MongoDB and requires a bearer token.
 
 ### Reviewer walkthrough
 
@@ -400,6 +405,7 @@ Then open `http://localhost:3000`.
 - **Flight Recorder.** Every history entry has a **Passport** action opening the API Flight Recorder with its **Passport**, **Compare**, **Minimize**, and **Capsule** sections: the immutable execution receipt with request/response fingerprints, a causal **Compare** of any two runs with the first meaningful divergence and contract drift, bounded failure **Minimize** with start/status/cancel, and **Export Capsule** / **Import Capsule** for redacted reproduction capsules that always open as unsent, unsaved dirty drafts.
 - **Collection runner.** The **Run collection** and **Run folder** actions open a runner that executes saved requests as one ordered run: pick any subset of requests (the preview shows the exact execution order), repeat the selection for up to 25 iterations, choose an environment, add initial run variables, and either stop at the first failure or continue. Every request is an ordinary execution through the normal compile → policy → DNS → transport → capture → normalize → history pipeline with its own history entry and Execution Passport, so **Passport** and **Compare** open straight from any result row — including failed ones. Variable changes made by scripts propagate deterministically to later requests in run scope and never modify saved environments or collections; initial run variables cannot substitute secret references. Each result row reports status, outcome, assertion counts, duration, and a failure reason, the summary is available after the run, and **Rerun** starts a fresh run with the same selection.
 - **Headless CLI.** The same runner is available without the UI via `bun run tracer` (see [Headless CLI](#headless-cli)), which reads a git-native project directory or a portable project file and executes it through the identical pipeline.
+- **Workspaces and sharing.** The header's workspace switcher picks the active workspace; every collection, environment, and request you see belongs to it, and nothing mixes across workspaces. **Manage** on that switcher opens the workspace dialog: rename, member list with each member's role, share with another Tracer account by email, change a role, or remove a member. `OWNER` manages members, `EDITOR` reads/runs/edits the definitions, `VIEWER` reads definitions and activity but cannot mutate or execute; the last `OWNER` can never be removed or demoted. Role and membership changes take effect on the next request, and a read-only viewer sees an explicit banner plus disabled controls rather than a control that fails on click. The **Activity** sidebar tab shows the bounded workspace feed (created/renamed, members, roles, collection and environment changes) with the actor and revision of each event. Because every shared save carries the revision it read, a concurrent edit is a typed `409` rather than a silent overwrite: Tracer names the current revision and the profile that produced it, keeps your draft, and offers reload or save-as. The two-user proof is recorded in [`docs/collaboration-verification.md`](docs/collaboration-verification.md).
 
 ## Headless CLI
 
@@ -494,8 +500,11 @@ For the final submission-state caveats and exact latest rerun results, use the f
 - **Target policy:** only publicly routable HTTP and HTTPS addresses are permitted. Private, loopback, link-local, multicast, reserved, and NAT64/6to4 addresses are rejected before dispatch, except the seeded demo target on `127.0.0.1:8000/demo/v1`.
 - **Body capture:** responses are captured up to 1 MiB encoded and 1 MiB decoded independently. A capture overflow reports the `size_limit` outcome; a history copy keeps at most the first 256 KiB of a body and says so.
 - **History retention:** every accepted send writes an immutable snapshot and its terminal outcome. Visible bodies are trimmed beyond the newest 200 completed sends per profile, and records expire after seven days. Deleting history removes stored bodies but keeps a minimal receipt so a duplicate execution id is never dispatched again.
-- **Collections:** up to 50 collections per profile, 100 requests and 20 folders per collection, 2 MiB canonical JSON per collection.
-- **Environments:** plain variables are stored as written and are visible to anyone who can read the profile. Secret references store only an alias; the value is resolved on the server at send time and never returned to the browser.
+- **Collections:** up to 50 collections per workspace, 100 requests and 20 folders per collection, 2 MiB canonical JSON per collection. Collection and environment names are unique inside a workspace and reusable across workspaces.
+- **Workspaces and sharing:** a workspace is a persisted group of collections and environments with an owner, members, per-member roles (`OWNER`, `EDITOR`, `VIEWER`), and a revision counter. Up to 10 workspaces per profile and 25 members per workspace. An `OWNER` manages members and roles, an `EDITOR` reads, runs, and edits the shared definitions, and a `VIEWER` reads the definitions and the activity feed but cannot mutate or execute. The last `OWNER` can never be removed or demoted. Role and membership changes take effect on the very next request. Workspaces are shared with an existing Tracer account by email — there is no email service and no invitation link, because both users already exist locally.
+- **Workspace activity:** every workspace change (created, renamed, member added/removed, role changed, collection/environment created/updated/deleted) appends to a bounded, append-only activity feed of the newest 500 events per workspace, paged 50 at a time. Entries record the actor, target, and revision but never request or response bodies, `Authorization` or `Cookie` headers, or resolved secret values.
+- **Concurrent edits:** every shared write carries the revision it read. The first save wins; a stale save is rejected with a typed `409` that names the current revision and the profile that produced it. Your draft stays intact so you can reload or save it under a new name — Tracer never silently last-write-wins and never auto-merges.
+- **Environments:** plain variables are stored as written and are visible to anyone who can read the workspace. Secret references store only an alias; the value is resolved on the server at send time and never returned to the browser. Sharing an environment shares the alias names only — each collaborator resolves aliases through their own profile's authorization, so one member's resolved credentials are never handed to another.
 - **Cookies:** up to 200 live cookies per profile, 4 KiB per cookie, and 8 KiB for a generated `Cookie` header. Cookies are matched by RFC 6265 domain, path, and Secure rules and are never sent outside their scope, to unrelated hosts, or after expiry. Session cookies (no `Max-Age`/`Expires`) live for the running backend process — a restart drops them, matching a browser session — while cookies with an explicit expiry survive restarts. Expired and stale-session cookies are purged lazily.
 - **Examples:** up to 50 examples per profile with unique names, 256 KiB per stored body (live responses are truncated and marked when larger), and at most 100 query-parameter and 100 header match rules. Credential headers (`Authorization`, `Cookie`, `Set-Cookie`, `Proxy-Authorization`, `X-API-Key`) are rejected as match rules, and mock routes carry an unguessable per-profile token instead of a session.
 
