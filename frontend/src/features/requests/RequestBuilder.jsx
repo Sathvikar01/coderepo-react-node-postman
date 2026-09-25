@@ -50,7 +50,7 @@ function AuthEditor({ auth, authOverride, collectionAuth, onAuthChange, onOverri
 		<div className="settings-grid">
 			<div className="field-row">
 				<label htmlFor="auth-mode">Authentication</label>
-				<SelectMenu ariaLabel="Authentication mode" options={AUTH_MODES} value={mode} onChange={setMode} />
+				<SelectMenu ariaLabel="Authentication mode" id="auth-mode" options={AUTH_MODES} value={mode} onChange={setMode} />
 			</div>
 			<div>
 				<button
@@ -106,7 +106,7 @@ function AuthEditor({ auth, authOverride, collectionAuth, onAuthChange, onOverri
 					</div>
 					<div className="field-row">
 						<label htmlFor="auth-in">Add to</label>
-						<SelectMenu ariaLabel="Where to add the API key" options={[{ value: "header", label: "Header" }, { value: "query", label: "Query" }]} value={effective.in ?? "header"} onChange={(value) => update({ in: value })} />
+						<SelectMenu ariaLabel="Where to add the API key" id="auth-in" options={[{ value: "header", label: "Header" }, { value: "query", label: "Query" }]} value={effective.in ?? "header"} onChange={(value) => update({ in: value })} />
 					</div>
 				</>
 			)}
@@ -134,6 +134,7 @@ function BodyEditor({ body, onChange }) {
 				<label htmlFor="body-mode">Body type</label>
 				<SelectMenu
 					ariaLabel="Body type"
+					id="body-mode"
 					options={BODY_MODES}
 					value={body.mode}
 					onChange={changeMode}

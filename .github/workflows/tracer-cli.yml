@@ -6,6 +6,10 @@ name: Tracer CLI
 # of the Baseline Gate and requires no database.
 
 on:
+  push:
+    branches:
+      - main
+      - "chatgpt/**"
   pull_request:
     branches:
       - main

@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { MaterialIcon } from "./MaterialIcon.jsx";
 
-export function SelectMenu({ ariaLabel, className = "", disabled = false, onChange, options, value }) {
+export function SelectMenu({ ariaLabel, className = "", disabled = false, id, onChange, options, value }) {
 	const [open, setOpen] = useState(false);
 	const reference = useRef(null);
 	const optionReferences = useRef([]);
@@ -28,7 +28,9 @@ export function SelectMenu({ ariaLabel, className = "", disabled = false, onChan
 		return () => document.removeEventListener("pointerdown", closeOutside);
 	}, [open]);
 	const move = (delta) => {
-		const next = (selectedIndex + delta + options.length) % options.length;
+		const focusedIndex = optionReferences.current.findIndex((node) => node === document.activeElement);
+		const origin = focusedIndex >= 0 ? focusedIndex : selectedIndex;
+		const next = (origin + delta + options.length) % options.length;
 		onChange?.(options[next].value);
 		requestAnimationFrame(() => optionReferences.current[next]?.focus());
 	};
@@ -41,6 +43,7 @@ export function SelectMenu({ ariaLabel, className = "", disabled = false, onChan
 				aria-label={ariaLabel}
 				className="select-menu-trigger"
 				disabled={disabled}
+				id={id}
 				role="combobox"
 				type="button"
 				onClick={() => (open ? closeAndFocusTrigger() : openAndFocus())}
