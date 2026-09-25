@@ -1,5 +1,8 @@
 # Build Your Own Postman — Architecture and Product Design
 
+> **Historical design record.** This file is the frozen pre-implementation architecture from September 17, 2026 and intentionally preserves the decisions and constraints as they were understood before implementation. It is **not** the best description of the shipped Tracer architecture. For the current system, reviewer flow, verification authority, and WHY evidence chain, start with [README.md](README.md) and [docs/REVIEWER_GUIDE.md](docs/REVIEWER_GUIDE.md).
+
+
 Revision: 1.0 — FROZEN on September 17, 2026. Phase: design complete; implementation not started.
 
 The user requested reconciliation of nine external reviews and a final architecture freeze. Architecture B is the implementation baseline below. The numbered decisions are frozen design decisions selected under that instruction, not claims that the user personally endorsed every technical detail. Runtime feasibility gates are mandatory before shipping. The freeze does not authorize implementation or claim that unexecuted checks passed.
