@@ -22,6 +22,8 @@ Execute → Understand → Compare → Verify
 - **Verify** rehearses the affected workflow, checks compatibility, and produces a tamper-evident proof.
 - **Why?** is a read-only projection over the evidence already produced by those systems. It creates no new truth.
 
+**Collaborate** is the shared-state layer around that workflow: separate accounts can work in the same workspace, see saved changes live, inspect immutable version history, and resolve concurrent edits through backend CAS instead of silent merging.
+
 The signature verification story is:
 
 ```text
@@ -198,7 +200,7 @@ Tracer is one Bun workspace with a React browser client, one Express API, and Mo
 ```mermaid
 flowchart LR
     UI["React / Vite UI<br/>Workspace · History · Runner<br/>Flight Recorder · Proof · Why?"]
-    API["Express API<br/>Auth · profile scope · Zod boundaries"]
+    API["Express API<br/>Auth · profile/workspace scope · Zod boundaries"]
 
     subgraph CORE["One execution path"]
       COMP["Compile<br/>variables · auth · headers · body"]
@@ -208,6 +210,18 @@ flowchart LR
       CAP["Capture + normalize"]
       HIST["History + Execution Passport"]
       COMP --> POL --> DNS --> NET --> CAP --> HIST
+    end
+
+    subgraph COLLAB["Shared workspace state"]
+      WS["Workspace membership<br/>OWNER · EDITOR · VIEWER"]
+      SAVED["Collections + environments<br/>revision CAS"]
+      VERS["Immutable versions<br/>compare · restore"]
+      LIVE["Authenticated SSE<br/>advisory freshness only"]
+      ACT["Activity feed"]
+      WS --> SAVED
+      SAVED --> VERS
+      SAVED --> ACT
+      ACT --> LIVE
     end
 
     subgraph EVID["Investigation + verification evidence"]
@@ -240,6 +254,11 @@ flowchart LR
 
     UI -->|/api/v1| API
     API --> COMP
+    API --> WS
+    LIVE --> UI
+    SAVED --> DB
+    VERS --> DB
+    ACT --> DB
     HIST --> DB
     API --> DB
     NET --> TARGET
@@ -254,6 +273,7 @@ The architectural rule that matters most for review is **single authority, singl
 - Verification composes bounded evidence and fails closed.
 - Verification Proof commits the exact identities/evidence it covers.
 - Why? only explains those artifacts; it cannot make an unavailable result look verified.
+- Shared workspace membership, resource revisions, and version rows are backend-owned. Live SSE events are only freshness signals; clients always reload canonical state before trusting a change.
 
 How the layers fit together:
 
@@ -272,6 +292,7 @@ flowchart LR
 ```
 
 - **Security boundaries.** Target requests carry only request/collection auth plus that profile's cookie jar; application sign-in tokens never reach a target. Private, loopback, and reserved addresses are rejected before dispatch (SSRF boundary), with two explicit exceptions: the seeded demo target and hosts approved through Local Runtime. Secrets are stored as alias references and resolved server-side at send time; every stored or displayed artifact is redacted.
+- **Collaboration + versions (`backend/src/features/workspaces`, `backend/src/features/versions`).** Workspace membership and roles scope saved collections/environments. Every shared write carries the revision it read; stale writers receive an attributed `409`. The newest 20 immutable versions per resource support structured compare and restore-as-new-revision. Authenticated SSE carries metadata-only freshness events; MongoDB state and persisted activity/version rows remain authoritative.
 - **Flight Recorder (`backend/src/features/execution-intelligence`).** Every history entry carries an immutable `ExecutionReceiptV1` passport. Compare, Minimize, and Reproduction Capsules build on those receipts as deterministic evidence, never a second transport.
 - **Headless CLI (`backend/src/features/cli`).** `bun run tracer` wires the same compiler, policy, transport, and collection runner over in-memory stores, so UI runs and CLI runs are equivalent by construction.
 - **Verification Proof (`backend/src/features/verification-proof-api`, `frontend/src/features/verification-proof`).** The build/export/import/verify surface over the snapshot, drift, rehearsal, and compatibility services. The frontend copies the backend's state instead of deciding anything: it never recomputes a fingerprint, never upgrades a state, and never renders `STALE` as a pass.
@@ -362,6 +383,7 @@ That already demonstrates the product's central design: a request is not just a 
 4. **Rehearse / verify** the affected workflow and obtain a Verification Proof.
 5. **Open Why? → Evidence** and attach the exported proof for this read. Walk the reviewer through Impact → Drift → Rehearsal → Contract → **Phase 41 Verification** → Proof.
 6. Change the relevant snapshot/environment identity and verify that the previous proof becomes **STALE**, not green.
+7. **Collaborate live.** Open Jordan in a second browser, save the shared collection, and show Alex receiving the new revision without reload. Dirty Alex's draft, save again as Jordan, then show the remote-change banner, attributed `409`, version compare, and restore-as-new-revision.
 
 The proof attachment is intentionally read-scoped: it is validated by the backend's Phase 47 importer and is never persisted or interpreted by React.
 
@@ -407,7 +429,7 @@ Then open `http://localhost:3000`.
 - **Flight Recorder.** Every history entry has a **Passport** action opening the API Flight Recorder with its **Passport**, **Compare**, **Minimize**, and **Capsule** sections: the immutable execution receipt with request/response fingerprints, a causal **Compare** of any two runs with the first meaningful divergence and contract drift, bounded failure **Minimize** with start/status/cancel, and **Export Capsule** / **Import Capsule** for redacted reproduction capsules that always open as unsent, unsaved dirty drafts.
 - **Collection runner.** The **Run collection** and **Run folder** actions open a runner that executes saved requests as one ordered run: pick any subset of requests (the preview shows the exact execution order), repeat the selection for up to 25 iterations, choose an environment, add initial run variables, and either stop at the first failure or continue. Every request is an ordinary execution through the normal compile → policy → DNS → transport → capture → normalize → history pipeline with its own history entry and Execution Passport, so **Passport** and **Compare** open straight from any result row — including failed ones. Variable changes made by scripts propagate deterministically to later requests in run scope and never modify saved environments or collections; initial run variables cannot substitute secret references. Each result row reports status, outcome, assertion counts, duration, and a failure reason, the summary is available after the run, and **Rerun** starts a fresh run with the same selection.
 - **Headless CLI.** The same runner is available without the UI via `bun run tracer` (see [Headless CLI](#headless-cli)), which reads a git-native project directory or a portable project file and executes it through the identical pipeline.
-- **Workspaces and sharing.** The header's workspace switcher picks the active workspace; every collection, environment, and request you see belongs to it, and nothing mixes across workspaces. **Manage** on that switcher opens the workspace dialog: rename, member list with each member's role, share with another Tracer account by email, change a role, or remove a member. `OWNER` manages members, `EDITOR` reads/runs/edits the definitions, `VIEWER` reads definitions and activity but cannot mutate or execute; the last `OWNER` can never be removed or demoted. Role and membership changes take effect on the next request, and a read-only viewer sees an explicit banner plus disabled controls rather than a control that fails on click. The **Activity** sidebar tab shows the bounded workspace feed (created/renamed, members, roles, collection and environment changes) with the actor and revision of each event. Because every shared save carries the revision it read, a concurrent edit is a typed `409` rather than a silent overwrite: Tracer names the current revision and the profile that produced it, keeps your draft, and offers reload or save-as. The two-user proof is recorded in [`docs/collaboration-verification.md`](docs/collaboration-verification.md).
+- **Workspaces and sharing.** The header's workspace switcher picks the active workspace; every collection, environment, and request you see belongs to it, and nothing mixes across workspaces. **Manage** on that switcher opens the workspace dialog: rename, member list with each member's role, share with another Tracer account by email, change a role, or remove a member. `OWNER` manages members, `EDITOR` reads/runs/edits the definitions, and `VIEWER` reads definitions/activity but cannot mutate or execute; the last `OWNER` can never be removed or demoted. Backend authorization changes take effect on the very next API request, while the open UI also receives the membership/role event live: capabilities refresh without manual reload, and a removed member's workspace stream closes and falls back to an authorized workspace. The **Activity** sidebar tab shows the bounded workspace feed (created/renamed, members, roles, collection/environment create/update/delete/restore) with actor and revision. Because every shared save carries the revision it read, a concurrent edit is a typed `409` rather than a silent overwrite: Tracer names the current revision and profile, keeps the local draft, and offers compare/reload/keep-editing or save-as where appropriate. The two-user proof is recorded in [`docs/collaboration-verification.md`](docs/collaboration-verification.md).
 
 ## Headless CLI
 
@@ -489,6 +511,7 @@ Important acceptance surfaces include:
 | Verification | impact/drift evidence, rehearsal/checkpoints, contract compatibility, Phase 41 states |
 | Verification Proof | build/export/import/verify, integrity, current/stale/mismatch/invalid states |
 | WHY Inspector | v2 read-model, Phase 41 authority, proof linkage, identity mismatch, secret exclusion |
+| Collaboration + versions | two real accounts, role changes/removal, CAS conflicts, immutable versions, compare/restore, SSE live sync, dirty-draft preservation, secret exclusion |
 | Browser acceptance | responsive widths, dark/light, dialogs, keyboard/Escape/focus, overflow and console checks |
 
 The merged acceptance history includes dedicated real-browser suites for Investigation, Verification Proof, product surfaces, and WHY v2, plus the repository's Baseline Gate, Tracer CLI, and Phase 30 E2E + Load workflows.
@@ -503,8 +526,10 @@ For the final submission-state caveats and exact latest rerun results, use the f
 - **Body capture:** responses are captured up to 1 MiB encoded and 1 MiB decoded independently. A capture overflow reports the `size_limit` outcome; a history copy keeps at most the first 256 KiB of a body and says so.
 - **History retention:** every accepted send writes an immutable snapshot and its terminal outcome. Visible bodies are trimmed beyond the newest 200 completed sends per profile, and records expire after seven days. Deleting history removes stored bodies but keeps a minimal receipt so a duplicate execution id is never dispatched again.
 - **Collections:** up to 50 collections per workspace, 100 requests and 20 folders per collection, 2 MiB canonical JSON per collection. Collection and environment names are unique inside a workspace and reusable across workspaces.
-- **Workspaces and sharing:** a workspace is a persisted group of collections and environments with an owner, members, per-member roles (`OWNER`, `EDITOR`, `VIEWER`), and a revision counter. Up to 10 workspaces per profile and 25 members per workspace. An `OWNER` manages members and roles, an `EDITOR` reads, runs, and edits the shared definitions, and a `VIEWER` reads the definitions and the activity feed but cannot mutate or execute. The last `OWNER` can never be removed or demoted. Role and membership changes take effect on the very next request. Workspaces are shared with an existing Tracer account by email — there is no email service and no invitation link, because both users already exist locally.
-- **Workspace activity:** every workspace change (created, renamed, member added/removed, role changed, collection/environment created/updated/deleted) appends to a bounded, append-only activity feed of the newest 500 events per workspace, paged 50 at a time. Entries record the actor, target, and revision but never request or response bodies, `Authorization` or `Cookie` headers, or resolved secret values.
+- **Workspaces and sharing:** a workspace is a persisted group of collections and environments with an owner, members, per-member roles (`OWNER`, `EDITOR`, `VIEWER`), and a revision counter. Up to 10 workspaces per profile and 25 members per workspace. An `OWNER` manages members and roles, an `EDITOR` reads, runs, and edits the shared definitions, and a `VIEWER` reads the definitions/activity but cannot mutate or execute. The last `OWNER` can never be removed or demoted. Authorization changes are enforced on the next API request and are also propagated to open clients through the authenticated live stream; removal closes that workspace stream. Workspaces are shared with an existing Tracer account by email — there is no email service and no invitation link, because both users already exist locally.
+- **Workspace activity:** every workspace change (created, renamed, member added/removed, role changed, collection/environment created/updated/deleted/restored) appends to a bounded, append-only activity feed of the newest 500 events per workspace, paged 50 at a time. Entries record the actor, target, and revision but never request or response bodies, `Authorization` or `Cookie` headers, or resolved secret values.
+- **Resource versions:** collections and environments retain the newest 20 immutable saved revisions. Compare output is deterministic and bounded; restore always creates a new revision and requires the current expected revision, so it cannot force-overwrite a collaborator's newer save.
+- **Live collaboration:** the authenticated SSE stream carries metadata-only workspace freshness events and a bounded in-memory replay window. It is advisory, not a source of truth: reconnecting clients reload canonical MongoDB state. The local in-process broker is designed for this single-process assessment runtime, not as a multi-instance pub/sub claim.
 - **Concurrent edits:** every shared write carries the revision it read. The first save wins; a stale save is rejected with a typed `409` that names the current revision and the profile that produced it. Your draft stays intact so you can reload or save it under a new name — Tracer never silently last-write-wins and never auto-merges.
 - **Environments:** plain variables are stored as written and are visible to anyone who can read the workspace. Secret references store only an alias; the value is resolved on the server at send time and never returned to the browser. Sharing an environment shares the alias names only — each collaborator resolves aliases through their own profile's authorization, so one member's resolved credentials are never handed to another.
 - **Cookies:** up to 200 live cookies per profile, 4 KiB per cookie, and 8 KiB for a generated `Cookie` header. Cookies are matched by RFC 6265 domain, path, and Secure rules and are never sent outside their scope, to unrelated hosts, or after expiry. Session cookies (no `Max-Age`/`Expires`) live for the running backend process — a restart drops them, matching a browser session — while cookies with an explicit expiry survive restarts. Expired and stale-session cookies are purged lazily.
