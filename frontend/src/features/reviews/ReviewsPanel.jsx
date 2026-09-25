@@ -167,6 +167,7 @@ function ReviewDetail({ members, onBack, onChanged, onToast, profileId, review, 
 	const [mentionId, setMentionId] = useState("");
 	const [waiveReason, setWaiveReason] = useState("");
 	const [changeReason, setChangeReason] = useState("");
+	const [currentProofArtifact, setCurrentProofArtifact] = useState("");
 
 	const reloadDetail = useCallback(async () => {
 		try {
@@ -202,6 +203,10 @@ function ReviewDetail({ members, onBack, onChanged, onToast, profileId, review, 
 	}
 
 	const isOwner = role === "OWNER";
+	const isEditor = role === "EDITOR";
+	const isAssignee = String(detail.assigneeProfileId ?? "") === String(profileId ?? "");
+	const isReviewer = String(detail.reviewerProfileId ?? "") === String(profileId ?? "");
+	const canDecide = isOwner || (isEditor && isReviewer);
 	const assignee = members.find((m) => String(m.profileId) === String(detail.assigneeProfileId));
 	const reviewer = members.find((m) => String(m.profileId) === String(detail.reviewerProfileId));
 
@@ -286,6 +291,71 @@ function ReviewDetail({ members, onBack, onChanged, onToast, profileId, review, 
 				<p>
 					Assignee: {memberLabel(assignee)} · Reviewer: {memberLabel(reviewer)} · Status: {detail.status}
 				</p>
+				<div className="decision-assignment-controls">
+					{isOwner ? (
+						<>
+							<label>
+								Assignee
+								<select
+									disabled={busy}
+									value={detail.assigneeProfileId ?? ""}
+									onChange={(event) =>
+										run("Assignee updated.", () =>
+											reviewsApi.assign(detail._id, detail.revision, event.target.value || null),
+										)
+									}
+								>
+									<option value="">Nobody</option>
+									{members.map((member) => (
+										<option key={member.profileId} value={member.profileId}>
+											{memberLabel(member)}
+										</option>
+									))}
+								</select>
+							</label>
+							<label>
+								Reviewer
+								<select
+									disabled={busy}
+									value={detail.reviewerProfileId ?? ""}
+									onChange={(event) =>
+										run("Reviewer updated.", () =>
+											reviewsApi.setReviewer(detail._id, detail.revision, event.target.value || null),
+										)
+									}
+								>
+									<option value="">Nobody</option>
+									{members.map((member) => (
+										<option key={member.profileId} value={member.profileId}>
+											{memberLabel(member)}
+										</option>
+									))}
+								</select>
+							</label>
+						</>
+					) : isEditor ? (
+						<>
+							{!isAssignee && (
+								<button
+									disabled={busy}
+									type="button"
+									onClick={() => run("Assigned to you.", () => reviewsApi.assign(detail._id, detail.revision, profileId))}
+								>
+									Assign to me
+								</button>
+							)}
+							{!isReviewer && (
+								<button
+									disabled={busy}
+									type="button"
+									onClick={() => run("You are now the reviewer.", () => reviewsApi.setReviewer(detail._id, detail.revision, profileId))}
+								>
+									Review this
+								</button>
+							)}
+						</>
+					) : null}
+				</div>
 				{detail.decision === "WAIVED" && detail.waiver && (
 					<p className="waiver-box" role="note">
 						Waived by {shortId(detail.waiver.authorProfileId)} at {formatTime(detail.waiver.waivedAt)} — technical state remains{" "}
@@ -298,12 +368,12 @@ function ReviewDetail({ members, onBack, onChanged, onToast, profileId, review, 
 							Start review
 						</button>
 					)}
-					{role !== "VIEWER" && (
+					{canDecide && (
 						<button disabled={busy} type="button" onClick={() => run("Approved. Technical state unchanged.", () => reviewsApi.decide(detail._id, detail.revision, "APPROVED"))}>
 							Approve
 						</button>
 					)}
-					{role !== "VIEWER" && (
+					{canDecide && (
 						<div className="decision-reason-row">
 							<input
 								aria-label="Change request reason"
@@ -344,16 +414,35 @@ function ReviewDetail({ members, onBack, onChanged, onToast, profileId, review, 
 							Resolve
 						</button>
 					)}
-					<button disabled={busy} type="button" onClick={() => run("Freshness rechecked.", () => reviewsApi.refresh(detail._id, {}))}>
+					<label className="current-proof-field">
+						Current Verification Proof
+						<textarea
+							value={currentProofArtifact}
+							onChange={(event) => setCurrentProofArtifact(event.target.value)}
+							rows={3}
+							placeholder="Optional for freshness; required to create a re-review from current stateless evidence."
+						/>
+					</label>
+					<button
+						disabled={busy}
+						type="button"
+						onClick={() =>
+							run("Freshness rechecked.", () =>
+								reviewsApi.refresh(detail._id, currentProofArtifact.trim() || null),
+							)
+						}
+					>
 						Recheck freshness
 					</button>
 					{isOwner && (
 						<button
-							disabled={busy}
+							disabled={busy || !currentProofArtifact.trim()}
 							type="button"
 							onClick={() =>
 								run("Re-review created from current evidence.", async () => {
-									const created = await reviewsApi.rereview(detail._id, {});
+									const created = await reviewsApi.rereview(detail._id, {
+										proofArtifact: currentProofArtifact.trim(),
+									});
 									const next = created?.data ?? created;
 									if (next?._id) window.location.hash = `#review-${next._id}`;
 								})
@@ -383,10 +472,7 @@ function PromoteForm({ members, onClose, onCreated, onToast }) {
 	const [title, setTitle] = useState("");
 	const [findingType, setFindingType] = useState(FINDING_TYPES[0]);
 	const [findingSummary, setFindingSummary] = useState("");
-	const [technicalState, setTechnicalState] = useState("BREAKING");
-	const [resourceType, setResourceType] = useState("collection");
-	const [resourceId, setResourceId] = useState("");
-	const [revision, setRevision] = useState("");
+	const [proofArtifact, setProofArtifact] = useState("");
 	const [assigneeProfileId, setAssigneeProfileId] = useState("");
 	const [busy, setBusy] = useState(false);
 
@@ -398,12 +484,7 @@ function PromoteForm({ members, onClose, onCreated, onToast }) {
 				title: title.trim(),
 				findingType,
 				findingSummary: findingSummary.trim(),
-				technicalState: technicalState.trim() || "UNKNOWN",
-				evidence: {
-					...(resourceId.trim() ? { resourceType, resourceId: resourceId.trim() } : {}),
-					...(revision ? { revision: Number(revision) } : {}),
-					technicalState: technicalState.trim() || "UNKNOWN",
-				},
+				proofArtifact: proofArtifact.trim(),
 				...(assigneeProfileId ? { assigneeProfileId } : {}),
 			});
 			onCreated(created?.data ?? created);
@@ -438,26 +519,15 @@ function PromoteForm({ members, onClose, onCreated, onToast }) {
 				<textarea value={findingSummary} onChange={(event) => setFindingSummary(event.target.value)} rows={3} maxLength={1000} required />
 			</label>
 			<label>
-				Technical state (frozen, never rewritten by decisions)
-				<input value={technicalState} onChange={(event) => setTechnicalState(event.target.value)} maxLength={40} required />
+				Verification Proof artifact
+				<textarea
+					value={proofArtifact}
+					onChange={(event) => setProofArtifact(event.target.value)}
+					rows={6}
+					required
+					placeholder="Paste the exported Tracer Verification Proof JSON. Technical state and evidence identities are derived by the backend."
+				/>
 			</label>
-			<div className="promote-row">
-				<label>
-					Resource type
-					<select value={resourceType} onChange={(event) => setResourceType(event.target.value)}>
-						<option value="collection">collection</option>
-						<option value="environment">environment</option>
-					</select>
-				</label>
-				<label>
-					Resource id
-					<input value={resourceId} onChange={(event) => setResourceId(event.target.value)} maxLength={120} placeholder="optional" />
-				</label>
-				<label>
-					Revision
-					<input value={revision} onChange={(event) => setRevision(event.target.value)} inputMode="numeric" placeholder="optional" />
-				</label>
-			</div>
 			<label>
 				Assignee
 				<select value={assigneeProfileId} onChange={(event) => setAssigneeProfileId(event.target.value)}>
@@ -470,7 +540,7 @@ function PromoteForm({ members, onClose, onCreated, onToast }) {
 				</select>
 			</label>
 			<div className="decision-actions">
-				<button disabled={busy} type="submit">
+				<button disabled={busy || !proofArtifact.trim()} type="submit">
 					Promote
 				</button>
 				<button disabled={busy} type="button" onClick={onClose}>
