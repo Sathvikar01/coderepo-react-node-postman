@@ -3,12 +3,28 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const css = readFileSync(fileURLToPath(new URL("../../phase30-workbench.css", import.meta.url)), "utf8");
+const main = readFileSync(fileURLToPath(new URL("../../main.jsx", import.meta.url)), "utf8");
+const baseCss = readFileSync(fileURLToPath(new URL("../../styles.css", import.meta.url)), "utf8");
 const app = readFileSync(fileURLToPath(new URL("../../App.jsx", import.meta.url)), "utf8");
 const header = readFileSync(fileURLToPath(new URL("./WorkspaceHeader.jsx", import.meta.url)), "utf8");
 const productCss = readFileSync(fileURLToPath(new URL("../product/product.css", import.meta.url)), "utf8");
 const proofDialog = readFileSync(fileURLToPath(new URL("../verification-proof/VerificationProofDialog.jsx", import.meta.url)), "utf8");
 
-describe("Phase 30 workbench contracts", () => {
+describe("Tracer visual-system contracts", () => {
+	test("keeps the Phase 30 replacement skin out of the runtime cascade", () => {
+		expect(main).toContain('import "./styles.css"');
+		expect(main).not.toContain('import "./phase30-workbench.css"');
+		expect(baseCss).toContain("--brand: #63f5b5");
+		expect(baseCss).toContain("--surface: #0d1117");
+		expect(baseCss).toContain("--ink-strong: #f5f7f4");
+	});
+
+	test("keeps later header commands compatible with the original shell", () => {
+		expect(baseCss).toContain(".app-header .rail-primary");
+		expect(baseCss).toContain(".app-header .rail-secondary");
+		expect(baseCss).toContain(".app-header .rail-command-label");
+	});
+
 	test("styles the classes the real request/response UI renders", () => {
 		expect(css).toContain(".url-bar");
 		expect(css).toContain(".editor-tab");
