@@ -277,7 +277,7 @@ The differentiators are the linked evidence workflows:
 
 ### Review queue in one minute
 
-Open the sidebar **Reviews** tab: the Needs Attention summary counts breaking findings, blocked states, and items assigned to you. Open a review to see four sections — **Finding | Evidence | Discussion | Decision**. Approve or waive a `BLOCKED` item and watch the technical state stay `BLOCKED`: the decision is recorded beside the evidence, never over it. Change the underlying resource and recheck freshness: the review goes `STALE` with the changed fields named, old comments and decisions intact, and **Create re-review** links a fresh review forward.
+Open the sidebar **Reviews** tab: the Needs Attention summary counts breaking findings, blocked states, and items assigned to you. Promotion starts from a validated Verification Proof artifact — the backend derives machine-owned technical state and evidence fingerprints, so a reviewer cannot type a fake BREAKING/BLOCKED state into existence. Open a review to see four sections — **Finding | Evidence | Discussion | Decision**. Approve or waive a `BLOCKED` item and watch the technical state stay `BLOCKED`: the decision is recorded beside the evidence, never over it. Change the underlying resource and recheck freshness: persisted resource revisions are checked directly; for stateless verification/contract/drift evidence, provide the current Verification Proof so Tracer compares validated identities rather than trusting caller-supplied fingerprints. The review goes `STALE` with changed fields named, old comments and decisions intact, and **Create re-review** requires current proof evidence and links a fresh review forward.
 
 ## Likely reviewer questions
 
