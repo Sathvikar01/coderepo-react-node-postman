@@ -6101,3 +6101,17 @@ User asked to tighten two documentation/product-copy claims after code review: r
 ChatGPT updated README.md plus in-product copy in frontend/src/features/product/product-content.js, ProductDialog.jsx, and VerificationProofDialog.jsx. Verification Proof is now described as canonical content authenticated with an HMAC-SHA256 fingerprint under a server-held key, explicitly not an asymmetric third-party-verifiable digital signature. Broad “everything is redacted” / “secret-free” phrasing was replaced with explicit structural exclusions and defined sensitive surfaces. Target-policy copy was also corrected to mention seeded-demo and Local Runtime exceptions. Regression tests were added to pin the HMAC and scoped-redaction wording.
 
 PR #59 passed Tracer CLI, Baseline Gate, Phase 30 browser E2E, and Phase 30 Locust load on head d963d7d0fabe0ce5e46dff8c0f0d1aeec8ba4bd2. ChatGPT merged PR #59 into main as a36bcb51cbf453cc99d765e9df4c0794e914a068.
+
+
+## [2026-09-25T22:20:00+05:30] Change Impact script fallback + proof wording — GitHub Closure
+
+Direct source review closed three reviewer questions. Sandboxed scripts have no independent network API: `pm.sendRequest` is absent and fetch/XMLHttpRequest/WebSocket/EventSource/require/process/Bun and related capabilities are forbidden/removed; scripts may mutate bounded variables and pre-request headers, while request URL/method are read-only. Verification Proof integrity uses HMAC-SHA256 with the shared fingerprint key but is purpose-separated in the authenticated message via proof/provenance `kind` fields; this is keyed tamper evidence, not an asymmetric signature.
+
+The review did uncover one real gap: Change Impact recognized canonical `pm.variables/environment/collection` calls and dynamic arguments, but alternate valid JavaScript syntax (aliasing/destructuring, bracket notation, optional chaining, or passing `pm` through helpers) could previously evade both exact and dynamic buckets. PR #61 added a conservative fallback that emits `unrecognized-script-variable-access` unknown evidence rather than allowing those forms to disappear silently, with focused regression tests. README wording was also tightened to state that HMAC verification requires the same fingerprint key and that cookie public-suffix protection is a bounded denylist rather than a browser-complete PSL implementation.
+
+PR #60 was closed as superseded after main advanced with overlapping proof/redaction copy changes. Replacement PR #61 was rebuilt on latest main, passed Tracer CLI and Baseline Gate (full tests, syntax, frontend build, seed, runtime smoke), and merged as 2730eab84fce485ee696581bd52124d866ee56b5.
+
+Context:
+pr=61 MERGED
+head=20df34ba7c26b3d61e062ac65c6f25ca791a7492
+merge_commit=2730eab84fce485ee696581bd52124d866ee56b5
