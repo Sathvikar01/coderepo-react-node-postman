@@ -44,7 +44,7 @@ function memberLabel(member) {
 	return `${shortId(member.profileId)} · ${member.role}`;
 }
 
-export function ReviewsPanel({ workspaceId, profileId, role, onToast, liveTick }) {
+export function ReviewsPanel({ workspaceId, profileId, role, onToast, liveTick, promotionSeed, onPromotionConsumed }) {
 	const [reviews, setReviews] = useState([]);
 	const [members, setMembers] = useState([]);
 	const [loading, setLoading] = useState(true);
@@ -73,6 +73,12 @@ export function ReviewsPanel({ workspaceId, profileId, role, onToast, liveTick }
 		reload();
 	}, [reload, liveTick]);
 
+	useEffect(() => {
+		if (!promotionSeed) return;
+		setSelectedId(null);
+		setShowPromote(true);
+	}, [promotionSeed]);
+
 	const summary = useMemo(() => {
 		const open = reviews.filter((item) => item.status !== "CLOSED");
 		return {
@@ -89,7 +95,14 @@ export function ReviewsPanel({ workspaceId, profileId, role, onToast, liveTick }
 			<div className="sidebar-section-label">
 				<span>Needs attention</span>
 				{canMutate && (
-					<button className="link-button" type="button" onClick={() => setShowPromote(true)}>
+					<button
+						className="link-button"
+						type="button"
+						onClick={() => {
+							onPromotionConsumed?.();
+							setShowPromote(true);
+						}}
+					>
 						Promote to review
 					</button>
 				)}
@@ -144,10 +157,16 @@ export function ReviewsPanel({ workspaceId, profileId, role, onToast, liveTick }
 			)}
 			{showPromote && (
 				<PromoteForm
+					key={promotionSeed?.id ?? "manual"}
 					members={members}
-					onClose={() => setShowPromote(false)}
+					seed={promotionSeed}
+					onClose={() => {
+						setShowPromote(false);
+						onPromotionConsumed?.();
+					}}
 					onCreated={(created) => {
 						setShowPromote(false);
+						onPromotionConsumed?.();
 						setSelectedId(created._id);
 						reload();
 					}}
@@ -480,11 +499,12 @@ function ReviewDetail({ members, onBack, onChanged, onToast, profileId, review, 
 	);
 }
 
-function PromoteForm({ members, onClose, onCreated, onToast }) {
-	const [title, setTitle] = useState("");
-	const [findingType, setFindingType] = useState(FINDING_TYPES[0]);
-	const [findingSummary, setFindingSummary] = useState("");
-	const [proofArtifact, setProofArtifact] = useState("");
+function PromoteForm({ members, onClose, onCreated, onToast, seed }) {
+	const seededProof = Boolean(seed?.proofArtifact);
+	const [title, setTitle] = useState(seed?.title ?? "");
+	const [findingType, setFindingType] = useState(seed?.findingType ?? FINDING_TYPES[0]);
+	const [findingSummary, setFindingSummary] = useState(seed?.findingSummary ?? "");
+	const [proofArtifact, setProofArtifact] = useState(seed?.proofArtifact ?? "");
 	const [assigneeProfileId, setAssigneeProfileId] = useState("");
 	const [busy, setBusy] = useState(false);
 
@@ -511,14 +531,18 @@ function PromoteForm({ members, onClose, onCreated, onToast }) {
 	return (
 		<form className="review-detail promote-form" onSubmit={submit} aria-label="Promote to review">
 			<h3>Promote to review</h3>
-			<p className="promote-hint">Explicit creation only. Paste a Verification Proof; the backend validates it and derives machine-owned technical state and evidence identities. Promotion never auto-sends, auto-saves, or re-executes.</p>
+			<p className="promote-hint">
+				{seededProof
+					? "This proof came directly from Tracer's evidence view. Review metadata is editable; technical truth is not."
+					: "Explicit creation only. Paste a Verification Proof; the backend validates it and derives machine-owned technical state and evidence identities. Promotion never auto-sends, auto-saves, or re-executes."}
+			</p>
 			<label>
 				Title
 				<input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={120} required />
 			</label>
 			<label>
 				Finding type
-				<select value={findingType} onChange={(event) => setFindingType(event.target.value)}>
+				<select disabled={seededProof} value={findingType} onChange={(event) => setFindingType(event.target.value)}>
 					{FINDING_TYPES.map((type) => (
 						<option key={type} value={type}>
 							{type}
@@ -530,16 +554,26 @@ function PromoteForm({ members, onClose, onCreated, onToast }) {
 				Finding summary
 				<textarea value={findingSummary} onChange={(event) => setFindingSummary(event.target.value)} rows={3} maxLength={1000} required />
 			</label>
-			<label>
-				Verification Proof artifact
-				<textarea
-					value={proofArtifact}
-					onChange={(event) => setProofArtifact(event.target.value)}
-					rows={6}
-					required
-					placeholder="Paste the exported Tracer Verification Proof JSON. Technical state and evidence identities are derived by the backend."
-				/>
-			</label>
+			{seededProof ? (
+				<div className="review-attached-proof" role="note">
+					<strong>Verification Proof attached</strong>
+					<p>
+						{seed?.proofId ? `Proof ${seed.proofId}` : "The validated proof"} is carried internally from the evidence view
+						{seed?.proofState ? ` · technical state ${seed.proofState}` : ""}. The backend validates it again when the review is created.
+					</p>
+				</div>
+			) : (
+				<label>
+					Verification Proof artifact
+					<textarea
+						value={proofArtifact}
+						onChange={(event) => setProofArtifact(event.target.value)}
+						rows={6}
+						required
+						placeholder="Paste the exported Tracer Verification Proof JSON. Technical state and evidence identities are derived by the backend."
+					/>
+				</label>
+			)}
 			<label>
 				Assignee
 				<select value={assigneeProfileId} onChange={(event) => setAssigneeProfileId(event.target.value)}>
