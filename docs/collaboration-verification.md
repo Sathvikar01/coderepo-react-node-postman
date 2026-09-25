@@ -77,3 +77,22 @@ PASS  33. Workspace endpoints require authentication — status=401
 | 30–31 | Secret boundary: sharing an environment shares only alias names, never resolved values |
 | 32–32b | Execution history stays profile-scoped even inside a shared workspace |
 | 33 | Workspace endpoints require authentication |
+
+## Phase 24B — live collaboration + version history
+
+Run after a fresh seed, with the backend on :8000 and the frontend on :3000:
+
+```bash
+cd backend && bun run seed
+bun frontend/scripts/phase24b-live-e2e.mjs
+```
+
+Expected: `PHASE24B_LIVE_E2E_PASS 29/29` — two independent Chrome contexts (Alex OWNER, Jordan EDITOR) proving: live update toasts without reload, immutable v1/v2 history with structured compare, dirty-draft preservation with a remote-change banner, stale-save 409 through the real Save button, restore-as-new-revision (v4, not a rewrite), immediate VIEWER read-only, direct-API 403s, removal stream-close with fallback, history isolation, no credential material in versions/diffs/events/activity, reconnect without duplicate writes, and 375/1440 responsive + light/dark checks on the new surfaces.
+
+Backend domain and security suites live alongside the Phase 24 suites:
+
+```bash
+cd backend && bun test src/features/versions/
+```
+
+They cover version recording/retention/retry-safety, deterministic bounded compare with typed truncation, CAS restore, outsider/VIEWER/cross-workspace refusal, revocation stream-close, and snapshot/event secret exclusion.

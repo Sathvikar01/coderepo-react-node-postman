@@ -17,6 +17,7 @@ import { localRuntimeRouter } from "./features/local-runtime/local-runtime.route
 import { mockRouteRouter, mockRouter } from "./features/mocks/mock.routes.js";
 import { preferenceRouter, profileRouter } from "./features/profiles/profile.routes.js";
 import { verificationProofRouter } from "./features/verification-proof-api/verification-proof.routes.js";
+import { collectionVersionsRouter, environmentVersionsRouter } from "./features/versions/versions.routes.js";
 import { whyInspectorRouter } from "./features/why-inspector/why-inspector.routes.js";
 import { workspaceRouter } from "./features/workspaces/workspace.routes.js";
 import { errorHandler, notFoundHandler } from "./shared/middleware/error-handler.js";
@@ -105,6 +106,26 @@ export function createApp() {
 		resolveProfileContext,
 		resolveWorkspaceContext,
 		environmentRouter,
+	);
+	// Phase 24B — version history shares each resource's auth and
+	// workspace-context chain, so membership and role gates behave identically.
+	// The routers stay prefix-scoped so unrelated routes never pass through
+	// version middleware.
+	app.use(
+		"/api/v1/collections",
+		express.json({ limit: LIMITS.jsonBodyCollection }),
+		requireWorkspaceAuth,
+		resolveProfileContext,
+		resolveWorkspaceContext,
+		collectionVersionsRouter,
+	);
+	app.use(
+		"/api/v1/environments",
+		express.json({ limit: LIMITS.jsonBodyEnvironment }),
+		requireWorkspaceAuth,
+		resolveProfileContext,
+		resolveWorkspaceContext,
+		environmentVersionsRouter,
 	);
 	app.use(
 		"/api/v1/cookies",

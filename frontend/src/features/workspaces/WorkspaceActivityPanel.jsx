@@ -21,9 +21,11 @@ const ACTION_LABELS = {
 	"collection.created": "Collection created",
 	"collection.updated": "Collection updated",
 	"collection.deleted": "Collection deleted",
+	"collection.restored": "Collection restored",
 	"environment.created": "Environment created",
 	"environment.updated": "Environment updated",
 	"environment.deleted": "Environment deleted",
+	"environment.restored": "Environment restored",
 };
 
 export function actionLabel(action) {
@@ -35,7 +37,7 @@ export function actionLabel(action) {
 // Pure presentation over `GET /workspaces/:id/activity`. Entries are already
 // secret-redacted by the backend; this component renders only what the server
 // returned and never fetches a second time for hidden fields.
-export function WorkspaceActivityPanel({ refreshToken = 0, workspaceId }) {
+export function WorkspaceActivityPanel({ refreshToken = 0, workspaceId, onOpenVersions }) {
 	const [entries, setEntries] = useState([]);
 	const [total, setTotal] = useState(0);
 	const [loading, setLoading] = useState(true);
@@ -103,6 +105,15 @@ export function WorkspaceActivityPanel({ refreshToken = 0, workspaceId }) {
 											: ""}
 									{` · ${formatWhen(entry.createdAt)}`}
 								</small>
+								{onOpenVersions && (entry.targetType === "collection" || entry.targetType === "environment") && entry.targetId && (
+									<button
+										className="text-button"
+										type="button"
+										onClick={() => onOpenVersions({ resourceType: entry.targetType, resourceId: entry.targetId, revision: entry.newRevision })}
+									>
+										View versions
+									</button>
+								)}
 							</div>
 						</li>
 					))}

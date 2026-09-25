@@ -19,6 +19,8 @@ import { WorkspaceAccount } from "../auth/workspace-account.model.js";
 import { Collection } from "../collections/collection.model.js";
 import { Environment } from "../environments/environment.model.js";
 import { ProfilePreference } from "../profiles/preference.model.js";
+import { ResourceVersion } from "../versions/version.model.js";
+import { versionsService } from "../versions/versions.service.js";
 import { recordWorkspaceActivity } from "./workspace-activity.js";
 import { WorkspaceActivity } from "./workspace-activity.model.js";
 import { Workspace } from "./workspace.model.js";
@@ -95,6 +97,7 @@ async function seedCollaboration() {
 
 	await Workspace.deleteMany({});
 	await WorkspaceActivity.deleteMany({});
+	await ResourceVersion.deleteMany({});
 	await Workspace.insertMany([
 		{
 			_id: TEAM_WORKSPACE_ID,
@@ -167,6 +170,38 @@ async function seedCollaboration() {
 	// workspace-scoped one. Runs after the workspaceId backfill so no transient duplicate
 	// name can block index creation.
 	await Promise.all([Collection.syncIndexes(), Environment.syncIndexes(), Workspace.init(), WorkspaceActivity.init()]);
+
+	// Phase 24B — seeded resources start at revision 1, so record their v1
+	// CREATED snapshots. Later live saves then produce v2+ through the normal
+	// CAS path, keeping version history continuous from a fresh seed.
+	const seededCollections = await Collection.find({
+		_id: { $in: [ALEX_ORDERS, ALEX_EXAMPLES, JORDAN_ORDERS, JORDAN_EXAMPLES] },
+	}).lean();
+	for (const document of seededCollections) {
+		await versionsService.recordVersion({
+			workspaceId: document.workspaceId,
+			resourceType: "collection",
+			resourceId: document._id,
+			revision: document.revision,
+			actorProfileId: document.createdByProfileId ?? document.ownerProfileId,
+			action: "CREATED",
+			aggregate: document,
+		});
+	}
+	const seededEnvironments = await Environment.find({
+		_id: { $in: [ALEX_LOCAL_ENV, ALEX_STAGING_ENV, JORDAN_LOCAL_ENV, JORDAN_STAGING_ENV] },
+	}).lean();
+	for (const document of seededEnvironments) {
+		await versionsService.recordVersion({
+			workspaceId: document.workspaceId,
+			resourceType: "environment",
+			resourceId: document._id,
+			revision: document.revision,
+			actorProfileId: document.createdByProfileId ?? document.ownerProfileId,
+			action: "CREATED",
+			aggregate: document,
+		});
+	}
 
 	const alexOrders = await Collection.findById(ALEX_ORDERS).lean();
 	const firstRequestId = alexOrders.requests[0].id;

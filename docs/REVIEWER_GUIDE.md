@@ -143,6 +143,25 @@ Point out explicit link states:
 
 A stale proof is never painted as a current green pass.
 
+### 6. Collaborate live
+
+> Tracer provides live workspace synchronization and conflict awareness, not character-level collaborative editing.
+
+Strongest demo path, with two signed-in browsers (Alex OWNER, Jordan EDITOR) in **API Platform Team**:
+
+```text
+Jordan edits → Alex receives the live change → compare versions → concurrent conflict → restore old version as new revision
+```
+
+1. Jordan saves the shared collection → Alex's UI follows the tip with a toast, no reload.
+2. Alex opens **Versions** from the collection menu, selects v1, and compares structured paths (`requests[id=…].method`) against current.
+3. Alex dirties a request draft; Jordan saves again → Alex keeps the draft and gets a remote-change banner (Compare / Reload remote / Keep editing).
+4. Alex saves the stale draft → the attributed 409, then Reload.
+5. Alex restores v1 → a new revision (v4), never a history rewrite; Jordan sees v4 live.
+6. Demote Jordan to VIEWER → controls go read-only immediately; remove Jordan → the stream closes and the client falls back to an authorized workspace.
+
+Version snapshots hold the saved canonical definition only: `secretRef` aliases without values, reference-only auth templates, and redacted header/query credentials.
+
 ## Architecture in one diagram
 
 ```mermaid

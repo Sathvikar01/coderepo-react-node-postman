@@ -69,6 +69,7 @@ export function CollectionsSidebar({
 	onOpenCollection,
 	onOpenDocs,
 	onOpenRequest,
+	onOpenVersions,
 	onRenameCollection,
 	onRenameFolder,
 	onReorderCollection,
@@ -180,6 +181,9 @@ export function CollectionsSidebar({
 													onSelect: () => onEditCollection(collection),
 												},
 												{ icon: "description", label: "Documentation", onSelect: () => onOpenDocs(collection) },
+											...(onOpenVersions
+												? [{ icon: "history", label: "Versions", onSelect: () => onOpenVersions(collection) }]
+												: []),
 												{
 													disabled: !canExecute,
 													icon: "play_arrow",
