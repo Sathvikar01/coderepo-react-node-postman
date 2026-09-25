@@ -14,6 +14,7 @@ import {
 	looksLikeProofArtifact,
 	proofErrorMessage,
 	rehearsalLine,
+	reviewPromotionOptions,
 	reasonTexts,
 	reportHeadline,
 	reportTone,
@@ -91,7 +92,7 @@ function Headline({ report }) {
 
 // A proof is only rendered as evidence when the backend report says it is VALID.
 // Every other status keeps its own non-green presentation.
-function ProofView({ proof, report }) {
+function ProofView({ proof, report, promotionOptions, onPromote, promoteBusy }) {
 	if (!proof) return <p className="kv-empty">Load or import a verification proof to inspect it.</p>;
 	const counts = countRows(proof.counts);
 	const contracts = contractRows(proof.contracts);
@@ -101,6 +102,27 @@ function ProofView({ proof, report }) {
 	return (
 		<div className="recorder-stack">
 			<Headline report={report} />
+			{onPromote && promotionOptions.length > 0 && (
+				<section className="recorder-card" aria-label="Review actions">
+					<h3>Promote to Review</h3>
+					<p className="field-hint">
+						Tracer carries this exact validated proof into the review. No copy/paste, no retyping technical state, and no new verification run.
+					</p>
+					<div className="recorder-actions">
+						{promotionOptions.map((option) => (
+							<button
+								key={option.findingType}
+								disabled={promoteBusy}
+								type="button"
+								onClick={() => onPromote(option)}
+							>
+								<MaterialIcon size={17}>rate_review</MaterialIcon>
+								{promoteBusy ? "Preparing review…" : option.label}
+							</button>
+						))}
+					</div>
+				</section>
+			)}
 			<div className="recorder-summary-grid">
 				<div><span>Verification state</span><strong>{verificationStateBadge(proof.state).label}</strong></div>
 				<div><span>Report status</span><strong>{statusLabel(report?.status)}</strong></div>
@@ -235,9 +257,10 @@ function IntegrityView({ proof, artifact }) {
 	);
 }
 
-export function VerificationProofDialog({ onClose, onOpenHelp }) {
+export function VerificationProofDialog({ onClose, onOpenHelp, onPromoteToReview }) {
 	const [tab, setTab] = useState("proof");
 	const [artifactText, setArtifactText] = useState("");
+	const [validatedArtifactText, setValidatedArtifactText] = useState("");
 	const [proof, setProof] = useState(null);
 	const [artifact, setArtifact] = useState(null);
 	const [report, setReport] = useState(null);
@@ -275,8 +298,10 @@ export function VerificationProofDialog({ onClose, onOpenHelp }) {
 	// Import never trusts the artifact. It parses it strictly, and the proof only
 	// becomes inspectable after the backend has decided its status.
 	const importArtifact = async () => {
-		const result = await run("import", () => verificationProofApi.importProof(artifactText));
+		const submittedArtifact = artifactText;
+		const result = await run("import", () => verificationProofApi.importProof(submittedArtifact));
 		if (!result) return;
+		setValidatedArtifactText(submittedArtifact);
 		setImportResult(result);
 		setProof(result.proof);
 		setArtifact(null);
@@ -307,17 +332,34 @@ export function VerificationProofDialog({ onClose, onOpenHelp }) {
 	};
 
 	// Export is a deterministic backend artifact. The proof is not mutated here.
-	const exportLoaded = async () => {
-		if (!proof) return;
-		const result = await run("export", () => verificationProofApi.exportProof({ proof }));
-		if (!result) return;
+	const exportLoaded = async ({ download = true } = {}) => {
+		if (!proof) return null;
+		const result = await run(download ? "export" : "promote", () => verificationProofApi.exportProof({ proof }));
+		if (!result) return null;
 		setArtifact(JSON.parse(result.text));
 		setArtifactText(result.text);
-		downloadText(safeFilename(result.filename), result.text);
-		setNotice(`Exported ${safeFilename(result.filename)} (proof ${result.proofId}).`);
+		setValidatedArtifactText(result.text);
+		if (download) {
+			downloadText(safeFilename(result.filename), result.text);
+			setNotice(`Exported ${safeFilename(result.filename)} (proof ${result.proofId}).`);
+		}
+		return result.text;
+	};
+
+	const promoteToReview = async (option) => {
+		if (!proof || !onPromoteToReview) return;
+		const exactArtifact = validatedArtifactText || (await exportLoaded({ download: false }));
+		if (!exactArtifact) return;
+		onPromoteToReview({
+			...option,
+			proofArtifact: exactArtifact,
+			proofId: proof.proofId ?? null,
+			proofState: proof.state ?? null,
+		});
 	};
 
 	const hasProof = Boolean(proof);
+	const promotionOptions = useMemo(() => reviewPromotionOptions(proof), [proof]);
 	const canImport = artifactText.trim().length > 0 && looksLikeProofArtifact(artifactText);
 	const malformedImport = artifactText.trim().length > 0 && !looksLikeProofArtifact(artifactText);
 
@@ -373,7 +415,15 @@ export function VerificationProofDialog({ onClose, onOpenHelp }) {
 				{notice && <p className="field-hint proof-notice" role="status">{notice}</p>}
 
 				<div className="recorder-content" role="tabpanel">
-					{tab === "proof" && <ProofView proof={proof} report={report} />}
+					{tab === "proof" && (
+						<ProofView
+							proof={proof}
+							report={report}
+							promotionOptions={promotionOptions}
+							onPromote={onPromoteToReview ? promoteToReview : null}
+							promoteBusy={busy === "promote"}
+						/>
+					)}
 					{tab === "evidence" && <EvidenceView proof={proof} />}
 					{tab === "integrity" && <IntegrityView artifact={artifact} proof={proof} />}
 					{tab === "import" && (
@@ -417,7 +467,7 @@ export function VerificationProofDialog({ onClose, onOpenHelp }) {
 										secrets.
 									</p>
 									<div className="recorder-actions">
-										<button className="primary-button" disabled={busy === "export"} type="button" onClick={exportLoaded}>
+										<button className="primary-button" disabled={busy === "export"} type="button" onClick={() => exportLoaded()}>
 											<MaterialIcon size={17}>download</MaterialIcon>
 											{busy === "export" ? "Exporting…" : "Export Proof"}
 										</button>
