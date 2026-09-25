@@ -126,6 +126,7 @@ export default function App() {
 	const [historyRefresh, setHistoryRefresh] = useState(0);
 	const [flightRecorder, setFlightRecorder] = useState(null);
 	const [proofOpen, setProofOpen] = useState(false);
+	const [reviewPromotion, setReviewPromotion] = useState(null);
 	const [productSurface, setProductSurface] = useState(null);
 	const [investigation, setInvestigation] = useState(null);
 	const [whyInspector, setWhyInspector] = useState(null);
@@ -374,6 +375,7 @@ export default function App() {
 		setWorkspaceDetail(null);
 		setWorkspaceDialog(null);
 		setWorkspaceError("");
+		setReviewPromotion(null);
 		setDialog(null);
 		setDialogError("");
 		setSidebarOpen(false);
@@ -1217,6 +1219,16 @@ export default function App() {
 		setSidebarOpen(false);
 	};
 
+	// Final Phase 50 polish — the proof dialog hands its exact validated/exported
+	// artifact directly to Reviews. No clipboard or caller-authored technical
+	// state crosses this seam; the backend validates the artifact again on create.
+	const openReviewPromotion = (promotion) => {
+		setReviewPromotion({ ...promotion, id: crypto.randomUUID() });
+		setProofOpen(false);
+		setSidebarTab("reviews");
+		setSidebarOpen(true);
+	};
+
 	const compareHistoryEntry = (executionId) => {
 		if (!comparisonBaseId) {
 			setComparisonBaseId(executionId);
@@ -1460,7 +1472,13 @@ export default function App() {
 		/>
 	) : null;
 
-	const proofNode = proofOpen ? <VerificationProofDialog onClose={() => setProofOpen(false)} onOpenHelp={() => setProductSurface("help")} /> : null;
+	const proofNode = proofOpen ? (
+		<VerificationProofDialog
+			onClose={() => setProofOpen(false)}
+			onOpenHelp={() => setProductSurface("help")}
+			onPromoteToReview={workspaceRole === "VIEWER" ? null : openReviewPromotion}
+		/>
+	) : null;
 
 	const productNode = productSurface ? (
 		<ProductDialog initialSurface={productSurface} onClose={() => setProductSurface(null)} />
@@ -1822,6 +1840,8 @@ export default function App() {
 							profileId={profile?._id ?? null}
 							role={workspaceRole}
 							workspaceId={activeWorkspaceId}
+							promotionSeed={reviewPromotion}
+							onPromotionConsumed={() => setReviewPromotion(null)}
 							onToast={toast}
 						/>
 					) : sidebarTab === "activity" ? (
