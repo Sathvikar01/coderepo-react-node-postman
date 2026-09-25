@@ -16,8 +16,9 @@ Tracer continues:
 4. **Can the affected workflow be rehearsed safely?**
 5. **What evidence makes this state VERIFIED, BLOCKED, NEEDS_REHEARSAL, or UNKNOWN?**
 6. **Why did Tracer reach that result?**
+7. **What happens when another developer changes the same shared API workspace?**
 
-The request builder is the substrate. The differentiator is the evidence system around each execution.
+The request builder is the substrate. The differentiator is the evidence system around each execution, plus conflict-safe shared workspace collaboration: live saved-state updates, immutable resource versions, attributed CAS conflicts, and restore-as-new-revision.
 
 ```text
 Execute → Understand → Compare → Verify
@@ -167,7 +168,16 @@ Version snapshots hold the saved canonical definition only: `secretRef` aliases 
 ```mermaid
 flowchart LR
     UI["React UI<br/>Workspace · History · Passport<br/>Investigation · Proof · Why?"]
-    API["Express API<br/>auth · profile scope · validation"]
+    API["Express API<br/>auth · profile/workspace scope · validation"]
+
+    subgraph COLLAB["Shared workspace collaboration"]
+      WS["membership + roles"]
+      SAVED["collections/environments<br/>revision CAS"]
+      VER["20 immutable versions<br/>compare · restore"]
+      SSE["authenticated SSE<br/>freshness only"]
+      WS --> SAVED --> VER
+      SAVED --> SSE
+    end
 
     subgraph EXEC["Single execution boundary"]
       C["compile"]
@@ -203,7 +213,12 @@ flowchart LR
     DB[("MongoDB")]
     TARGET["Approved targets"]
 
-    UI --> API --> C
+    UI --> API
+    API --> WS
+    API --> C
+    SSE --> UI
+    SAVED --> DB
+    VER --> DB
     H --> DB
     H --> W
     API --> DB
@@ -224,6 +239,10 @@ flowchart LR
 | VERIFIED / BLOCKED / NEEDS_REHEARSAL / UNKNOWN | **Phase 41** | display only |
 | Proof integrity/currentness | Phase 47 | display only |
 | Why explanation | Why read-model | compose existing evidence only |
+| Shared workspace membership / role | workspace service + persisted membership | display backend capabilities |
+| Saved collection/environment revision | resource CAS in backend services | keep local draft, never silently merge |
+| Version history / restore | immutable version rows + CAS restore | inspect/compare/request restore |
+| Live update event | SSE broker (advisory only) | reload canonical state |
 
 The rule to remember:
 
@@ -248,6 +267,8 @@ The differentiators are the linked evidence workflows:
 - authoritative cross-environment verification
 - tamper-evident Verification Proof
 - WHY Inspector across the full chain
+- live multi-user workspace synchronization with conflict-safe drafts
+- immutable collection/environment version history with compare + restore-as-new-revision
 
 ## Likely reviewer questions
 
@@ -267,6 +288,18 @@ Proof artifacts are intentionally not persisted server-side by the proof import 
 
 It protects mutating rehearsal steps from blind replay. If a remote side effect may have occurred but the durable checkpoint is ambiguous, Tracer stops rather than claiming exactly-once remote behavior it cannot prove.
 
+### “Is the live collaboration Google-Docs-style realtime editing?”
+
+No. Tracer synchronizes **saved resource state**, roles, membership and activity live. It intentionally does not synchronize keystrokes or cursors. If Alex and Jordan edit the same saved request concurrently, each keeps their own local draft; the first valid CAS save wins and the stale save receives an attributed `409`. That is safer for an API-development tool than silently merging request definitions.
+
+### “What if an SSE event is missed?”
+
+Nothing authoritative is lost. SSE is a freshness signal only. On reconnect the client reloads canonical workspace state from the API; persisted MongoDB resources, version rows and activity are the source of truth. The in-process broker is appropriate to this single-process assessment runtime and is not presented as multi-instance pub/sub.
+
+### “Can one collaborator see another collaborator's execution history or secrets?”
+
+No. Saved collection/environment definitions are workspace-shared, but execution History/Passport/Investigation remains profile-scoped. Environment `secretRef` aliases may be shared as definitions; resolved credential values remain profile-authorized and are never copied into versions, activity or live event payloads.
+
 ### “Are you claiming enterprise compliance?”
 
 No. Security & Safety, Data Handling, and Responsible Use document implemented behavior. The project does not claim SOC 2, GDPR certification, penetration-test certification, or production legal review.
@@ -280,6 +313,8 @@ No. Security & Safety, Data Handling, and Responsible Use document implemented b
 - Proof import/attachment is inspection-only and read-scoped; Tracer does not persist an imported proof merely to make Why? easier.
 - If evidence from Impact/Drift/Verification/Proof is not available or cannot be identity-linked, Why? reports that gap.
 - The final submission-readiness report documents host-specific rerun limitations separately; do not replace those historical results with stronger claims.
+- Live collaboration uses an in-process authenticated SSE broker with bounded replay. It is deliberately suitable for the single backend process used by this assessment; multi-instance deployment would require an external pub/sub layer.
+- Collaboration is saved-state synchronization, not CRDT/OT character-level co-editing.
 - The project is designed for local evaluation and HackerRank assessment constraints, not as a claim of a hosted multi-tenant commercial SaaS.
 
 ## Demo account
@@ -308,9 +343,11 @@ bun start
 bun test
 bun run demo:flight-recorder
 bun run demo:investigation
+bun frontend/scripts/phase24b-live-e2e.mjs  # two-browser live collaboration proof (app running)
 ```
 
 For exact final acceptance evidence and caveats, read:
 
 - `docs/final-submission-readiness.md`
 - `docs/phase49/why-inspector.md`
+- `docs/collaboration-verification.md`
