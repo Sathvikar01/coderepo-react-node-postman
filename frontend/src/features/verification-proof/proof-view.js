@@ -170,6 +170,52 @@ export function contractRows(contracts) {
 	};
 }
 
+
+// Phase 50 polish — deterministic review entry points from an already-loaded
+// Verification Proof. This helper never decides technical truth: it only exposes
+// review finding types that are explicitly present in the backend proof.
+export function reviewPromotionOptions(proof) {
+	if (!proof) return [];
+	const proofId = String(proof.proofId ?? "verification proof").slice(0, 64);
+	const snapshotId = String(proof.identity?.snapshot?.snapshotId ?? "the recorded snapshot").slice(0, 64);
+	const options = [];
+
+	const breaking = proof.contracts?.classes?.breaking ?? 0;
+	if (breaking > 0) {
+		options.push({
+			findingType: "contract_breaking",
+			label: "Promote BREAKING contract",
+			title: `Review ${breaking} breaking contract finding${breaking === 1 ? "" : "s"}`,
+			findingSummary: `Verification Proof ${proofId} records ${breaking} breaking contract compatibility finding${breaking === 1 ? "" : "s"} for ${snapshotId}.`,
+		});
+	}
+
+	if (proof.state === PROOF_STATES.BLOCKED) {
+		options.push({
+			findingType: "verification_blocked",
+			label: "Promote BLOCKED verification",
+			title: "Review BLOCKED verification",
+			findingSummary: `Phase 41 verification is BLOCKED in Verification Proof ${proofId} for ${snapshotId}.`,
+		});
+	} else if (proof.state === PROOF_STATES.UNKNOWN) {
+		options.push({
+			findingType: "verification_unknown",
+			label: "Promote UNKNOWN verification",
+			title: "Review UNKNOWN verification",
+			findingSummary: `Phase 41 verification is UNKNOWN in Verification Proof ${proofId} for ${snapshotId}.`,
+		});
+	}
+
+	options.push({
+		findingType: "verification_proof",
+		label: "Promote proof",
+		title: `Review Verification Proof ${proofId}`,
+		findingSummary: `Review the exact evidence committed by Verification Proof ${proofId} for ${snapshotId}. Technical state: ${proof.state ?? "UNKNOWN"}.`,
+	});
+
+	return options;
+}
+
 export function driftSummary(drift) {
 	if (!drift || drift.present !== true) {
 		return { present: false, blocking: [], blockingCount: 0, identical: null, label: "No environment drift comparison is committed in this proof." };

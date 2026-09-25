@@ -268,3 +268,21 @@
 	color: #7c2d12;
 	padding: 0.5rem;
 }
+
+
+.review-attached-proof {
+	border: 1px solid var(--border, #e5e7eb);
+	border-radius: 0.5rem;
+	background: var(--card, transparent);
+	padding: 0.55rem 0.65rem;
+}
+
+.review-attached-proof strong {
+	font-size: 0.8rem;
+}
+
+.review-attached-proof p {
+	color: var(--muted-foreground, #6b7280);
+	font-size: 0.76rem;
+	margin: 0.2rem 0 0;
+}
