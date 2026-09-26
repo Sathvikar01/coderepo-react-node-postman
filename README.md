@@ -7,6 +7,25 @@
 
 Tracer still gives you the familiar API-client workflow — build requests, organize collections, switch environments, send, inspect responses, and reopen history. The difference is what happens **after the workspace changes**.
 
+## Submission scope — 10 core capabilities
+
+Tracer is submitted as **10 meaningful end-to-end capabilities**. Supporting controls are grouped under the workflow they complete rather than counted as separate products.
+
+| # | Core capability | Supporting controls included in that capability |
+| ---: | --- | --- |
+| 1 | **Request authoring & execution** | Request builder, real HTTP send/cancel, cURL import, code snippets/export, local-target approval, execution safety |
+| 2 | **Collections & generated documentation** | Collections, folders, saved requests, ordering/duplication, collection documentation |
+| 3 | **Environment management** | Named environments, variable resolution, secret references, active/default environment behavior |
+| 4 | **Authentication & session state** | Bearer/basic/API-key auth, inheritance, cookie/session jar and credential-safe handling |
+| 5 | **Response analysis & history** | Status/timing/size/headers/body inspection, immutable history, reopen/resend/save-from-history |
+| 6 | **Automated testing & multi-request runs** | Sandboxed scripts, assertions, collection/folder runner, headless CLI and CI parity |
+| 7 | **Examples & deterministic mocks** | Saved examples, match rules, mock send and capability mock routes without network dispatch |
+| 8 | **Workspaces, collaboration & versioning** | Sharing, roles, activity, live saved-state sync, revision conflicts, immutable versions, compare/restore |
+| 9 | **Flight Recorder & investigation** | Execution Passport, run comparison, causal probes, regression boundary, minimization, stability, reproduction capsules |
+| 10 | **Change verification & human review** | Impact, environment drift, rehearsal, contract compatibility, authoritative verification, Verification Proof, Why? explanation, Reviews/re-review |
+
+This grouping is intentional: a cookie jar is session behavior inside authenticated execution; a code-snippet dialog is an authoring/export control; immutable versions are part of collaboration safety; and Impact/Drift/Rehearsal/Proof/Why/Reviews form one linked change-verification workflow. They are implementation depth within the ten capabilities above, not independent product scope.
+
 ## Reviewer in 60 seconds
 
 **Tracer answers one concrete question: when an API workspace changes, can we trust the affected workflow?**
@@ -419,6 +438,9 @@ Then open `http://localhost:3000`.
 `bun start` runs `setup.sh --start` first (which reseeds), then starts the Express API on port 8000 with `bun --watch` and the Vite dev server on port 3000. Vite proxies `/api` to the backend.
 
 ## Using the Workspace
+
+The controls below are supporting surfaces within the ten core capabilities above; they are not additional submission features.
+
 
 - **Keyboard.** `Ctrl/Cmd+Enter` sends the active request, `Ctrl/Cmd+S` saves it into its collection, arrow keys move between request, response, and sidebar tabs, and the splitter between the request and response panes resizes with arrow keys (`Enter` resets it).
 - **Layout.** Drag the splitter between the request builder and the response to set your own balance; the position is remembered locally. Below 840 px the collection panel becomes an overlay that closes with `Escape`.
