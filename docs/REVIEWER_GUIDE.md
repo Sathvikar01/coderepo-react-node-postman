@@ -2,44 +2,43 @@
 
 This document is the fastest way to understand and demo the shipped product.
 
-## 30-second pitch
+## 10-second story
 
-**Tracer is an API execution, investigation, and change-verification workspace.**
+**Tracer is an API change-safety workspace.**
 
-A conventional HTTP client answers: *what did this request return?*
+A developer changes an API request, variable, auth setting, collection, or environment. Tracer answers:
 
-Tracer continues:
-
-1. **How exactly did it execute?**
-2. **What changed when it stopped working?**
-3. **What does this change affect?**
-4. **Can the affected workflow be rehearsed safely?**
-5. **What evidence makes this state VERIFIED, BLOCKED, NEEDS_REHEARSAL, or UNKNOWN?**
-6. **Why did Tracer reach that result?**
-7. **What happens when another developer changes the same shared API workspace?**
-
-The request builder is the substrate. The differentiator is the evidence system around each execution, plus conflict-safe shared workspace collaboration: live saved-state updates, immutable resource versions, attributed CAS conflicts, and restore-as-new-revision.
+1. **What can this change affect?**
+2. **Can the affected workflow still run in the target environment?**
+3. **Did environment drift or a response-contract break block it?**
+4. **What evidence supports the final technical state?**
+5. **What human review decision was made beside that state?**
 
 ```text
-Execute → Understand → Compare → Verify
-   \____________ Why? ____________/
+Change → Impact → Rehearse → Verify → Review
 ```
+
+That is the story to say first. Everything else in Tracer exists to make one of those five steps trustworthy.
+
+## 30-second pitch
+
+Start with a normal API workspace: compose requests, save collections, use environments, send, and inspect responses.
+
+Tracer adds the change-safety loop. When workspace state changes, **Impact** narrows the requests and references that may be affected. **Rehearsal** runs that affected workflow against the target environment through the normal execution pipeline. **Verification** combines the recorded rehearsal, environment-drift, and contract evidence into `VERIFIED`, `BLOCKED`, `NEEDS_REHEARSAL`, or `UNKNOWN`, then produces a tamper-evident Verification Proof. **Reviews** carries that exact proof into the human decision without changing the machine result.
+
+If something fails, **Why?** and Investigation explain the exact configuration and execution evidence behind it. If another developer edits the same workspace, collaboration keeps versions, conflicts, and restores explicit instead of silently merging over them.
 
 ## What to show first
 
-If a reviewer only gives you two minutes, do this:
+If a reviewer only gives you two minutes:
 
-1. Send **Orders API → Read → List orders**.
-2. Open **History → Why?**.
-3. Show:
-   - effective configuration,
-   - where variables/auth came from,
-   - ordered execution stages,
-   - explicit missing/unknown evidence instead of guessed conclusions.
-4. Cross-link to **Passport**.
-5. Explain: **“React never decides that this execution is verified. Phase 41 is the authority; Why? only explains recorded evidence.”**
+1. Say the five-step story once: **“Change → Impact → Rehearse → Verify → Review.”**
+2. Send **Orders API → Read → List orders** to establish that this is a real API workspace, not a diagram.
+3. Open **History → Why?** and show that Tracer records the effective configuration, variable/auth provenance, execution stages, and explicit unknown evidence instead of guessing.
+4. Cross-link to **Passport** to show the immutable execution record that later impact/verification evidence can cite.
+5. Explain: **“This evidence is what lets Tracer verify a changed workflow and carry the exact result into review; React never invents the verification state.”**
 
-That single path demonstrates the central product idea better than walking through every Postman-like feature.
+Do not start by listing every Postman-like feature or every internal phase. The reviewer should understand the job first; the implementation depth comes second.
 
 ## Five-minute differentiator demo
 
