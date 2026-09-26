@@ -143,8 +143,13 @@ pass("Collections rail command changes resource mode");
 
 await click('[aria-label="Import cURL"]', "Import");
 await waitFor('document.body.textContent.includes("Import cURL")', "Import dialog");
-await pressEscape();
-pass("Import opens");
+await setInput('.import-dialog textarea', "curl http://127.0.0.1:8000/demo/v1/examples/text");
+await waitFor('document.querySelector(".import-dialog .primary-button:not([disabled])") !== null', "import ready");
+await clickButtonText("Import as draft");
+await waitFor('document.querySelector(".import-dialog-modal[open]") === null && document.querySelector(".request-builder") !== null', "backend-validated import");
+const importedUrl = await evaluate('document.querySelector(".url-input")?.value || ""');
+if (!importedUrl.includes("/demo/v1/examples/text")) throw new Error("Imported draft did not contain backend-validated URL");
+pass("Import validates through API and opens a draft");
 
 await click('[aria-label="Environments"]', "Variables");
 await waitFor('document.body.textContent.includes("Environments")', "Environments");
@@ -168,8 +173,9 @@ pass("request editor tabs work");
 
 await click(".code-button", "Code");
 await waitFor('document.querySelector(".code-dialog-modal[open]") !== null', "Code dialog");
+await waitFor('document.querySelector(".code-preview")?.textContent.includes("curl --request")', "backend-generated code");
 await pressEscape();
-pass("Code opens");
+pass("Code generation returns through API");
 
 await click(".send-button", "Send");
 await waitFor('document.querySelector(".response-toolbar") !== null', "terminal send result", 20000);
