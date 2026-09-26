@@ -6203,3 +6203,52 @@ branch=polish/direct-promote-to-review
 pr=63 MERGED
 final_head=38a88f5f99fcf2f8f6809f35e0c9bf75c9cdb025
 merge_commit=24a32d74cc8b6d19e799362cb82eaed930e348ce
+
+
+## [2026-09-26T09:13:00+05:30] Core Story Clarity — GitHub Closure
+
+Final positioning pass to make Tracer's purpose understandable before its implementation depth.
+
+Primary story changed from the abstract `Execute → Understand → Compare → Verify` framing to the concrete user event:
+
+`Change → Impact → Rehearse → Verify → Review`
+
+Product identity now leads with `API change-safety workspace`.
+
+Reviewer-facing explanation now starts with one question: when an API workspace changes, can we trust the affected workflow?
+
+The five steps are presented as:
+- Change a request, variable, auth setting, environment, or collection.
+- Impact identifies the saved requests/references the change can reach.
+- Rehearse runs the affected workflow against the target environment through the normal backend execution path.
+- Verify combines rehearsal, drift, and contract evidence into the authoritative verification state and Verification Proof.
+- Review carries that exact validated proof into the human decision without rewriting technical truth.
+
+Why?/Investigation and Collaboration remain fully shipped, but are now positioned as supporting systems: Investigation explains failures/evidence; Collaboration keeps shared workspace changes/version conflicts explicit.
+
+Changed current-facing surfaces only:
+- README.md
+- docs/REVIEWER_GUIDE.md
+- frontend product help/about content
+- content/render tests
+
+No backend, API, schema, dependency, verification-authority, execution, collaboration, or review behavior changed.
+
+Exact PR head: `44114474ec349638a7810ee95ee7052dbe81d139`.
+Exact-head GitHub Actions:
+- Tracer CLI — success
+- Baseline Gate — success
+- Phase 30 E2E + Load — success
+- existing browser E2E — success
+- direct Proof → Review browser E2E — success
+- Locust light/moderate/burst — success
+
+PR #66 merged into main as `8cebc8672c4936f22dfbafeac15851da8b617995`.
+
+This is a product-story/documentation clarity pass only; no new capability phase.
+
+Context:
+branch=polish/core-story-clarity
+pr=66 MERGED
+final_head=44114474ec349638a7810ee95ee7052dbe81d139
+merge_commit=8cebc8672c4936f22dfbafeac15851da8b617995
