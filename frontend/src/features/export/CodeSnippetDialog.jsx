@@ -1,24 +1,58 @@
-import { useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MaterialIcon } from "../../shared/components/MaterialIcon.jsx";
 import { Modal } from "../../shared/components/Modal.jsx";
 import { useRovingTabs } from "../../shared/hooks/useRovingTabs.js";
+import { requestToolsApi } from "../request-tools/request-tools.api.js";
 import { writeClipboard } from "./clipboard.js";
-import { generateSnippet, SNIPPET_FORMATS } from "./snippets.js";
+import { SNIPPET_FORMATS } from "./snippets.js";
 
-// request -> format -> preview -> copy. Reading a request produces code only:
-// the dialog never sends, saves, or changes the workspace.
+function emptySnippet(format) {
+	return {
+		ok: false,
+		format,
+		label: SNIPPET_FORMATS.find((item) => item.value === format)?.label ?? format,
+		code: "",
+		errors: [],
+		warnings: [],
+	};
+}
+
+// The backend owns request normalization and snippet generation. The dialog only
+// selects a format, displays the returned text, and copies it to the clipboard.
 export function CodeSnippetDialog({ collectionAuth = null, onClose, request }) {
 	const [format, setFormat] = useState("curl");
 	const [copyState, setCopyState] = useState("idle");
+	const [snippet, setSnippet] = useState(() => emptySnippet("curl"));
+	const [loading, setLoading] = useState(true);
+	const [apiError, setApiError] = useState("");
+	const requestId = useRef(0);
 	const tabs = useRovingTabs();
-	const snippet = useMemo(() => generateSnippet(request, format, { collectionAuth }), [collectionAuth, format, request]);
+
+	useEffect(() => {
+		const id = ++requestId.current;
+		setLoading(true);
+		setApiError("");
+		setSnippet(emptySnippet(format));
+		requestToolsApi
+			.generateSnippet(request, format, collectionAuth)
+			.then((result) => {
+				if (id === requestId.current) setSnippet(result);
+			})
+			.catch((error) => {
+				if (id === requestId.current) setApiError(error.message || "Tracer could not generate this code snippet.");
+			})
+			.finally(() => {
+				if (id === requestId.current) setLoading(false);
+			});
+	}, [collectionAuth, format, request]);
 
 	const selectFormat = (next) => {
 		setFormat(next);
 		setCopyState("idle");
 	};
+
 	const copy = async () => {
-		if (!snippet.ok) return;
+		if (!snippet.ok || loading) return;
 		setCopyState((await writeClipboard(snippet.code)) ? "copied" : "failed");
 	};
 
@@ -27,8 +61,8 @@ export function CodeSnippetDialog({ collectionAuth = null, onClose, request }) {
 			<section className="form-dialog code-dialog">
 				<h2>Code</h2>
 				<p className="import-hint">
-					Generated from this request. Variable references such as <code>{"{{token}}"}</code> stay as placeholders — Tracer never
-					resolves credentials here, and send-only auth overrides are excluded.
+					Generated from this request by Tracer's backend. Variable references such as <code>{"{{token}}"}</code> stay as
+					placeholders — resolved credentials and send-only auth overrides are never included.
 				</p>
 				<div aria-label="Code format" className="code-formats" onKeyDown={tabs.onKeyDown} ref={tabs.listRef} role="tablist">
 					{SNIPPET_FORMATS.map((item) => (
@@ -47,7 +81,9 @@ export function CodeSnippetDialog({ collectionAuth = null, onClose, request }) {
 					))}
 				</div>
 				<div aria-label={`${snippet.label || format} snippet`} className="code-preview" id="code-preview" role="tabpanel">
-					{snippet.ok ? (
+					{loading ? (
+						<p className="code-empty">Generating code…</p>
+					) : snippet.ok ? (
 						<pre>
 							<code>{snippet.code}</code>
 						</pre>
@@ -55,6 +91,11 @@ export function CodeSnippetDialog({ collectionAuth = null, onClose, request }) {
 						<p className="code-empty">This request cannot be exported yet. Fix the problems below and try again.</p>
 					)}
 				</div>
+				{apiError && (
+					<div className="dialog-error" role="alert">
+						{apiError}
+					</div>
+				)}
 				{snippet.errors.length > 0 && (
 					<ul className="import-issues import-errors" role="alert">
 						{snippet.errors.map((issue) => (
@@ -86,7 +127,7 @@ export function CodeSnippetDialog({ collectionAuth = null, onClose, request }) {
 					<button type="button" onClick={onClose}>
 						Close
 					</button>
-					<button className="primary-button" data-autofocus disabled={!snippet.ok} type="button" onClick={copy}>
+					<button className="primary-button" data-autofocus disabled={!snippet.ok || loading} type="button" onClick={copy}>
 						<MaterialIcon size={18}>content_copy</MaterialIcon>
 						{copyState === "copied" ? "Copied" : "Copy"}
 					</button>
