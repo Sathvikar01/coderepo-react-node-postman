@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
 	CONCEPTS,
+	CORE_STORY_FLOW,
 	DATA_CATEGORIES,
 	DATA_MINIMIZATION,
 	DATA_NOTE,
@@ -27,13 +28,15 @@ import {
 const readRepoFile = (relative) => readFileSync(join(import.meta.dir, "../../../..", relative), "utf8");
 
 describe("product identity content", () => {
-	test("states the locked identity once, without overselling", () => {
-		expect(PRODUCT_TAGLINE).toBe("API execution, investigation, and change-verification workspace");
-		expect(PRODUCT_ONE_LINER).toContain("verify an affected workflow");
+	test("states the concrete change-safety job without overselling", () => {
+		expect(PRODUCT_TAGLINE).toBe("API change-safety workspace");
+		expect(PRODUCT_ONE_LINER).toContain("see what it can affect");
+		expect(PRODUCT_ONE_LINER).toContain("carry the exact evidence into review");
+		expect(CORE_STORY_FLOW).toBe("Change → Impact → Rehearse → Verify → Review");
 	});
 
-	test("covers exactly the four-part mental model in order", () => {
-		expect(PRODUCT_MODEL.map((part) => part.label)).toEqual(["Execute", "Understand", "Compare", "Verify"]);
+	test("covers the concrete core story in order", () => {
+		expect(PRODUCT_MODEL.map((part) => part.label)).toEqual(["Change", "Impact", "Rehearse", "Verify", "Review"]);
 	});
 
 	test("every model part names at least one real surface and explains itself", () => {
@@ -44,10 +47,11 @@ describe("product identity content", () => {
 		}
 	});
 
-	test("the mental model is Execute then Understand then Compare then Verify, never verify before compare", () => {
+	test("the core story reaches verification only after impact and rehearsal, then review", () => {
 		const ids = PRODUCT_MODEL.map((part) => part.id);
-		expect(ids).toEqual(["execute", "understand", "compare", "verify"]);
-		expect(ids.indexOf("verify")).toBeGreaterThan(ids.indexOf("compare"));
+		expect(ids).toEqual(["change", "impact", "rehearse", "verify", "review"]);
+		expect(ids.indexOf("verify")).toBeGreaterThan(ids.indexOf("rehearse"));
+		expect(ids.indexOf("review")).toBeGreaterThan(ids.indexOf("verify"));
 	});
 });
 
