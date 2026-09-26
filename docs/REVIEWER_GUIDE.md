@@ -28,6 +28,23 @@ Tracer adds the change-safety loop. When workspace state changes, **Impact** nar
 
 If something fails, **Why?** and Investigation explain the exact configuration and execution evidence behind it. If another developer edits the same workspace, collaboration keeps versions, conflicts, and restores explicit instead of silently merging over them.
 
+## Submitted capability scope
+
+For HackerRank scope, present Tracer as **10 core capabilities**:
+
+1. Request authoring & execution
+2. Collections & generated documentation
+3. Environment management
+4. Authentication & session state
+5. Response analysis & history
+6. Automated testing & multi-request runs
+7. Examples & deterministic mocks
+8. Workspaces, collaboration & versioning
+9. Flight Recorder & investigation
+10. Change verification & human review
+
+Do **not** count implementation controls such as cURL import, code snippets, cookies, assertions, CLI, versions, Impact, Drift, Rehearsal, Contract, Proof, Why?, or Reviews as separate top-level products. Each exists to complete one of the ten workflows above.
+
 ## What to show first
 
 If a reviewer only gives you two minutes:
@@ -253,26 +270,13 @@ The rule to remember:
 
 ## Why this is not just a Postman clone
 
-Tracer still has the substrate expected from an HTTP client: requests, collections, environments, history, response inspection, runner, import/export, cookies, examples, mocks, CLI, and related workflows.
+Tracer's submitted scope is the ten-capability inventory above. Familiar API-client controls and the deeper evidence machinery are supporting parts of those workflows, not extra feature claims.
 
-But the product thesis is different:
+The product thesis is:
 
 > **A request should be explainable after it executes, diagnosable after it fails, and verifiable after it changes.**
 
-The differentiators are the linked evidence workflows:
-
-- Execution Passport / Flight Recorder
-- evidence-driven Investigation
-- bounded minimization + reproduction capsule
-- impact and drift evidence
-- checkpointed rehearsal with fail-closed uncertainty
-- contract compatibility
-- authoritative cross-environment verification
-- tamper-evident Verification Proof
-- WHY Inspector across the full chain
-- live multi-user workspace synchronization with conflict-safe drafts
-- immutable collection/environment version history with compare + restore-as-new-revision
-- human review & decision workflow bound to frozen evidence (Reviews tab)
+The two main differentiating capabilities are **Flight Recorder & investigation** and **Change verification & human review**. Their internal evidence steps remain visible because they make the result trustworthy, but they are not presented as separate submission features.
 
 ### Review queue in one minute
 
