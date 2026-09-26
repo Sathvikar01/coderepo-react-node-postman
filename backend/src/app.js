@@ -163,6 +163,7 @@ export function createApp() {
 		express.json({ limit: LIMITS.jsonBodyCollection }),
 		requireWorkspaceAuth,
 		resolveProfileContext,
+		resolveWorkspaceContext,
 		requestToolsRouter,
 	);
 	app.use(
