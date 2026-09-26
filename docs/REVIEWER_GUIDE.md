@@ -28,6 +28,23 @@ Tracer adds the change-safety loop. When workspace state changes, **Impact** nar
 
 If something fails, **Why?** and Investigation explain the exact configuration and execution evidence behind it. If another developer edits the same workspace, collaboration keeps versions, conflicts, and restores explicit instead of silently merging over them.
 
+## Submitted capability scope
+
+For HackerRank scope, present Tracer as **10 core capabilities**:
+
+1. Request authoring & execution
+2. Collections & generated documentation
+3. Environment management
+4. Authentication & session state
+5. Response analysis & history
+6. Automated testing & multi-request runs
+7. Examples & deterministic mocks
+8. Workspaces, collaboration & versioning
+9. Flight Recorder & investigation
+10. Change verification & human review
+
+Do **not** count implementation controls such as cURL import, code snippets, cookies, assertions, CLI, versions, Impact, Drift, Rehearsal, Contract, Proof, Why?, or Reviews as separate top-level products. Each exists to complete one of the ten workflows above.
+
 ## What to show first
 
 If a reviewer only gives you two minutes:
@@ -143,11 +160,13 @@ Point out explicit link states:
 
 A stale proof is never painted as a current green pass.
 
-### 6. Collaborate live
+### 6. Collaboration and versioning
 
-> Tracer provides live workspace synchronization and conflict awareness, not character-level collaborative editing.
+> Tracer provides persisted workspace sharing, roles, version history, and conflict-safe saved-state synchronization. The required HackerRank product path does not depend on multiple simultaneous signed-in browser sessions.
 
-Strongest demo path, with two signed-in browsers (Alex OWNER, Jordan EDITOR) in **API Platform Team**:
+For the normal single-session reviewer path, use Alex to open **Manage**, inspect the seeded Alex/Jordan membership and roles, open **Activity**, then open a collection's **Versions** view to compare or restore a prior revision.
+
+For optional local evidence of live synchronization, use two signed-in browsers (Alex OWNER, Jordan EDITOR) in **API Platform Team**:
 
 ```text
 Jordan edits → Alex receives the live change → compare versions → concurrent conflict → restore old version as new revision
@@ -253,26 +272,13 @@ The rule to remember:
 
 ## Why this is not just a Postman clone
 
-Tracer still has the substrate expected from an HTTP client: requests, collections, environments, history, response inspection, runner, import/export, cookies, examples, mocks, CLI, and related workflows.
+Tracer's submitted scope is the ten-capability inventory above. Familiar API-client controls and the deeper evidence machinery are supporting parts of those workflows, not extra feature claims.
 
-But the product thesis is different:
+The product thesis is:
 
 > **A request should be explainable after it executes, diagnosable after it fails, and verifiable after it changes.**
 
-The differentiators are the linked evidence workflows:
-
-- Execution Passport / Flight Recorder
-- evidence-driven Investigation
-- bounded minimization + reproduction capsule
-- impact and drift evidence
-- checkpointed rehearsal with fail-closed uncertainty
-- contract compatibility
-- authoritative cross-environment verification
-- tamper-evident Verification Proof
-- WHY Inspector across the full chain
-- live multi-user workspace synchronization with conflict-safe drafts
-- immutable collection/environment version history with compare + restore-as-new-revision
-- human review & decision workflow bound to frozen evidence (Reviews tab)
+The two main differentiating capabilities are **Flight Recorder & investigation** and **Change verification & human review**. Their internal evidence steps remain visible because they make the result trustworthy, but they are not presented as separate submission features.
 
 ### Review queue in one minute
 
@@ -335,11 +341,7 @@ After `bun start`:
 - Password: `password123`
 - Second account: `jordan.lee@example.test` / `password123` (team workspace `EDITOR`)
 
-Both accounts are members of the seeded **API Platform Team** workspace. Use a
-private/incognito window for the second account to see the same shared
-collections and environments from an independently authenticated session, and
-the workspace **Manage** dialog as Alex to change Jordan's role, remove, or
-re-add them.
+Both accounts are members of the seeded **API Platform Team** workspace. The required HackerRank walkthrough uses one signed-in browser. A private/incognito window with the second account is optional local evidence for live saved-state synchronization; it is not required for the application to install, start, or demonstrate its core workflows.
 
 ## Useful commands
 
