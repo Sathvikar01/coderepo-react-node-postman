@@ -17,6 +17,7 @@ import { localRuntimeRouter } from "./features/local-runtime/local-runtime.route
 import { mockRouteRouter, mockRouter } from "./features/mocks/mock.routes.js";
 import { preferenceRouter, profileRouter } from "./features/profiles/profile.routes.js";
 import { reviewRouter } from "./features/reviews/review.routes.js";
+import { requestToolsRouter } from "./features/request-tools/request-tools.routes.js";
 import { verificationProofRouter } from "./features/verification-proof-api/verification-proof.routes.js";
 import { collectionVersionsRouter, environmentVersionsRouter } from "./features/versions/versions.routes.js";
 import { whyInspectorRouter } from "./features/why-inspector/why-inspector.routes.js";
@@ -156,6 +157,13 @@ export function createApp() {
 		requireWorkspaceAuth,
 		resolveProfileContext,
 		localRuntimeRouter,
+	);
+	app.use(
+		"/api/v1/request-tools",
+		express.json({ limit: LIMITS.jsonBodyCollection }),
+		requireWorkspaceAuth,
+		resolveProfileContext,
+		requestToolsRouter,
 	);
 	app.use(
 		"/api/v1/examples",
