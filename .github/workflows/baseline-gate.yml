@@ -35,6 +35,13 @@ jobs:
         run: find backend/src -name '*.js' -print0 | xargs -0 -n1 node --check
       - name: Frontend build
         run: cd frontend && bun run build
+      - name: Archive size
+        shell: bash
+        run: |
+          git archive --format=zip --output=/tmp/tracer-hackerrank.zip HEAD
+          bytes=$(wc -c < /tmp/tracer-hackerrank.zip)
+          echo "HackerRank archive bytes: $bytes"
+          test "$bytes" -lt 5000000
       - name: Seed
         run: bash setup.sh --seed
       - name: Runtime smoke
