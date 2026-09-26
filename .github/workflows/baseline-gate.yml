@@ -27,7 +27,9 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      - name: Install
+      - name: Declared install contract
+        run: bun install && bash setup.sh --seed
+      - name: Frozen lockfile check
         run: bun install --frozen-lockfile
       - name: Test
         run: bun test
