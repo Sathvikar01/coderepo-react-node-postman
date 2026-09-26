@@ -1,0 +1,139 @@
+name: Final Literal Validator
+
+on:
+  push:
+    branches:
+      - "validation/final-literal-validator"
+
+permissions:
+  contents: read
+
+jobs:
+  literal-validator:
+    runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout exact final main
+        uses: actions/checkout@v4
+        with:
+          ref: 7b07768f3dba1d2a274070e293c832ab69e80ed9
+          fetch-depth: 0
+
+      - name: Prove exact checkout
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "7b07768f3dba1d2a274070e293c832ab69e80ed9"
+          test -z "$(git status --short)"
+          echo "EXACT_CHECKOUT_PASS $(git rev-parse HEAD)"
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: R01 exact declared install command
+        shell: bash
+        run: bun install && bash setup.sh --seed
+
+      - name: R01 clean-tree proof
+        shell: bash
+        run: |
+          test -z "$(git status --short)"
+          echo "R01_EXACT_INSTALL_PASS"
+
+      - name: R11 create state then exact full-start reset
+        shell: bash
+        run: |
+          set -euo pipefail
+          UNIQUE_NAME="Code Repo validation reset"
+
+          cat >/tmp/exact-bun-start.sh <<'EOF'
+          #!/usr/bin/env bash
+          set -euxo pipefail
+          bun start
+          EOF
+          chmod +x /tmp/exact-bun-start.sh
+
+          wait_ready() {
+            for i in {1..90}; do
+              if curl --fail --silent http://127.0.0.1:8000/api/v1/health >/tmp/health.json &&
+                 curl --fail --silent http://127.0.0.1:3000 >/dev/null; then
+                cat /tmp/health.json
+                return 0
+              fi
+              sleep 1
+            done
+            return 1
+          }
+
+          stop_app() {
+            local pid="$1"
+            kill -- -"$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+            for i in {1..30}; do
+              if ! curl --silent http://127.0.0.1:8000/api/v1/health >/dev/null 2>&1; then
+                return 0
+              fi
+              sleep 1
+            done
+            echo "Application did not stop cleanly" >&2
+            return 1
+          }
+
+          authenticate() {
+            local login_json profile_json profile_id switch_json
+            login_json=$(curl --fail --silent               -H 'Content-Type: application/json'               -d '{"email":"alex.morgan@example.test","password":"password123"}'               http://127.0.0.1:8000/api/v1/auth/login)
+            WORKSPACE_TOKEN=$(printf '%s' "$login_json" | jq -er '.data.token')
+
+            profile_json=$(curl --fail --silent               -H "Authorization: Bearer $WORKSPACE_TOKEN"               http://127.0.0.1:8000/api/v1/profiles)
+            profile_id=$(printf '%s' "$profile_json" | jq -er '.data[0]._id')
+
+            switch_json=$(curl --fail --silent               -H 'Content-Type: application/json'               -H "Authorization: Bearer $WORKSPACE_TOKEN"               -d "{\"profileId\":\"$profile_id\"}"               http://127.0.0.1:8000/api/v1/auth/switch-profile)
+            PROFILE_TOKEN=$(printf '%s' "$switch_json" | jq -er '.data.token')
+          }
+
+          setsid /tmp/exact-bun-start.sh >/tmp/tracer-first.log 2>&1 &
+          FIRST_PID=$!
+          trap 'kill -- -"$FIRST_PID" 2>/dev/null || true; if [ -n "${SECOND_PID:-}" ]; then kill -- -"$SECOND_PID" 2>/dev/null || true; fi' EXIT
+          wait_ready
+          authenticate
+
+          create_json=$(curl --fail --silent             -H 'Content-Type: application/json'             -H "Authorization: Bearer $PROFILE_TOKEN"             -d '{"mode":"manual","name":"Code Repo validation reset","match":{"method":"GET","path":"/validator-reset","query":[],"headers":[]},"response":{"status":200,"statusText":"OK","contentType":"application/json","headers":[],"body":{"encoding":"utf8","value":"{\"ok\":true}","mediaType":"application/json"}}}'             http://127.0.0.1:8000/api/v1/examples)
+          printf '%s' "$create_json" | jq -e '.data.name == "Code Repo validation reset"' >/dev/null
+
+          before_json=$(curl --fail --silent             -H "Authorization: Bearer $PROFILE_TOKEN"             http://127.0.0.1:8000/api/v1/examples)
+          printf '%s' "$before_json" | jq -e '[.data[].name] | index("Code Repo validation reset") != null' >/dev/null
+          echo "R11_ADHOC_STATE_CREATED_AND_VISIBLE"
+
+          stop_app "$FIRST_PID"
+          FIRST_PID=""
+
+          setsid /tmp/exact-bun-start.sh >/tmp/tracer-second.log 2>&1 &
+          SECOND_PID=$!
+          wait_ready
+          authenticate
+
+          after_json=$(curl --fail --silent             -H "Authorization: Bearer $PROFILE_TOKEN"             http://127.0.0.1:8000/api/v1/examples)
+          printf '%s' "$after_json" | jq -e '[.data[].name] | index("Code Repo validation reset") == null' >/dev/null
+          echo "R11_EXACT_FULL_START_RESET_PASS"
+
+          test -z "$(git status --short)"
+          echo "FINAL_TREE_CLEAN_PASS"
+
+      - name: Dump app logs on failure
+        if: failure()
+        shell: bash
+        run: |
+          echo "=== first start ==="
+          cat /tmp/tracer-first.log 2>/dev/null || true
+          echo "=== second start ==="
+          cat /tmp/tracer-second.log 2>/dev/null || true
