@@ -62,9 +62,9 @@ For a reviewer-oriented walkthrough and talking points, see **[`docs/REVIEWER_GU
 
 ## Why Tracer is different
 
-Most HTTP clients help you send a request and read a response. Tracer helps you answer the harder questions that follow: **a request worked, then it stopped working — what actually caused that?** and **is this workspace state safe to promote?**
+Most HTTP clients stop after **send → response**. Tracer follows the change: **what can it affect, does that affected workflow still work in the target environment, did drift or a contract break block it, and what evidence belongs beside the final review decision?**
 
-### Understand: the investigation workflow
+### When something breaks: investigation
 
 ```text
 failure → investigate → compare → isolate → reproduce
@@ -85,7 +85,7 @@ A deterministic end-to-end demo of the whole investigation runs against the seed
 bun run demo:investigation
 ```
 
-### Verify: the change-verification workflow
+### Core loop: change verification
 
 ```text
 edit → snapshot → impact → drift → rehearse → contract check → verify → proof
