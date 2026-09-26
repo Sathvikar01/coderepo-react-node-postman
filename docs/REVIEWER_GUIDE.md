@@ -160,11 +160,13 @@ Point out explicit link states:
 
 A stale proof is never painted as a current green pass.
 
-### 6. Collaborate live
+### 6. Collaboration and versioning
 
-> Tracer provides live workspace synchronization and conflict awareness, not character-level collaborative editing.
+> Tracer provides persisted workspace sharing, roles, version history, and conflict-safe saved-state synchronization. The required HackerRank product path does not depend on multiple simultaneous signed-in browser sessions.
 
-Strongest demo path, with two signed-in browsers (Alex OWNER, Jordan EDITOR) in **API Platform Team**:
+For the normal single-session reviewer path, use Alex to open **Manage**, inspect the seeded Alex/Jordan membership and roles, open **Activity**, then open a collection's **Versions** view to compare or restore a prior revision.
+
+For optional local evidence of live synchronization, use two signed-in browsers (Alex OWNER, Jordan EDITOR) in **API Platform Team**:
 
 ```text
 Jordan edits → Alex receives the live change → compare versions → concurrent conflict → restore old version as new revision
@@ -339,11 +341,7 @@ After `bun start`:
 - Password: `password123`
 - Second account: `jordan.lee@example.test` / `password123` (team workspace `EDITOR`)
 
-Both accounts are members of the seeded **API Platform Team** workspace. Use a
-private/incognito window for the second account to see the same shared
-collections and environments from an independently authenticated session, and
-the workspace **Manage** dialog as Alex to change Jordan's role, remove, or
-re-add them.
+Both accounts are members of the seeded **API Platform Team** workspace. The required HackerRank walkthrough uses one signed-in browser. A private/incognito window with the second account is optional local evidence for live saved-state synchronization; it is not required for the application to install, start, or demonstrate its core workflows.
 
 ## Useful commands
 
