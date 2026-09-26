@@ -372,7 +372,7 @@ A full `bun start` intentionally reseeds this baseline. Data survives browser re
 
 ## Seeded Access
 
-Two independent login accounts are seeded, and each account authorizes only its own profile. Sign in with one of them (a private/incognito window lets you sign in as both at once):
+Two independent login accounts are seeded, and each account authorizes only its own profile. The required HackerRank walkthrough uses one signed-in browser; signing in as both at once in a private/incognito window is optional local evidence for live synchronization:
 
 | Email                      | Password      | Team workspace role |
 | -------------------------- | ------------- | ------------------- |
