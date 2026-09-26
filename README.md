@@ -1,36 +1,40 @@
-<h1 align="center">Tracer — API Flight Recorder</h1>
+<h1 align="center">Tracer — API Change Safety</h1>
 
 <p align="center">
-  <strong>API execution, investigation, and change-verification workspace.</strong><br />
-  Compose, send, and organize API requests — then investigate failures, understand what a change affects, and verify an affected workflow before you trust it.
+  <strong>Change an API → see what it affects → rehearse the affected workflow → verify → review with proof.</strong><br />
+  Tracer is a shared API workspace that helps teams understand whether a change is safe before they trust it.
 </p>
 
-Tracer is a full-stack React and Express application. Requests execute through the Express API on the server and results are persisted in MongoDB, so a signed-in profile can build a real HTTP request, send it, inspect the response, save it into a collection, switch environments, and reopen it from history.
+Tracer still gives you the familiar API-client workflow — build requests, organize collections, switch environments, send, inspect responses, and reopen history. The difference is what happens **after the workspace changes**.
 
 ## Reviewer in 60 seconds
 
-**Tracer is an API execution, investigation, and change-verification workspace.** The request builder is the substrate; the differentiator is the evidence system around each execution.
+**Tracer answers one concrete question: when an API workspace changes, can we trust the affected workflow?**
 
 ```text
-Execute → Understand → Compare → Verify
-   \____________ Why? ____________/
+Change → Impact → Rehearse → Verify → Review
 ```
 
-- **Execute** sends a real request through one backend-owned transport pipeline.
-- **Understand** records an immutable, secret-redacted Execution Passport and supports evidence-driven investigation.
-- **Compare** explains what changed and what is affected without promoting correlation into causation.
-- **Verify** rehearses the affected workflow, checks compatibility, and produces a tamper-evident proof.
-- **Why?** is a read-only projection over the evidence already produced by those systems. It creates no new truth.
+- **Change** a request, variable, auth setting, environment, or saved collection.
+- **Impact** shows which requests and references that change can reach.
+- **Rehearse** runs the affected workflow against the target environment through the same backend execution path as a normal send.
+- **Verify** combines rehearsal, environment drift, and response-contract evidence into `VERIFIED`, `BLOCKED`, `NEEDS_REHEARSAL`, or `UNKNOWN`, then binds it into a Verification Proof.
+- **Review** carries that exact validated proof into the human decision without letting the UI rewrite the technical state.
 
-**Collaborate** is the shared-state layer around that workflow: separate accounts can work in the same workspace, see saved changes live, inspect immutable version history, and resolve concurrent edits through backend CAS instead of silent merging.
+That is the core product story.
 
-The signature verification story is:
+Two supporting systems make the loop trustworthy rather than decorative:
+
+- **Why? / Investigation:** when something fails, Tracer shows what configuration actually executed, what changed, what was experimentally verified to cause the failure, and what evidence led to the result.
+- **Collaboration:** separate accounts share the same API workspace with live saved-state updates, immutable versions, attributed conflicts, and restore-as-new-revision instead of silent overwrites.
+
+Under the simple story, the verification evidence chain is:
 
 ```text
-edit → snapshot identity → impact → drift → rehearse → contract → verify → proof
+edit → snapshot identity → impact → drift → rehearse → contract → verify → proof → review
 ```
 
-Clicking **Why?** explains the same result as an evidence chain:
+And **Why?** explains the same result without inventing new truth:
 
 ```text
 configuration → execution → impact → drift → rehearsal → contract → verification → proof
@@ -58,9 +62,9 @@ For a reviewer-oriented walkthrough and talking points, see **[`docs/REVIEWER_GU
 
 ## Why Tracer is different
 
-Most HTTP clients help you send a request and read a response. Tracer helps you answer the harder questions that follow: **a request worked, then it stopped working — what actually caused that?** and **is this workspace state safe to promote?**
+Most HTTP clients stop after **send → response**. Tracer follows the change: **what can it affect, does that affected workflow still work in the target environment, did drift or a contract break block it, and what evidence belongs beside the final review decision?**
 
-### Understand: the investigation workflow
+### When something breaks: investigation
 
 ```text
 failure → investigate → compare → isolate → reproduce
@@ -81,7 +85,7 @@ A deterministic end-to-end demo of the whole investigation runs against the seed
 bun run demo:investigation
 ```
 
-### Verify: the change-verification workflow
+### Core loop: change verification
 
 ```text
 edit → snapshot → impact → drift → rehearse → contract check → verify → proof

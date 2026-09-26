@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ProductDialog } from "./ProductDialog.jsx";
 import { WorkflowProgression } from "./WorkflowProgression.jsx";
-import { INVESTIGATION_WORKFLOW, PRODUCT_SURFACE_IDS, VERIFICATION_WORKFLOW } from "./product-content.js";
+import { CORE_STORY_FLOW, INVESTIGATION_WORKFLOW, PRODUCT_SURFACE_IDS, VERIFICATION_WORKFLOW } from "./product-content.js";
 
 const readRepoFile = (relative) => readFileSync(join(import.meta.dir, "../../../..", relative), "utf8");
 
@@ -97,9 +97,9 @@ describe("ProductDialog", () => {
 		expect(html).toContain("not a certification");
 	});
 
-	test("the about surface presents the four-part model and both workflows", () => {
+	test("the about surface leads with the concrete core story and preserves the detailed verification workflow", () => {
 		const html = render("about");
-		expect(html).toContain("Execute → Understand → Compare → Verify");
+		expect(html).toContain(CORE_STORY_FLOW);
 		expect(html).toContain("Edit → Snapshot → Impact → Drift → Rehearse → Contract Check → Verify → Proof");
 	});
 

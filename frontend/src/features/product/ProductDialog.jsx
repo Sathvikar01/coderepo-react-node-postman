@@ -5,6 +5,7 @@ import { TracerSymbol } from "../../shared/components/TracerBrand.jsx";
 import { useRovingTabs } from "../../shared/hooks/useRovingTabs.js";
 import {
 	CONCEPTS,
+	CORE_STORY_FLOW,
 	DATA_CATEGORIES,
 	DATA_MINIMIZATION,
 	DATA_NOTE,
@@ -177,7 +178,7 @@ function AboutSurface() {
 
 			<section className="product-section">
 				<h3>Core workflow</h3>
-				<p className="product-flow">Execute → Understand → Compare → Verify</p>
+				<p className="product-flow">{CORE_STORY_FLOW}</p>
 				<ModelGrid />
 			</section>
 

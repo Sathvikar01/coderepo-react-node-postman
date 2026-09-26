@@ -14,42 +14,55 @@
 //   * "Verify" means producing and checking evidence about a snapshot against a
 //     target environment. It does not mean a request succeeded.
 
-// The locked product identity. One sentence, no overselling.
-export const PRODUCT_TAGLINE = "API execution, investigation, and change-verification workspace";
+// The product identity. Lead with the concrete job Tracer does rather than
+// internal feature categories: a developer changes API workspace state, Tracer
+// narrows the blast radius, rehearses the affected workflow, verifies the
+// evidence, and carries that evidence into human review.
+export const PRODUCT_TAGLINE = "API change-safety workspace";
 
 export const PRODUCT_ONE_LINER =
-	"Tracer helps you execute APIs, investigate failures, understand what configuration changes affect, and verify an affected workflow against another environment before treating a snapshot as known-good.";
+	"Change an API, see what it can affect, rehearse the affected workflow against a target environment, verify the result, and carry the exact evidence into review.";
 
-// The four-part mental model. Each part maps to real, shipped surfaces so the
-// UI never promises a capability that does not exist.
+export const CORE_STORY_FLOW = "Change → Impact → Rehearse → Verify → Review";
+
+// The primary product story maps to shipped surfaces. Investigation and
+// collaboration remain important supporting capabilities, but they no longer
+// compete with the first-pass explanation of what Tracer is for.
 export const PRODUCT_MODEL = Object.freeze([
 	{
-		id: "execute",
-		label: "Execute",
-		summary: "Compose, send, and read APIs.",
-		detail: "Build requests and collections, attach auth, switch environments, send through the server, and inspect responses.",
-		surfaces: ["Workspace", "Collections", "Environments", "History"],
+		id: "change",
+		label: "Change",
+		summary: "Edit the API workspace you already use.",
+		detail: "Change a request, variable, authentication setting, environment, or saved collection while version history preserves the shared state around that edit.",
+		surfaces: ["Workspace", "Collections", "Environments", "Versions"],
 	},
 	{
-		id: "understand",
-		label: "Understand",
-		summary: "Investigate why a request stopped working.",
-		detail: "Every send records an execution passport. Compare two runs, find the first meaningful divergence, and narrow to the smallest reproducer.",
-		surfaces: ["History", "Flight Recorder", "Investigation"],
+		id: "impact",
+		label: "Impact",
+		summary: "See which requests the change can reach.",
+		detail: "Trace the changed item through saved references and dependencies so the workflow that needs attention is explicit instead of guessed or manually rediscovered.",
+		surfaces: ["Change impact", "Environment drift", "Contracts"],
 	},
 	{
-		id: "compare",
-		label: "Compare",
-		summary: "See what a change affects.",
-		detail: "Freeze a workspace snapshot, then read what a configuration change can reach, how environments drifted apart, and whether response contracts still line up.",
-		surfaces: ["Snapshots", "Change impact", "Environment drift", "Contracts"],
+		id: "rehearse",
+		label: "Rehearse",
+		summary: "Replay the affected workflow before you trust it.",
+		detail: "Run the affected requests against the target environment through the same backend execution path as a normal send, with bounded policy and recorded evidence.",
+		surfaces: ["Rehearsal", "Runner", "History"],
 	},
 	{
 		id: "verify",
 		label: "Verify",
-		summary: "Generate evidence before you trust a snapshot.",
-		detail: "Rehearse the affected workflow against another environment, run the contract check, and produce a tamper-evident Verification Proof — or an honest non-pass.",
-		surfaces: ["Rehearsal", "Compatibility", "Verification Proof"],
+		summary: "Turn the recorded evidence into an explicit state.",
+		detail: "Combine rehearsal, drift, and contract evidence into VERIFIED, BLOCKED, NEEDS_REHEARSAL, or UNKNOWN, then bind that result into a tamper-evident Verification Proof.",
+		surfaces: ["Compatibility", "Phase 41 verification", "Verification Proof", "Why?"],
+	},
+	{
+		id: "review",
+		label: "Review",
+		summary: "Make the human decision beside the machine result.",
+		detail: "Promote the exact validated proof into Reviews so assignment, discussion, approval, changes requested, or waiver stay separate from the technical verification state.",
+		surfaces: ["Reviews", "Needs Attention", "Verification Proof"],
 	},
 ]);
 
@@ -141,8 +154,8 @@ export const INVESTIGATE_INTRO = {
 
 export const VERIFY_INTRO = {
 	title: "Verify a change",
-	flow: "Snapshot → Impact → Drift → Rehearse → Verify → Proof",
-	body: "After a change, compare the snapshot against the target environment, rehearse the affected workflow, and produce a Verification Proof that states exactly what was and was not verified.",
+	flow: CORE_STORY_FLOW,
+	body: "After an API change, identify the affected requests, rehearse that workflow against the target environment, verify the recorded drift and contract evidence, and carry the resulting Verification Proof into review.",
 };
 
 // Security & Safety. Every line is a mechanism the repository implements.
