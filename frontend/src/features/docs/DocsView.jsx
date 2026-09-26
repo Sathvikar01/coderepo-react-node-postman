@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { MaterialIcon } from "../../shared/components/MaterialIcon.jsx";
 import { Modal } from "../../shared/components/Modal.jsx";
+import { collectionApi } from "../collections/collection.api.js";
 import { buildCollectionDocs } from "./docs-model.js";
 import { collectionDocsFileName, collectionDocsToMarkdown, requestDocsToMarkdown } from "./docs-markdown.js";
 import "./docs.css";
@@ -200,9 +201,41 @@ function RequestDocs({ request }) {
 }
 
 export function DocsView({ collection, onClose }) {
-	const model = useMemo(() => buildCollectionDocs(collection), [collection]);
+	const [source, setSource] = useState(collection);
+	const [refreshState, setRefreshState] = useState("idle");
+	const [refreshError, setRefreshError] = useState("");
+	const model = useMemo(() => buildCollectionDocs(source), [source]);
 	const markdown = useMemo(() => collectionDocsToMarkdown(model), [model]);
 	const [note, setNote] = useState("");
+
+	useEffect(() => {
+		let active = true;
+		setSource(collection);
+		setRefreshError("");
+		if (!collection?._id) {
+			setRefreshState("error");
+			setRefreshError("This documentation view needs a saved collection.");
+			return () => {
+				active = false;
+			};
+		}
+		setRefreshState("loading");
+		collectionApi
+			.get(collection._id)
+			.then((saved) => {
+				if (!active) return;
+				setSource(saved);
+				setRefreshState("ready");
+			})
+			.catch((error) => {
+				if (!active) return;
+				setRefreshError(error.message || "Tracer could not refresh this saved collection.");
+				setRefreshState("error");
+			});
+		return () => {
+			active = false;
+		};
+	}, [collection, collection?._id, collection?.revision]);
 
 	const scrollTo = (event, anchor) => {
 		event.preventDefault();
@@ -249,6 +282,16 @@ export function DocsView({ collection, onClose }) {
 				Generated from the saved collection{model.updatedAt ? ` last updated ${new Date(model.updatedAt).toLocaleString()}` : ""}.
 				Unsaved edits and send-only auth are never included, and variable values are never shown.
 			</p>
+			{refreshState === "loading" && (
+				<p className="docs-notice" role="status">
+					Refreshing the saved collection from Tracer's API…
+				</p>
+			)}
+			{refreshError && (
+				<p className="docs-notice" role="alert">
+					{refreshError} Showing the last loaded saved definition.
+				</p>
+			)}
 			{note && (
 				<p className="docs-notice" role="status">
 					{note}
