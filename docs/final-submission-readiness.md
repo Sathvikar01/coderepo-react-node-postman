@@ -1,5 +1,7 @@
 # Final Submission Readiness — Tracer (API Flight Recorder)
 
+> **Final compliance refresh — 2026-09-26:** current `main` includes submission-scope and HackerRank integration cleanup PR #67 (merged as `a9f915992cd9ea6e328b4904d6573d0f882d2a26`). The exact PR head passed **Baseline Gate**, **Tracer CLI**, and **Phase 30 E2E + Load**. Baseline evidence: **2015 pass, 0 fail**; browser acceptance: **14/14 PASS** including backend-validated cURL import and backend-generated code snippets; direct Verification Proof → Review flow: **6/6 PASS**. The exact HackerRank `git archive --format=zip` was **1,519,288 bytes**, below the 5 MB limit. The README/reviewer guide now present exactly **10 core capabilities**, while reachable supporting controls remain end-to-end and are mapped beneath those workflows. The required reviewer path is single-session; two-browser collaboration is optional local evidence only. No dependencies were added.
+>
 > **Post-freeze audit update — 2026-09-26:** current `main` includes audit-hardening PR #64 (`586c3bf9`). The exact patched tree passed the Baseline Gate (**2013 pass, 1 skip, 0 fail**), frontend production build, Tracer CLI, Phase 30 real-browser E2E, the direct Verification Proof → Review browser flow, and light/moderate/burst Locust jobs with zero request failures. PR #64 also broadens the browser/load workflow trigger so backend, lockfile, root manifest, and setup changes can no longer skip that end-to-end gate. The freeze evidence below is preserved as historical evidence for the earlier freeze commit.
 >
 > **Coverage clarification:** standalone historical browser harnesses such as Phase 24B/36/37/47C/49 are targeted acceptance scripts; they are **not all invoked by `bun test` or by the always-on Phase 30 workflow**. Their underlying service/view-model behavior has extensive automated test coverage, while their full browser journeys remain targeted regression harnesses.
@@ -172,3 +174,7 @@ was reseeded deterministically by this freeze (`request_desk_demo`).
 No freeze-code defects proven; report-only change on this branch.
 
 `FINAL FREEZE VERDICT: PASS — TRACER READY FOR SUBMISSION`
+
+## Current compliance status
+
+The current product tree remains within the documented HackerRank technology, runtime, archive, and submission-scope contracts after PR #67. No unresolved repository defect is recorded by the standing CI gates. The supplied validation skill remains the authoritative final handover audit and should be executed once more on the exact submission checkout immediately before handoff; any resulting `FAIL` must be resolved, while `MANUAL` means the item is not yet directly verified.
