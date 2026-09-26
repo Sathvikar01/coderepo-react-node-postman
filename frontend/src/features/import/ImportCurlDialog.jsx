@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { MaterialIcon } from "../../shared/components/MaterialIcon.jsx";
 import { Modal } from "../../shared/components/Modal.jsx";
+import { requestToolsApi } from "../request-tools/request-tools.api.js";
 import { parseCurl } from "./curl-parser.js";
 
 const PLACEHOLDER = `curl -X POST http://127.0.0.1:8000/demo/v1/echo \\
@@ -18,11 +19,31 @@ function bodySummary(body) {
 
 export function ImportCurlDialog({ onCancel, onImport }) {
 	const [text, setText] = useState("");
+	const [busy, setBusy] = useState(false);
+	const [serverError, setServerError] = useState("");
 	const parsed = useMemo(() => (text.trim() ? parseCurl(text) : null), [text]);
 	const importable = Boolean(parsed?.ok);
 	const errors = parsed?.errors ?? [];
 	const warnings = parsed?.warnings ?? [];
 	const request = parsed?.request ?? null;
+	const commitImport = async () => {
+		if (!importable || busy) return;
+		setBusy(true);
+		setServerError("");
+		try {
+			const verified = await requestToolsApi.parseCurl(text);
+			if (!verified?.ok) {
+				setServerError(verified?.errors?.[0]?.message || "The backend could not validate this cURL command.");
+				return;
+			}
+			onImport(verified);
+		} catch (error) {
+			setServerError(error.message || "The cURL command could not be validated.");
+		} finally {
+			setBusy(false);
+		}
+	};
+
 	const status = !parsed
 		? ""
 		: parsed.ok
@@ -49,7 +70,7 @@ export function ImportCurlDialog({ onCancel, onImport }) {
 							onKeyDown={(event) => {
 								if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && importable) {
 									event.preventDefault();
-									onImport(parsed);
+									commitImport();
 								}
 							}}
 						/>
@@ -107,6 +128,11 @@ export function ImportCurlDialog({ onCancel, onImport }) {
 							))}
 						</ul>
 					)}
+					{serverError && (
+						<div className="dialog-error" role="alert">
+							{serverError}
+						</div>
+					)}
 					{warnings.length > 0 && (
 						<ul className="import-issues import-warnings">
 							{warnings.map((issue, index) => (
@@ -124,13 +150,13 @@ export function ImportCurlDialog({ onCancel, onImport }) {
 					</button>
 					<button
 						className="primary-button"
-						disabled={!importable}
+						disabled={!importable || busy}
 						title={importable ? "Open the parsed request as an unsaved draft" : "Fix the errors above to import"}
 						type="button"
-						onClick={() => onImport(parsed)}
+						onClick={commitImport}
 					>
 						<MaterialIcon size={18}>download</MaterialIcon>
-						Import as draft
+						{busy ? "Validating…" : "Import as draft"}
 					</button>
 				</footer>
 			</section>
