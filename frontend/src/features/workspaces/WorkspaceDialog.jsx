@@ -200,8 +200,13 @@ export function WorkspaceDialog({
 	onReload,
 	onRemoveMember,
 	onRename,
+	onOpenVersions,
 }) {
-	const [tab, setTab] = useState("members");
+	const [tab, setTab] = useState(mode === "activity" ? "activity" : "members");
+
+	useEffect(() => {
+		setTab(mode === "activity" ? "activity" : "members");
+	}, [mode, detail?._id]);
 
 	if (mode === "create") {
 		return (
@@ -257,7 +262,11 @@ export function WorkspaceDialog({
 					)}
 					{detail && tab === "activity" && (
 						<div className="workspace-activity-tab">
-							<WorkspaceActivityPanel refreshToken={activityRefreshToken} workspaceId={detail._id} />
+							<WorkspaceActivityPanel
+							refreshToken={activityRefreshToken}
+							workspaceId={detail._id}
+							onOpenVersions={onOpenVersions}
+						/>
 						</div>
 					)}
 					{error && (

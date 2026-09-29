@@ -60,9 +60,11 @@ describe("Phase 24 collaboration contracts", () => {
 
 	test("the active-workspace control is reachable from the header rail", () => {
 		expect(app).toContain("<WorkspaceSwitcher");
-		expect(app).toContain("workspaceSwitcher={");
-		expect(header).toContain("{workspaceSwitcher}");
-		expect(switcher).toContain('ariaLabel="Active workspace"');
+		expect(app).toContain("workspaceCommand={");
+		expect(header).toContain("{workspaceCommand}");
+		expect(switcher).toContain('trigger="workspaces"');
+		expect(switcher).not.toContain("SelectMenu");
+		expect(switcher).not.toContain("workspace-role-badge");
 	});
 
 	test("read-only roles still get an explicit, non-destructive explanation", () => {
@@ -70,10 +72,11 @@ describe("Phase 24 collaboration contracts", () => {
 		expect(app).toContain("read-only access");
 	});
 
-	test("the Activity view and Manage dialog are wired into the shell", () => {
-		expect(app).toContain("WorkspaceActivityPanel");
+	test("collaboration stays inside the Figma rail and four-slot resource index", () => {
 		expect(app).toContain("WorkspaceDialog");
-		expect(app).toContain('setSidebarTab("activity")');
+		expect(app).toContain('openWorkspaceDialog("activity")');
+		expect(app).not.toContain('setSidebarTab("activity")');
+		expect(css).toContain("grid-template-columns: repeat(4, 1fr)");
 	});
 });
 
