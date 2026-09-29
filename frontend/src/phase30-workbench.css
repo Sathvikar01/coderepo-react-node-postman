@@ -231,6 +231,10 @@ textarea:focus-visible,
 	gap: 6px;
 }
 
+.app-header-actions > .menu-anchor {
+	width: 100%;
+}
+
 .rail-primary {
 	flex: none;
 }
@@ -1021,6 +1025,11 @@ textarea:focus-visible,
 		gap: 2px;
 		padding: 0;
 		border: 0;
+	}
+
+	.app-header-actions > .menu-anchor {
+		width: auto;
+		flex: none;
 	}
 
 	.rail-primary {
