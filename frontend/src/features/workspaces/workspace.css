@@ -2,36 +2,6 @@
    Presentation only. Every value here comes from the Phase 30 design tokens so
    the workspace UI is indistinguishable from the rest of the workbench. */
 
-.workspace-switcher {
-	align-items: stretch;
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-	min-width: 0;
-}
-
-.workspace-picker,
-.workspace-picker .select-menu-trigger {
-	max-width: 100%;
-	min-width: 0;
-	width: 100%;
-}
-
-.workspace-picker .select-menu-value {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.workspace-switcher .workspace-role-badge {
-	text-align: center;
-}
-
-.workspace-switcher .menu-anchor {
-	display: flex;
-	width: 100%;
-}
-
 .workspace-role-badge {
 	background: var(--surface-raised);
 	border: 1px solid var(--border);
@@ -231,36 +201,7 @@
 	font-size: 11px;
 }
 
-@media (max-width: 1179px) {
-	.workspace-switcher {
-		align-items: center;
-		flex-direction: row;
-		gap: 6px;
-	}
-
-	.workspace-switcher .menu-anchor {
-		width: auto;
-	}
-
-	.workspace-picker,
-	.workspace-picker .select-menu-trigger {
-		max-width: 180px;
-		min-width: 140px;
-		width: auto;
-	}
-}
-
 @media (max-width: 767px) {
-	.workspace-switcher {
-		gap: 4px;
-	}
-
-	.workspace-picker,
-	.workspace-picker .select-menu-trigger {
-		max-width: 128px;
-		min-width: 96px;
-	}
-
 	.workspace-role-badge {
 		display: none;
 	}
@@ -273,7 +214,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.workspace-switcher *,
 	.workspace-modal * {
 		transition: none;
 	}
