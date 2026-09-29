@@ -201,7 +201,11 @@ export function WorkspaceDialog({
 	onRemoveMember,
 	onRename,
 }) {
-	const [tab, setTab] = useState("members");
+	const [tab, setTab] = useState(mode === "activity" ? "activity" : "members");
+
+	useEffect(() => {
+		setTab(mode === "activity" ? "activity" : "members");
+	}, [mode, detail?._id]);
 
 	if (mode === "create") {
 		return (
