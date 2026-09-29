@@ -286,7 +286,7 @@ async function resetCollaboration() {
 
 // Real DOM helpers for the Phase 24 surfaces.
 async function openManage(context) {
-	await context.click('[aria-label="Workspace actions"]', "workspace actions");
+	await context.click('[aria-label^="Workspace:"]', "workspace command");
 	await context.waitFor('document.querySelector(".menu [role=menuitem]") !== null', "workspace menu");
 	const clicked = await context.evaluate(`(() => {
 		const node = [...document.querySelectorAll(".menu [role=menuitem]")].find((item) => !item.disabled && item.textContent.includes("Manage workspace"));
