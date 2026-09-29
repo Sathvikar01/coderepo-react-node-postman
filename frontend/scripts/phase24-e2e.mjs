@@ -336,16 +336,15 @@ await (async () => {
 	if (!tokensDiffer) throw new Error("Alex's browser has no profile token");
 	pass("2. Each browser holds its own session token for its own account", `alex="${alexIdentity.slice(0, 26)}" jordan="${jordanIdentity.slice(0, 26)}"`);
 
-	// ------------------------------------------------------------ workspace switcher + roles
-	await alex.waitFor('document.querySelector(".workspace-switcher") !== null', "workspace switcher");
-	await jordan.waitFor('document.querySelector(".workspace-switcher") !== null', "workspace switcher");
-	const alexRole = await alex.evaluate('document.querySelector(".workspace-role-badge")?.textContent.trim() || ""');
-	const jordanRole = await jordan.evaluate('document.querySelector(".workspace-role-badge")?.textContent.trim() || ""');
-	if (alexRole !== "Owner" || jordanRole !== "Editor") {
-		throw new Error(`Unexpected role badges: alex="${alexRole}" jordan="${jordanRole}"`);
+	// ------------------------------------------------------------ workspace command
+	await alex.waitFor('document.querySelector(\'[aria-label^="Workspace:"]\') !== null', "workspace command");
+	await jordan.waitFor('document.querySelector(\'[aria-label^="Workspace:"]\') !== null', "workspace command");
+	const alexWorkspace = await alex.evaluate('document.querySelector(\'[aria-label^="Workspace:"]\')?.getAttribute("aria-label") || ""');
+	const jordanWorkspace = await jordan.evaluate('document.querySelector(\'[aria-label^="Workspace:"]\')?.getAttribute("aria-label") || ""');
+	if (!/API Platform Team/.test(alexWorkspace) || !/API Platform Team/.test(jordanWorkspace)) {
+		throw new Error(`Workspace rail command is not bound to the shared workspace: alex="${alexWorkspace}" jordan="${jordanWorkspace}"`);
 	}
-	const alexWorkspace = await alex.evaluate('document.querySelector(".workspace-picker .select-menu-value")?.textContent.trim() || ""');
-	pass("3. Each user sees the shared workspace name and their own role", `alex=${alexRole} jordan=${jordanRole} ws="${alexWorkspace}"`);
+	pass("3. Each user sees the shared workspace through the Figma command rail", alexWorkspace);
 
 	// ------------------------------------------------------------ shared collections
 	const collectionsOf = (context) =>
@@ -391,19 +390,16 @@ await (async () => {
 	await alex.escape();
 	await alex.waitFor('document.querySelector(".workspace-modal") === null', "manage closed");
 
-	// ------------------------------------------------------------ activity sidebar tab
-	await alex.clickText("Activity", ".sidebar-tabs");
-	await alex.waitFor('document.querySelector(".workspace-activity") !== null', "activity view");
-	const sidebarActivity = await alex.waitFor(
-		'(() => { const node = document.querySelector(".workspace-activity"); if (!node) return ""; const text = node.textContent.replace(/\\s+/g, " ").trim(); if (!text || /Loading/i.test(text)) return ""; return text; })()',
-		"sidebar activity",
+	// ------------------------------------------------------------ Figma resource index remains four slots
+	const resourceTabs = await alex.evaluate(
+		'Array.from(document.querySelectorAll(".sidebar-tabs .sidebar-tab")).map((n) => n.textContent.replace(/\\s+/g, " ").trim()).join("|")',
 	);
-	if (!/workspace|member|role/i.test(sidebarActivity)) throw new Error("Activity tab has no workspace events: " + sidebarActivity);
-	if (/authorization|set-cookie|password123/i.test(sidebarActivity)) throw new Error("Activity tab leaked sensitive material");
-	pass("8. The Activity sidebar tab shows the workspace feed with no secret leakage", sidebarActivity.slice(0, 90));
+	if (resourceTabs.split("|").length !== 4 || !/Collections/.test(resourceTabs) || !/History/.test(resourceTabs) || !/Cookies/.test(resourceTabs) || !/Examples/.test(resourceTabs)) {
+		throw new Error("Figma resource index drifted: " + resourceTabs);
+	}
+	pass("8. Activity stays in Manage; the Figma resource index remains four slots", resourceTabs);
 
 	// ------------------------------------------------------------ workbench still intact
-	await alex.clickText("Collections", ".sidebar-tabs");
 	await alex.waitFor('document.querySelector(".tree") !== null', "collections tree");
 	await alex.waitFor('document.querySelectorAll(".tree-label").length > 0', "collection titles");
 	// Expand the first collection, then open one of its requests: the workbench
@@ -478,7 +474,6 @@ await (async () => {
 	// a disabled Send control. The client fails closed from the server's role.
 	await jordan.reload();
 	await jordan.waitFor('document.querySelector(".app-shell") !== null', "jordan reloaded");
-	await jordan.retry(() => jordan.evaluate('document.querySelector(".workspace-role-badge")?.textContent.trim() === "Viewer"'), "viewer badge in Jordan");
 	// A viewer still *reads* shared definitions; opening a request must show a
 	// disabled Send control rather than a working one.
 	await jordan.waitFor('document.querySelector(".workspace-readonly-banner") !== null', "viewer read-only banner");
@@ -518,7 +513,6 @@ await (async () => {
 	await alex.escape();
 	await jordan.reload();
 	await jordan.waitFor('document.querySelector(".app-shell") !== null', "jordan reloaded");
-	await jordan.retry(() => jordan.evaluate('document.querySelector(".workspace-role-badge")?.textContent.trim() === "Editor"'), "editor badge restored in Jordan");
 	await jordan.retry(() => jordan.evaluate('document.querySelector(".workspace-readonly-banner") === null'), "read-only banner cleared");
 	pass("13. Restoring Editor immediately re-enables the other browser");
 
