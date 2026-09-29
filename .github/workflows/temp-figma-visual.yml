@@ -133,6 +133,13 @@ jobs:
               workspacePickerCount: document.querySelectorAll(".workspace-picker").length,
               railRoleBadgeCount: [...document.querySelectorAll(".app-header .workspace-role-badge")].length,
               workspaceCommand: document.querySelector('[aria-label^="Workspace:"]')?.getAttribute("aria-label") || "",
+              workspaceCommandRect: (() => {
+                const node = document.querySelector('[aria-label^="Workspace:"]');
+                if (!node) return null;
+                const rect = node.getBoundingClientRect();
+                const style = getComputedStyle(node);
+                return { x: rect.x, y: rect.y, width: rect.width, height: rect.height, bottom: rect.bottom, display: style.display, visibility: style.visibility };
+              })(),
               overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
             };
           })()`);
@@ -143,6 +150,9 @@ jobs:
           if (geometry.workspacePickerCount !== 0) throw new Error("full workspace picker still exists in Figma rail");
           if (geometry.railRoleBadgeCount !== 0) throw new Error("role badge still exists in Figma rail");
           if (!geometry.workspaceCommand.includes("API Platform Team")) throw new Error("workspace command missing");
+          if (!geometry.workspaceCommandRect || geometry.workspaceCommandRect.width < 36 || geometry.workspaceCommandRect.height < 36 || geometry.workspaceCommandRect.y < 0 || geometry.workspaceCommandRect.bottom > 900 || geometry.workspaceCommandRect.display === "none" || geometry.workspaceCommandRect.visibility === "hidden") {
+            throw new Error("workspace command is not visibly reachable: " + JSON.stringify(geometry.workspaceCommandRect));
+          }
           if (geometry.overflow > 1) throw new Error("desktop horizontal overflow: " + geometry.overflow);
 
           const desktop = await call("Page.captureScreenshot", { format: "jpeg", quality: 72, fromSurface: true });
