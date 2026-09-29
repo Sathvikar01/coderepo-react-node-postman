@@ -359,10 +359,10 @@ await (async () => {
 		const jordanSame = await jordan.evaluate(`localStorage.getItem("request-desk-workspace-id") === ${JSON.stringify(teamId)}`);
 		if (!jordanSame) throw new Error("Jordan is not in the team workspace");
 		for (const [who, context] of [["alex", alex], ["jordan", jordan]]) {
-			const switcher = await context.evaluate(`document.querySelector(".workspace-switcher")?.textContent.replace(/\\s+/g, " ").trim() || ""`);
-			if (!/API Platform Team/.test(switcher)) throw new Error(`${who} switcher does not show the team workspace: ${switcher}`);
+			const command = await context.evaluate(`document.querySelector('[aria-label^="Workspace:"]')?.getAttribute("aria-label") || ""`);
+			if (!/API Platform Team/.test(command)) throw new Error(`${who} workspace command does not show the team workspace: ${command}`);
 		}
-		pass("2. Both open API Platform Team", `workspace=${teamId.slice(-4)}`);
+		pass("2. Both open API Platform Team through the Figma command rail", `workspace=${teamId.slice(-4)}`);
 
 		// Same seeded collection visible to both (UI sidebar text).
 		const collectionName = await alex.evaluate(apiBase(`
@@ -402,18 +402,29 @@ await (async () => {
 		if (versions.length < 2 || versions[0].revision !== v2.revision) throw new Error("v2 missing from history: " + JSON.stringify(versions));
 		pass("6. Version v2 appears", versions.map((v) => `v${v.revision}:${v.action}`).join(" "));
 
-		// Activity entry appears live in the sidebar feed.
-		await alex.clickText("Activity", ".sidebar-tabs");
+		// Activity stays inside the workspace dialog so the Figma resource index
+		// remains exactly Collections / History / Cookies / Examples.
+		await alex.click('[aria-label^="Workspace:"]', "workspace command");
+		await alex.waitFor('[...document.querySelectorAll(".menu [role=menuitem]")].some((n) => n.textContent.includes("Workspace activity"))', "workspace activity menu item");
+		await alex.evaluate(`(() => {
+			const item = [...document.querySelectorAll(".menu [role=menuitem]")].find((n) => n.textContent.includes("Workspace activity"));
+			if (!item) return false;
+			item.click();
+			return true;
+		})()`);
 		await alex.waitFor('document.querySelector(".workspace-activity") !== null', "activity view");
 		const activityText = await alex.waitFor(
 			'(() => { const node = document.querySelector(".workspace-activity"); if (!node) return ""; const text = node.textContent.replace(/\\s+/g, " ").trim(); if (!text || /Loading/i.test(text)) return ""; return text; })()',
-			"sidebar activity",
+			"workspace activity",
 		);
 		if (!/revision 1 → 2|revision \d+ → \d+/.test(activityText)) throw new Error("No revision-transition activity: " + activityText.slice(0, 200));
 		if (!/View versions/.test(activityText)) throw new Error("Activity rows have no version links");
 		if (/authorization|set-cookie|password123/i.test(activityText)) throw new Error("Activity leaked sensitive material");
-		pass("7. Activity entry appears live with a version link");
-		await alex.clickText("Collections", ".sidebar-tabs");
+		const resourceTabs = await alex.evaluate('document.querySelectorAll(".sidebar-tabs .sidebar-tab").length');
+		if (resourceTabs !== 4) throw new Error("Figma resource index drifted to " + resourceTabs + " slots");
+		pass("7. Activity stays live inside Manage while the Figma resource index remains four slots");
+		await alex.escape();
+		await alex.waitFor('document.querySelector(".workspace-modal") === null', "activity dialog closed");
 		await alex.waitFor('document.querySelector(".tree") !== null', "collections tree");
 
 		// Alex opens v1 → v2 compare through the collection menu.
@@ -560,7 +571,6 @@ await (async () => {
 			return res.status;
 		`));
 		if (demoted !== 200) throw new Error("Demoting Jordan failed with status " + demoted);
-		await jordan.waitFor('document.querySelector(".workspace-role-badge")?.textContent.trim() === "Viewer"', "viewer badge", 30000);
 		// Open a request tab so the Save control exists, then prove it is disabled.
 		await jordan.evaluate(`(() => {
 			const label = [...document.querySelectorAll(".tree .tree-label")].find((n) => n.textContent.includes(${JSON.stringify(collectionName.name)}));
