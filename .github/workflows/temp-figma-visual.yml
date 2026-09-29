@@ -1,0 +1,178 @@
+name: Temporary Figma Visual Check
+
+on:
+  push:
+    branches:
+      - "chatgpt/restore-figma-workbench"
+
+jobs:
+  figma-visual:
+    runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - name: Seed and start
+        shell: bash
+        run: |
+          bash setup.sh --seed
+          bun start > /tmp/tracer.log 2>&1 &
+          for i in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:8000/api/v1/health >/dev/null && curl --fail --silent http://127.0.0.1:3000 >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/tracer.log
+          exit 1
+      - name: Launch Chrome
+        shell: bash
+        run: |
+          CHROME="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
+          test -n "$CHROME"
+          "$CHROME" --headless=new --no-sandbox --disable-gpu --remote-debugging-port=9222 about:blank >/tmp/chrome.log 2>&1 &
+          for i in {1..30}; do
+            curl --fail --silent http://127.0.0.1:9222/json/version >/dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/chrome.log
+          exit 1
+      - name: Capture and assert Figma workbench
+        shell: bash
+        run: |
+          cat >/tmp/figma-check.mjs <<'EOF'
+          const CDP = "http://127.0.0.1:9222";
+          const APP = "http://127.0.0.1:3000";
+          const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+          const target = await (await fetch(CDP + "/json/new?" + encodeURIComponent(APP), { method: "PUT" })).json();
+          const socket = new WebSocket(target.webSocketDebuggerUrl);
+          await new Promise((resolve, reject) => {
+            socket.addEventListener("open", resolve, { once: true });
+            socket.addEventListener("error", reject, { once: true });
+          });
+          let nextId = 1;
+          const pending = new Map();
+          socket.addEventListener("message", (event) => {
+            const message = JSON.parse(event.data);
+            if (!message.id) return;
+            const waiter = pending.get(message.id);
+            if (!waiter) return;
+            pending.delete(message.id);
+            message.error ? waiter.reject(new Error(message.error.message)) : waiter.resolve(message.result);
+          });
+          const call = (method, params = {}) => new Promise((resolve, reject) => {
+            const id = nextId++;
+            pending.set(id, { resolve, reject });
+            socket.send(JSON.stringify({ id, method, params }));
+          });
+          const evaluate = async (expression) => {
+            const result = await call("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true, userGesture: true });
+            if (result.exceptionDetails) throw new Error(result.exceptionDetails.text || "evaluate failed");
+            return result.result?.value;
+          };
+          const waitFor = async (expression, label, timeout = 20000) => {
+            const end = Date.now() + timeout;
+            while (Date.now() < end) {
+              try {
+                if (await evaluate(expression)) return;
+              } catch {}
+              await sleep(120);
+            }
+            throw new Error(label + " timed out");
+          };
+          const setInput = async (selector, value) => {
+            const ok = await evaluate(`(() => {
+              const node = document.querySelector(${JSON.stringify(selector)});
+              if (!node) return false;
+              const proto = node instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+              const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+              if (!setter) return false;
+              setter.call(node, ${JSON.stringify(value)});
+              node.dispatchEvent(new Event("input", { bubbles: true }));
+              node.dispatchEvent(new Event("change", { bubbles: true }));
+              return true;
+            })()`);
+            if (!ok) throw new Error("could not set " + selector);
+          };
+
+          await call("Page.enable");
+          await call("Runtime.enable");
+          await call("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+          await call("Page.navigate", { url: APP });
+          await waitFor('document.querySelector("#workspace-email") !== null', "login");
+          await setInput("#workspace-email", "alex.morgan@example.test");
+          await setInput("#workspace-password", "password123");
+          await evaluate('document.querySelector(".workspace-login-card form").requestSubmit(); true');
+          await waitFor('[...document.querySelectorAll("button")].some((n) => n.getAttribute("aria-label")?.startsWith("Continue as"))', "profile");
+          await evaluate('[...document.querySelectorAll("button")].find((n) => n.getAttribute("aria-label")?.startsWith("Continue as")).click(); true');
+          await waitFor('document.querySelector(".app-shell") !== null', "app shell");
+
+          const geometry = await evaluate(`(() => {
+            const rail = document.querySelector(".app-header")?.getBoundingClientRect();
+            const sidebar = document.querySelector(".sidebar")?.getBoundingClientRect();
+            const workspace = document.querySelector(".workspace")?.getBoundingClientRect();
+            const tabs = [...document.querySelectorAll(".sidebar-tabs .sidebar-tab")].map((n) => n.textContent.replace(/\\s+/g, " ").trim());
+            return {
+              rail: rail && { x: rail.x, width: rail.width, height: rail.height },
+              sidebar: sidebar && { x: sidebar.x, width: sidebar.width, height: sidebar.height },
+              workspace: workspace && { x: workspace.x, width: workspace.width },
+              tabs,
+              workspacePickerCount: document.querySelectorAll(".workspace-picker").length,
+              railRoleBadgeCount: [...document.querySelectorAll(".app-header .workspace-role-badge")].length,
+              workspaceCommand: document.querySelector('[aria-label^="Workspace:"]')?.getAttribute("aria-label") || "",
+              overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+            };
+          })()`);
+          console.log("FIGMA_GEOMETRY " + JSON.stringify(geometry));
+          if (!geometry.rail || geometry.rail.width < 70 || geometry.rail.width > 82) throw new Error("rail width drifted");
+          if (!geometry.sidebar || geometry.sidebar.width < 276 || geometry.sidebar.width > 296) throw new Error("resource index width drifted");
+          if (geometry.tabs.length !== 4 || geometry.tabs.join("|") !== "Collections|History|Cookies|Examples") throw new Error("resource strip drifted: " + geometry.tabs.join("|"));
+          if (geometry.workspacePickerCount !== 0) throw new Error("full workspace picker still exists in Figma rail");
+          if (geometry.railRoleBadgeCount !== 0) throw new Error("role badge still exists in Figma rail");
+          if (!geometry.workspaceCommand.includes("API Platform Team")) throw new Error("workspace command missing");
+          if (geometry.overflow > 1) throw new Error("desktop horizontal overflow: " + geometry.overflow);
+
+          const desktop = await call("Page.captureScreenshot", { format: "jpeg", quality: 72, fromSurface: true });
+          console.log("SCREENSHOT_DESKTOP_BEGIN");
+          console.log(desktop.data);
+          console.log("SCREENSHOT_DESKTOP_END");
+
+          await call("Emulation.setDeviceMetricsOverride", { width: 375, height: 820, deviceScaleFactor: 1, mobile: false });
+          await sleep(250);
+          const opened = await evaluate(`(() => {
+            const button = document.querySelector('[aria-label="Open collections"]');
+            if (!button) return false;
+            button.click();
+            return true;
+          })()`);
+          if (!opened) throw new Error("mobile collections command unavailable");
+          await waitFor('document.querySelector(".sidebar")?.classList.contains("open")', "mobile resource drawer");
+          const mobile = await evaluate(`(() => ({
+            overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+            tabs: document.querySelectorAll(".sidebar-tabs .sidebar-tab").length,
+            picker: document.querySelectorAll(".workspace-picker").length,
+          }))()`);
+          console.log("FIGMA_MOBILE " + JSON.stringify(mobile));
+          if (mobile.overflow > 1 || mobile.tabs !== 4 || mobile.picker !== 0) throw new Error("mobile Figma contract drift");
+
+          const phone = await call("Page.captureScreenshot", { format: "jpeg", quality: 72, fromSurface: true });
+          console.log("SCREENSHOT_PHONE_BEGIN");
+          console.log(phone.data);
+          console.log("SCREENSHOT_PHONE_END");
+          console.log("FIGMA_VISUAL_PASS");
+          socket.close();
+          EOF
+          bun /tmp/figma-check.mjs
