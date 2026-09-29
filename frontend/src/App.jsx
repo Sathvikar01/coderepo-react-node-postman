@@ -1580,6 +1580,22 @@ export default function App() {
 			onReload={() => reloadWorkspaceDetail()}
 			onRemoveMember={removeWorkspaceMember}
 			onRename={renameWorkspace}
+			onOpenVersions={async ({ resourceType, resourceId }) => {
+				try {
+					const fresh =
+						resourceType === "collection"
+							? await collectionApi.get(resourceId)
+							: await environmentApi.get(resourceId);
+					setVersionsDialog({
+						resourceType,
+						resourceId,
+						resourceName: fresh.name,
+						currentRevision: fresh.revision,
+					});
+				} catch (error) {
+					toast(error.message, "error");
+				}
+			}}
 		/>
 	) : null;
 
