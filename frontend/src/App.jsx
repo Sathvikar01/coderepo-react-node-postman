@@ -79,7 +79,6 @@ import { RemoteChangeBanner } from "./features/versions/RemoteChangeBanner.jsx";
 import { useWorkspaceEvents } from "./features/versions/useWorkspaceEvents.js";
 import { VersionsDialog } from "./features/versions/VersionsDialog.jsx";
 import { WorkspaceHeader } from "./features/workspace/WorkspaceHeader.jsx";
-import { WorkspaceActivityPanel } from "./features/workspaces/WorkspaceActivityPanel.jsx";
 import { WorkspaceDialog } from "./features/workspaces/WorkspaceDialog.jsx";
 import { WorkspaceSwitcher } from "./features/workspaces/WorkspaceSwitcher.jsx";
 import { workspaceApi } from "./features/workspaces/workspace.api.js";
@@ -471,7 +470,7 @@ export default function App() {
 		async (mode) => {
 			setWorkspaceError("");
 			setWorkspaceDialog(mode);
-			if (mode === "manage") await reloadWorkspaceDetail();
+			if (mode !== "create") await reloadWorkspaceDetail();
 		},
 		[reloadWorkspaceDetail],
 	);
@@ -1602,7 +1601,7 @@ export default function App() {
 				localRuntime={localRuntime}
 				profile={profile}
 				theme={theme}
-				workspaceSwitcher={
+				workspaceCommand={
 					<WorkspaceSwitcher
 						activeWorkspaceId={activeWorkspaceId}
 						capabilities={workspaceCapabilities}
@@ -1612,7 +1611,11 @@ export default function App() {
 						onManage={() => openWorkspaceDialog("manage")}
 						onOpenActivity={() => {
 							setWorkspaceActivityVersion((current) => current + 1);
-							setSidebarTab("activity");
+							openWorkspaceDialog("activity");
+						}}
+						onOpenReviews={() => {
+							setWorkspaceActivityVersion((current) => current + 1);
+							setSidebarTab("reviews");
 							setSidebarOpen(true);
 						}}
 						onSelectWorkspace={selectWorkspace}
@@ -1695,32 +1698,6 @@ export default function App() {
 							onClick={() => setSidebarTab("examples")}
 						>
 							<MaterialIcon size={18}>bookmark</MaterialIcon> Examples
-						</button>
-						<button
-							aria-selected={sidebarTab === "activity"}
-							className="sidebar-tab"
-							role="tab"
-							tabIndex={sidebarTab === "activity" ? 0 : -1}
-							type="button"
-							onClick={() => {
-								setWorkspaceActivityVersion((current) => current + 1);
-								setSidebarTab("activity");
-							}}
-						>
-							<MaterialIcon size={18}>history</MaterialIcon> Activity
-						</button>
-						<button
-							aria-selected={sidebarTab === "reviews"}
-							className="sidebar-tab"
-							role="tab"
-							tabIndex={sidebarTab === "reviews" ? 0 : -1}
-							type="button"
-							onClick={() => {
-								setWorkspaceActivityVersion((current) => current + 1);
-								setSidebarTab("reviews");
-							}}
-						>
-							<MaterialIcon size={18}>rate_review</MaterialIcon> Reviews
 						</button>
 					</div>
 					{workspaceRole === "VIEWER" && (
@@ -1844,34 +1821,6 @@ export default function App() {
 							onPromotionConsumed={() => setReviewPromotion(null)}
 							onToast={toast}
 						/>
-					) : sidebarTab === "activity" ? (
-						<div className="sidebar-panel">
-							<div className="sidebar-section-label">
-								<span>Workspace activity</span>
-							</div>
-							<div className="sidebar-scroll">
-								<WorkspaceActivityPanel
-									refreshToken={workspaceActivityVersion}
-									workspaceId={activeWorkspaceId}
-									onOpenVersions={async ({ resourceType, resourceId }) => {
-										try {
-											const fresh =
-												resourceType === "collection"
-													? await collectionApi.get(resourceId)
-													: await environmentApi.get(resourceId);
-											setVersionsDialog({
-												resourceType,
-												resourceId,
-												resourceName: fresh.name,
-												currentRevision: fresh.revision,
-											});
-										} catch (error) {
-											toast(error.message, "error");
-										}
-									}}
-								/>
-							</div>
-						</div>
 					) : (
 						<ExamplesPanel
 							refreshToken={examplesVersion}
