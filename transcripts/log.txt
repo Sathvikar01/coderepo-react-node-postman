@@ -6499,3 +6499,41 @@ branch=audit/full-ui-feature-coverage-gate
 pr=72
 issue=71 OPEN
 parent_agent=none
+
+
+## [2026-10-01T01:02:00+05:30] TRANSCRIPT CORRECTION — exclude meta-repair chatter
+
+Correction:
+The following two entries were mistakenly appended by ChatGPT during transcript repair and are **not Tracer project-development turns**:
+
+- `## [2026-10-01T00:50:10+05:30] User detects transcript gap — recovered missing turn`
+- `## [2026-10-01T00:55:38+05:30] Transcript ownership correction and missing-turn recovery`
+
+They are transcript-maintenance/meta conversation, not product requirements, implementation instructions, architecture decisions, coding-agent results, validation results, or merge work. They must not be interpreted as part of the participant's Tracer engineering decision trail.
+
+The correct latest Tracer project turn is the preceding entry:
+
+- `## [2026-10-01T00:44:04+05:30] Full UI / feature-coverage audit follow-up — recovered missing turn`
+
+That entry contains the actual user project prompt beginning:
+
+`Running: [Open Tracer](http://localhost:3000/).`
+
+and the explicit UI-audit instruction:
+
+`i dont think every feature is being displayed in the UI properly...`
+
+Standing transcript rule clarified:
+- Log real Tracer project prompts and their resulting implementation/review/verification response summaries.
+- Do not add ChatGPT's own transcript-repair bookkeeping, complaints about logging, or recovery process as if they were product-development prompts.
+- Preserve append-only history; corrections invalidate mistaken meta entries rather than rewriting prior bytes.
+
+Actions:
+* marked the two accidental meta entries as non-project transcript material
+* reaffirmed the actual latest Tracer project entry as the full UI / feature-coverage audit turn
+* preserved append-only history without deleting or rewriting prior entries
+
+Context:
+tool=ChatGPT
+branch=main
+parent_agent=none
