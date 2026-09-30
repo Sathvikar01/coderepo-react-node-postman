@@ -6594,3 +6594,65 @@ issue=71 OPEN
 pr=72 MERGED
 merge_commit=54604374d7ae6a2a5e46132d3e4992b9efc07566
 parent_agent=none
+
+
+## [2026-10-01] Project-history and readiness reconciliation
+
+Implementation / Audit Prompt:
+Reconcile Tracer's project history and submission-readiness record so a reviewer cannot misread phase order, phase coverage, verdicts, or test totals.
+
+Required work:
+
+1. Phase-history audit
+- Inspect the tracked transcript headings against the canonical roadmap and shipped phase reports.
+- Document where transcript append order differs from phase-number/dependency order.
+- Identify phase numbers with no dedicated transcript heading.
+- Distinguish intentionally skipped/unimplemented roadmap phases from implemented phases whose transcript entry is missing.
+- Do not fabricate missing history merely to make numbering continuous.
+- Correct any misleading roadmap heading that implies a different phase count than the table actually contains.
+
+2. PASS / BLOCKED reconciliation
+- Audit reviewer-facing documentation for historical or scoped PASS results that can be mistaken for the current whole-product verdict.
+- Preserve legitimate historical gate results for their exact commits/scopes.
+- State plainly that the current product/submission status is BLOCKED while the full Impact → Drift → Rehearsal → Contract Compatibility → Verification Proof generation path is not proven as one browser workflow.
+- Keep issue #71 open unless that browser gap is actually implemented and evidenced.
+- Scope README/reviewer claims so the ten capability groups are presented as submission grouping, not as a claim that all ten are complete browser end-to-end workflows.
+
+3. Test-count reconciliation
+- Explain the apparent change from 1822 pass / 2 skip to 1417 pass / 114 skip using the recorded command scope, file counts, and environment notes.
+- Verify whether the runs had the same denominator before describing the change as a regression.
+- Account for database-dependent test skipping under the recorded MongoDB/OOM instability.
+- Establish a rule that future reported counts include command, scope/directory, file count, and pass/skip/fail.
+
+4. Delivery
+- Add one repository-visible reconciliation document.
+- Update README, reviewer guide, final readiness report, and roadmap wording where needed.
+- Keep changes documentation-only; do not alter runtime/product semantics.
+- Open a PR, verify the claims are internally consistent, merge it, and report the final issue #71 state.
+
+Agent Response Summary:
+The repository history/readiness claims were reconciled without changing product behavior. A new `docs/project-history-reconciliation.md` documents the non-linear transcript ordering, identifies missing phase headings, separates intentionally unimplemented/skipped phases from implemented-but-unlogged phases, and records the roadmap-heading drift. Reviewer-facing docs now distinguish historical/scoped PASS results from the current BLOCKED product/submission verdict.
+
+The README no longer calls all 10 submission groups “end-to-end capabilities”; it explicitly treats them as scope grouping and states the known browser gap in capability 10. Issue #71 remains OPEN because the full Impact → Drift → Rehearsal → Contract → Verification Proof generation chain is still not proven as one browser workflow.
+
+The test-count discrepancy is documented as a scope/environment mismatch: Phase 48B recorded 1822 pass / 2 skip across a repo-wide 116-file run, while the later freeze recorded 1417 pass / 114 skip across a backend-only 90-file run on a host where MongoDB OOM-crashed. Database-backed suites intentionally skip when Mongo is unavailable, so the numbers cannot be compared as if 405 tests disappeared.
+
+PR #73, `Docs: reconcile phase history, readiness status, and test counts`, was merged into `main` as `fa66a64d3802613ae23b2ce3c5ec1231a55d7e09`.
+
+Actions:
+* added `docs/project-history-reconciliation.md`
+* documented phase-order anomalies and missing phase headings
+* corrected the misleading “26-phase” roadmap heading
+* scoped README and reviewer-guide end-to-end claims
+* reconciled historical PASS versus current BLOCKED status
+* explained the 1822/2 versus 1417/114 test-count difference
+* kept issue #71 open with explicit product-completeness wording
+* merged PR #73
+
+Context:
+tool=ChatGPT GitHub verification
+branch=audit/history-readiness-reconciliation
+pr=73 MERGED
+merge_commit=fa66a64d3802613ae23b2ce3c5ec1231a55d7e09
+issue=71 OPEN
+parent_agent=none
