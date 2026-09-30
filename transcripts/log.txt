@@ -6415,8 +6415,92 @@ parent_agent=none
 
 ## [2026-10-01T00:44:04+05:30] Full UI / feature-coverage audit
 
-User Prompt (verbatim, secrets redacted):
-i dont think every feature is being displayed in the UI properly, and also that everything isnt proper, like alignments n all, please go through everything, take snapshot of everything, n make very very sure tht all the features is being used or being displayed in the UI, like a real-website
+Implementation Prompt (generated from the user's instruction):
+You are performing the final full-product UI audit and integration pass for Tracer.
+
+Goal:
+Make Tracer feel like a complete real-world product where every shipped user-facing capability is visibly discoverable, correctly aligned, responsive, and usable end-to-end from the existing UI. Preserve the established Figma/Tracer workbench as the visual source of truth.
+
+Required work:
+
+1. Inventory the product
+- Read the current README, REQUIREMENTS.md, reviewer docs, and the shipped frontend/backend feature directories.
+- Build a complete inventory of every shipped core and supporting capability.
+- Map each user-facing capability to a real UI entry point.
+- Identify anything that exists only in backend/code, is hidden behind developer knowledge, or is only partially represented in the UI.
+
+2. Fix discoverability and complete missing workflows
+- Every shipped user-facing feature must be reachable naturally from the product UI.
+- Do not create a second navigation system or a new visual language.
+- Fit all additions into the existing Figma workbench and current command-rail/resource-panel patterns.
+- Complete the browser workflow for the change-safety chain:
+  Impact → Environment Drift → Rehearsal → Contract Compatibility → Verification Proof.
+- These must support the required generation/selection/action states, not only read-only inspection of previously recorded evidence.
+- Verification Proof and Why? may inspect canonical evidence, but the UI must also expose the actual upstream workflow needed to create that evidence.
+
+3. Preserve backend authority
+- The frontend must not re-derive or invent Impact, Drift, Rehearsal, Contract, Verification, or Proof truth.
+- React may call and render the canonical backend semantics only.
+- Reuse existing cores/services wherever possible.
+- Add the smallest API/UI wiring necessary to expose existing functionality cleanly.
+- Do not introduce new dependencies, a second execution engine, or unrelated architectural refactors.
+
+4. Perform a complete UI/UX audit
+Check and fix:
+- alignment, spacing, sizing, hierarchy, and visual consistency;
+- navigation and feature discoverability;
+- request/response tabs and state transitions;
+- forms on desktop and mobile;
+- account/workspace switching;
+- dialogs, sheets, menus, and overlays;
+- scrolling and overflow;
+- loading, empty, error, validation, disabled, success, and destructive states;
+- keyboard navigation, focus handling, Escape behavior, and accessible labels;
+- responsive behavior at 375, 768, 1024, and 1440 px;
+- dark/light themes where applicable;
+- browser console/runtime errors.
+
+5. Snapshot everything important
+- Capture current screenshots for all material pages, dialogs, feature states, and responsive breakpoints.
+- Include enough state coverage that a reviewer can visually verify every shipped capability.
+- Keep the screenshot output organized and generate an index/gallery.
+
+6. Verification
+- Run the full frontend test suite.
+- Run the full backend test suite.
+- Run the production frontend build.
+- Run targeted browser checks for every workflow changed in this pass.
+- Re-run the exhaustive full-UI browser audit after fixes.
+- Do not claim a feature is complete unless the browser path is actually exercised.
+
+7. Produce a repository-visible feature coverage report
+For every shipped feature, record:
+- feature/capability name;
+- UI entry point;
+- canonical backend/API/service authority;
+- persistence/evidence path;
+- browser-test coverage;
+- screenshot coverage;
+- status: complete / partial / backend-only / blocked.
+
+Acceptance gate:
+- No shipped user-facing capability is practically hidden or backend-only while being presented as an end-to-end product feature.
+- All major UI surfaces are visually coherent with the existing Figma workbench.
+- The Impact → Drift → Rehearsal → Contract → Verification Proof journey is usable from the browser without developer-only setup.
+- Responsive, keyboard, overflow, error-state, and console checks pass.
+- Full frontend/backend suites and production build pass.
+- The final feature coverage report and screenshot gallery are produced.
+- If any substantial gap remains, report it explicitly and do not mark the product as fully submission-ready.
+
+Keep the implementation bounded and verification-first. Fix what is actually broken, preserve existing working behavior, and do not broaden scope unnecessarily.
+
+At the end, report:
+- what you found;
+- what you fixed;
+- every user-facing workflow now reachable in the UI;
+- screenshot/browser evidence;
+- exact test/build results;
+- any remaining blocker.
 
 Agent Response Summary:
 Running: Open Tracer at http://localhost:3000/.
