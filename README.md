@@ -9,7 +9,7 @@ Tracer still gives you the familiar API-client workflow — build requests, orga
 
 ## Submission scope — 10 core capabilities
 
-Tracer is submitted as **10 meaningful end-to-end capabilities**. Supporting controls are grouped under the workflow they complete rather than counted as separate products.
+Tracer is submitted as **10 meaningful core capabilities**. This is a submission-scope grouping, not a claim that every group currently has complete browser end-to-end coverage. Supporting controls are grouped under the workflow they complete rather than counted as separate products.
 
 | # | Core capability | Supporting controls included in that capability |
 | ---: | --- | --- |
@@ -26,6 +26,8 @@ Tracer is submitted as **10 meaningful end-to-end capabilities**. Supporting con
 
 This grouping is intentional: a cookie jar is session behavior inside authenticated execution; a code-snippet dialog is an authoring/export control; immutable versions are part of collaboration safety; and Impact/Drift/Rehearsal/Proof/Why/Reviews form one linked change-verification workflow. They are implementation depth within the ten capabilities above, not independent product scope.
 
+**Current browser-coverage scope:** capability 10 has shipped backend/domain engines and targeted evidence, but the full `Impact → Drift → Rehearsal → Contract → Verification Proof` generation path is not yet a complete browser-driven workflow. Issue #71 remains open for that gap. Until it is closed with repository-visible browser evidence, Tracer should not be described as fully browser end-to-end or fully submission-ready.
+
 ## Reviewer in 60 seconds
 
 **Tracer answers one concrete question: when an API workspace changes, can we trust the affected workflow?**
@@ -41,6 +43,8 @@ Change → Impact → Rehearse → Verify → Review
 - **Review** carries that exact validated proof into the human decision without letting the UI rewrite the technical state.
 
 That is the core product story.
+
+**Important:** this is the product/architecture story, not a claim that every step is currently drivable end-to-end from the browser. The known UI gap is tracked in issue #71 and summarized in [`docs/project-history-reconciliation.md`](docs/project-history-reconciliation.md).
 
 Two supporting systems make the loop trustworthy rather than decorative:
 

@@ -258,9 +258,11 @@ These rules record the user's assignment and attached architecture brief. Preser
 
 ---
 
-## 10. CANONICAL 26-PHASE ROADMAP, DEPENDENCIES, AND PARALLEL WORK
+## 10. CANONICAL ROADMAP THROUGH PHASE 37, DEPENDENCIES, AND PARALLEL WORK
 
 This section is the repo-level source of truth for phase numbers. Agents must not guess what a phase number means.
+
+> Historical note: the original section title incorrectly called this a 26-phase roadmap even though the table extends through Phase 37. Later post-roadmap work introduced Phases 38–50; those later phases are evidenced by their reports/PRs and are not retroactively inserted into this original dependency map. See `docs/project-history-reconciliation.md` for the transcript-order and missing-phase-record audit.
 
 ### 10.1 Canonical phase map
 
