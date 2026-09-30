@@ -11,7 +11,7 @@
 >
 > **Merge/submission blocker:** Impact, Environment Drift, Rehearsal, and Contract generation still lack complete browser workflows. GitHub code inspection confirms the Rehearsal planning/checkpoint/executor surfaces are explicitly backend-only, while Proof and Why? primarily inspect already-recorded evidence. Until the user can generate and exercise Impact → Drift → Rehearsal → Contract → Verification through real browser UI, with screenshots and browser assertions across the supported responsive/keyboard states, Tracer must **not** be described as having complete end-to-end UI coverage or as fully submission-ready.
 >
-> **Required pre-merge instruction:** run the exact user prompt tracked in the corresponding GitHub issue from the active local coding-agent session so `AGENTS.md` appends it to `%USERPROFILE%\hackerrank_postman\log.txt` before implementation/merge. Do not fabricate or manually backfill that external append-only log from GitHub.
+> **Required pre-merge instruction:** run the generated implementation prompt tracked in the corresponding GitHub issue from the active local coding-agent session before implementation/merge, and log that implementation prompt together with the resulting agent response. Do not substitute the user's rough chat wording for the generated coding prompt.
 
 
 - Branch: `final/submission-freeze`
