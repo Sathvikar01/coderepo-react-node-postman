@@ -7,6 +7,13 @@
 > **Coverage clarification:** standalone historical browser harnesses such as Phase 24B/36/37/47C/49 are targeted acceptance scripts; they are **not all invoked by `bun test` or by the always-on Phase 30 workflow**. Their underlying service/view-model behavior has extensive automated test coverage, while their full browser journeys remain targeted regression harnesses.
 
 
+> **Post-PR70 full-UI audit gate — 2026-10-01:** a newer local browser/UI audit reports that feature navigation, alignment, mobile forms, keyboard handling, response tabs, and account switching were repaired; the reported run has **19 browser checks passed**, **427 frontend + 1,595 backend tests passed**, **2 skipped**, and a successful frontend build. Those artifacts currently live only on the local Windows checkout (including a 139-capture gallery and `design/feature-coverage.md`) and are **not present on GitHub main**, so these counts are recorded as local audit evidence rather than independently reproducible repository evidence.
+>
+> **Merge/submission blocker:** Impact, Environment Drift, Rehearsal, and Contract generation still lack complete browser workflows. GitHub code inspection confirms the Rehearsal planning/checkpoint/executor surfaces are explicitly backend-only, while Proof and Why? primarily inspect already-recorded evidence. Until the user can generate and exercise Impact → Drift → Rehearsal → Contract → Verification through real browser UI, with screenshots and browser assertions across the supported responsive/keyboard states, Tracer must **not** be described as having complete end-to-end UI coverage or as fully submission-ready.
+>
+> **Required pre-merge instruction:** run the exact user prompt tracked in the corresponding GitHub issue from the active local coding-agent session so `AGENTS.md` appends it to `%USERPROFILE%\hackerrank_postman\log.txt` before implementation/merge. Do not fabricate or manually backfill that external append-only log from GitHub.
+
+
 - Branch: `final/submission-freeze`
 - Base: `93cf3e0e1fb1a91c68c2a2365930423440c6888e` (origin/main at freeze time)
 - Date: 2026-09-25 (Asia/Kolkata). No new features were added on this branch.
@@ -173,8 +180,8 @@ was reseeded deterministically by this freeze (`request_desk_demo`).
 
 No freeze-code defects proven; report-only change on this branch.
 
-`FINAL FREEZE VERDICT: PASS — TRACER READY FOR SUBMISSION`
+`CURRENT VERDICT: BLOCKED — COMPLETE FULL-UI FEATURE WORKFLOWS BEFORE SUBMISSION`
 
 ## Current compliance status
 
-The current product tree remains within the documented HackerRank technology, runtime, archive, and submission-scope contracts after PR #67. No unresolved repository defect is recorded by the standing CI gates. The supplied validation skill remains the authoritative final handover audit and should be executed once more on the exact submission checkout immediately before handoff; any resulting `FAIL` must be resolved, while `MANUAL` means the item is not yet directly verified.
+The current product tree remains within the documented HackerRank technology, runtime, archive, and submission-scope contracts after PR #67, but the post-PR70 full-UI audit records an unresolved product-completeness gap: Impact, Drift, Rehearsal, and Contract generation are not yet proven as complete browser workflows. The supplied validation skill remains the authoritative final handover audit and should be executed once more on the exact submission checkout immediately before handoff; any resulting `FAIL` must be resolved, while `MANUAL` means the item is not yet directly verified.
