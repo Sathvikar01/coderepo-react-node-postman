@@ -110,6 +110,31 @@ async function clickText(selector, text, label = text) {
 	await retry(() => evaluate(expression), "click " + label, 10000);
 }
 
+async function selectMenu(label, optionText) {
+	await click('[role="combobox"][aria-label="' + label + '"]', label);
+	await clickText('.select-menu-list [role="option"]', optionText, label + ' -> ' + optionText);
+	await waitFor(
+		'(() => { const node=document.querySelector(' + JSON.stringify('[role="combobox"][aria-label="' + label + '"]') + '); return Boolean(node && node.textContent.replace(/\\s+/g, " ").includes(' + JSON.stringify(optionText) + ')); })()',
+		label + ' selected ' + optionText,
+	);
+}
+
+async function selectPreviousRevision() {
+	await click('[role="combobox"][aria-label="Baseline revision"]', "Baseline revision");
+	await retry(
+		() =>
+			evaluate(
+				"(() => { const options=[...document.querySelectorAll('.select-menu-list [role=option]')]; const node=options.find((item)=>!item.querySelector('small')?.textContent.includes('current saved revision')); if (!node) return false; node.focus(); node.click(); return true; })()",
+			),
+		"select previous saved revision",
+		10000,
+	);
+	await waitFor(
+		'document.querySelector(\'[role="combobox"][aria-label="Baseline revision"]\')?.textContent.includes("Revision v")',
+		"previous revision selected",
+	);
+}
+
 async function setInput(selector, value) {
 	const expression =
 		"(() => { const node = document.querySelector(" +
@@ -179,45 +204,38 @@ await click('[aria-label^="Continue as"]', "profile");
 await waitFor('document.querySelector(".app-shell") !== null', "workspace");
 pass("login -> profile -> workspace");
 
-const listed = await api("GET", "/collections");
-if (listed.status !== 200) throw new Error("Could not list collections: " + listed.status);
-const ordersSummary = (listed.body?.data ?? []).find((item) => item.name === "Orders API");
-if (!ordersSummary) throw new Error("Orders API not found");
+await click('[aria-label="Open collections"]', "Collections rail command");
+await clickText(".tree-row .tree-label", "Orders API", "Orders API collection");
+await waitFor(
+	'[...document.querySelectorAll(".tree-row .tree-label")].some((node)=>node.textContent.replace(/\\s+/g," ").trim().includes("List orders"))',
+	"List orders visible",
+);
+await clickText(".tree-row .tree-label", "List orders", "List orders request");
+await waitFor('document.querySelector(".request-name-input")?.value === "List orders"', "List orders request builder");
 
-const fetched = await api("GET", "/collections/" + ordersSummary._id);
-if (fetched.status !== 200) throw new Error("Could not read Orders API: " + fetched.status);
-const current = fetched.body.data;
-const listOrders = (current.requests ?? []).find((request) => request.name === "List orders");
-if (!listOrders) throw new Error("List orders request not found");
+await clickText(".request-builder button", "Headers", "Headers tab");
+await waitFor('document.querySelector(\'.kv-editor[aria-label="Headers"]\') !== null', "Headers editor");
+const existingAuditHeader = await evaluate(
+	'[...document.querySelectorAll(\'.kv-editor[aria-label="Headers"] .kv-row input[placeholder="Key"]\')].some((node)=>node.value === "X-Change-Safety-Audit")',
+);
+if (existingAuditHeader) throw new Error("Seed unexpectedly already contains the Change Safety audit header");
 
-const auditHeader = {
-	id: "54000000-0000-4000-8000-000000000001",
-	key: "X-Change-Safety-Audit",
-	value: "enabled",
-	enabled: true,
-};
-const alreadyChanged = (listOrders.headers ?? []).some((header) => header.key === auditHeader.key);
-if (!alreadyChanged) {
-	const aggregate = {
-		name: current.name,
-		description: current.description ?? "",
-		variables: current.variables ?? [],
-		auth: current.auth ?? { mode: "none" },
-		folders: current.folders ?? [],
-		requests: (current.requests ?? []).map((request) =>
-			request.id === listOrders.id
-				? { ...request, headers: [...(request.headers ?? []), auditHeader] }
-				: request,
-		),
-	};
-	const updated = await api("PUT", "/collections/" + current._id, {
-		expectedRevision: current.revision,
-		collection: aggregate,
-	});
-	if (updated.status !== 200) throw new Error("Could not create saved change: " + updated.status + " " + JSON.stringify(updated.body).slice(0, 500));
-	if (Number(updated.body?.data?.revision) !== Number(current.revision) + 1) throw new Error("Saved change did not create a new revision");
-}
-pass("saved collection change has immutable before/current revisions");
+await clickText('.kv-editor[aria-label="Headers"] button', "Add row", "Add header row");
+const headerRowCount = await waitFor(
+	'document.querySelectorAll(\'.kv-editor[aria-label="Headers"] .kv-row\').length',
+	"new header row",
+);
+await setInput('[aria-label="Key ' + headerRowCount + '"]', "X-Change-Safety-Audit");
+await setInput('[aria-label="Value ' + headerRowCount + '"]', "enabled");
+await waitFor('document.body.textContent.includes("Unsaved changes.")', "dirty saved request");
+
+await clickText(".request-title-row button", "Save", "Save request");
+await waitFor(
+	'[...document.querySelectorAll(".toast")].some((node)=>node.textContent.includes("Request saved."))',
+	"request saved through browser UI",
+);
+await waitFor('!document.body.textContent.includes("Unsaved changes.")', "saved draft clean");
+pass("saved collection change created through the request UI");
 
 await call("Page.reload", { ignoreCache: true });
 await waitFor(
@@ -236,10 +254,11 @@ pass("Escape closes dialog and returns focus");
 
 await click('[aria-label="Open Change Safety"]', "Verify rail command");
 await waitFor('document.querySelector(".change-safety-dialog") !== null', "Change Safety dialog reopened");
-await waitFor(
-	'(() => { const values=[...document.querySelectorAll(".change-safety-picker-grid .select-menu-value")].map((n)=>n.textContent.trim()); return values.includes("Orders API") && values.some((v)=>v.startsWith("Revision v")) && values.includes("Local") && values.includes("Staging"); })()',
-	"default selection",
-);
+await selectMenu("Change Safety collection", "Orders API");
+await selectPreviousRevision();
+await selectMenu("Source environment", "Local");
+await selectMenu("Target environment", "Staging");
+pass("Change Safety collection, baseline, source, and target selected through the browser");
 
 await clickText(".change-safety-dialog button", "Analyze saved change", "Analyze saved change");
 const analysisState = await retry(async () => {
