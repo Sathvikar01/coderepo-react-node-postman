@@ -96,7 +96,7 @@ async function click(selector, label = selector) {
 	const expression =
 		"(() => { const node = document.querySelector(" +
 		JSON.stringify(selector) +
-		"); if (!node || node.disabled || node.getClientRects().length === 0) return false; node.click(); return true; })()";
+		"); if (!node || node.disabled || node.getClientRects().length === 0) return false; node.focus(); node.click(); return true; })()";
 	await retry(() => evaluate(expression), "click " + label, 10000);
 }
 
@@ -106,7 +106,7 @@ async function clickText(selector, text, label = text) {
 		JSON.stringify(text) +
 		"; const node = [...document.querySelectorAll(" +
 		JSON.stringify(selector) +
-		")].find((n) => !n.disabled && n.getClientRects().length > 0 && n.textContent.replace(/\\s+/g, ' ').trim().includes(target)); if (!node) return false; node.click(); return true; })()";
+		")].find((n) => !n.disabled && n.getClientRects().length > 0 && n.textContent.replace(/\\s+/g, ' ').trim().includes(target)); if (!node) return false; node.focus(); node.click(); return true; })()";
 	await retry(() => evaluate(expression), "click " + label, 10000);
 }
 
