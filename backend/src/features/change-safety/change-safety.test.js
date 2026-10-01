@@ -242,6 +242,28 @@ describe("Phase 54 change-safety workflow", () => {
 		expect(result.collection).toBeUndefined();
 	});
 
+	test("normalizes workspace attribution and nested environment ids before Phase 39 analysis", async () => {
+		const sharedSource = {
+			...sourceEnvironment,
+			ownerProfileId: "resource-owner",
+			variables: [{ id: new String("variable-source"), key: "base_url", kind: "plain", value: "https://api.example.test", enabled: true }],
+		};
+		const sharedTarget = {
+			...targetEnvironment,
+			ownerProfileId: "resource-owner",
+			variables: [{ id: new String("variable-target"), key: "base_url", kind: "plain", value: "https://api.example.test", enabled: true }],
+		};
+		const { service } = fixtureService({
+			analyzeImpact: undefined,
+			environments: {
+				get: async (id) => (id === SOURCE_ENV ? sharedSource : sharedTarget),
+			},
+		});
+		const result = await service.analyze(PROFILE, { workspaceId: WORKSPACE }, input);
+		expect(result.selectedImpact.summary.totalRequests).toBe(1);
+		expect(result.blockers.map((item) => item.code)).not.toContain("NO_AFFECTED_REQUESTS");
+	});
+
 	test("generates a published contract from a real source-environment response and binds it by snapshot fingerprint", async () => {
 		const { service, calls } = fixtureService();
 		const result = await service.generateContracts(PROFILE, { workspaceId: WORKSPACE }, input);
