@@ -26,6 +26,17 @@ export async function analyzeChangeSafety(request, response, next) {
 	}
 }
 
+export async function generateChangeSafetyContracts(request, response, next) {
+	try {
+		const input = parseChangeSafetyRequest(request.body);
+		response.status(201).json({
+			data: await changeSafetyService.generateContracts(request.profileId, request.workspaceScope, input),
+		});
+	} catch (error) {
+		next(error);
+	}
+}
+
 export async function runChangeSafety(request, response, next) {
 	try {
 		const input = parseChangeSafetyRequest(request.body);
