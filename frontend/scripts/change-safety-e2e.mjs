@@ -220,7 +220,11 @@ if (!alreadyChanged) {
 pass("saved collection change has immutable before/current revisions");
 
 await call("Page.reload", { ignoreCache: true });
-await waitFor('document.querySelector(".app-shell") !== null', "workspace after saved change");
+await waitFor(
+	'document.readyState === "complete" && document.querySelector(".app-shell") !== null && document.querySelector(\'[aria-label="Open Change Safety"]\')?.getClientRects().length > 0',
+	"workspace and Verify rail command after saved change",
+);
+await sleep(250);
 
 await click('[aria-label="Open Change Safety"]', "Verify rail command");
 await waitFor('document.querySelector(".change-safety-dialog") !== null', "Change Safety dialog");
