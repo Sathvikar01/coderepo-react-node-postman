@@ -497,7 +497,9 @@ export function createChangeSafetyService({
 					collectionId: analysis.selection.collectionId,
 					workspaceId: String(workspaceScope.workspaceId),
 					requestId: row.requestId,
-					snapshotId: analysis.snapshot.snapshotId,
+					// Phase 42 persists snapshotId as an ObjectId, while this browser
+					// workflow's revision identity is a richer string. Bind the contract
+					// to the canonical fingerprint and leave the optional registry id unset.
 					snapshotFingerprint: analysis.snapshot.snapshotFingerprint,
 					name: inferred.name,
 					description: inferred.description ?? "",
