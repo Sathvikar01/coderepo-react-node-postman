@@ -246,12 +246,12 @@ describe("Phase 54 change-safety workflow", () => {
 		const sharedSource = {
 			...sourceEnvironment,
 			ownerProfileId: "resource-owner",
-			variables: [{ id: new String("variable-source"), key: "base_url", kind: "plain", value: "https://api.example.test", enabled: true }],
+			variables: [{ id: { toString: () => "variable-source" }, key: "base_url", kind: "plain", value: "https://api.example.test", enabled: true }],
 		};
 		const sharedTarget = {
 			...targetEnvironment,
 			ownerProfileId: "resource-owner",
-			variables: [{ id: new String("variable-target"), key: "base_url", kind: "plain", value: "https://api.example.test", enabled: true }],
+			variables: [{ id: { toString: () => "variable-target" }, key: "base_url", kind: "plain", value: "https://api.example.test", enabled: true }],
 		};
 		const { service } = fixtureService({
 			analyzeImpact: undefined,
