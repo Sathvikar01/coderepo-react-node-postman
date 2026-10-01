@@ -210,23 +210,25 @@ pass("login -> profile -> workspace");
 await click('[aria-label="Open collections"]', "Collections rail command");
 await clickText(".tree-row .tree-label", "Orders API", "Orders API collection");
 await waitFor(
-	'[...document.querySelectorAll(".tree-row .tree-label")].some((node)=>node.textContent.replace(/\\s+/g," ").trim().includes("List orders"))',
-	"List orders visible",
+	'[...document.querySelectorAll(".tree-row .tree-label")].some((node)=>node.textContent.replace(/\\s+/g," ").trim().includes("Create order"))',
+	"Create order visible",
 );
-await clickText(".tree-row .tree-label", "List orders", "List orders request");
-await waitFor('document.querySelector(".request-name-input")?.value === "List orders"', "List orders request builder");
+await clickText(".tree-row .tree-label", "Create order", "Create order request");
+await waitFor('document.querySelector(".request-name-input")?.value === "Create order"', "Create order request builder");
 
-await clickText(".request-builder button", "Params", "Params tab");
-await waitFor('document.querySelector(\'.kv-editor[aria-label="Query parameters"]\') !== null', "Query parameters editor");
-const seededQuery = await evaluate(
-	`(() => { const editor=document.querySelector('.kv-editor[aria-label="Query parameters"]'); const keys=[...editor.querySelectorAll('input[placeholder="Key"]')].map((node)=>node.value); const values=[...editor.querySelectorAll('input[placeholder="Value"]')].map((node)=>node.value); const index=keys.indexOf("status"); return index >= 0 ? values[index] : null; })()`,
+await clickText(".request-builder button", "Headers", "Headers tab");
+await waitFor('document.querySelector(\'.kv-editor[aria-label="Headers"]\') !== null', "Headers editor");
+const contentTypeValue = await evaluate(
+	`(() => { const editor=document.querySelector('.kv-editor[aria-label="Headers"]'); const keys=[...editor.querySelectorAll('input[placeholder="Key"]')].map((node)=>node.value); const values=[...editor.querySelectorAll('input[placeholder="Value"]')].map((node)=>node.value); const index=keys.indexOf("Content-Type"); return index >= 0 ? { index, value: values[index] } : null; })()`,
 );
-if (seededQuery !== "paid") throw new Error("Expected seeded status=paid query parameter, got " + JSON.stringify(seededQuery));
-const statusValueSelector = '.kv-editor[aria-label="Query parameters"] input[placeholder="Value"]';
-await setInput(statusValueSelector, "pending");
+if (!contentTypeValue || contentTypeValue.value !== "application/json") {
+	throw new Error("Expected seeded Content-Type=application/json header, got " + JSON.stringify(contentTypeValue));
+}
+const contentTypeValueSelector = '.kv-editor[aria-label="Headers"] input[aria-label="Value ' + (contentTypeValue.index + 1) + '"]';
+await setInput(contentTypeValueSelector, "application/json; charset=utf-8");
 await waitFor(
-	'document.querySelector(' + JSON.stringify(statusValueSelector) + ')?.value === "pending"',
-	"tracked query parameter changed",
+	'document.querySelector(' + JSON.stringify(contentTypeValueSelector) + ')?.value === "application/json; charset=utf-8"',
+	"tracked existing header changed",
 );
 await waitFor('document.body.textContent.includes("Unsaved changes.")', "dirty saved request");
 
@@ -236,7 +238,7 @@ await waitFor(
 	"request saved through browser UI",
 );
 await waitFor('!document.body.textContent.includes("Unsaved changes.")', "saved draft clean");
-pass("saved Phase-39-trackable collection change created through the request UI");
+pass("saved existing-header change created through the request UI");
 
 await call("Page.reload", { ignoreCache: true });
 await waitFor(
@@ -264,6 +266,10 @@ await waitFor(
 	"v1 baseline selection remains stable",
 );
 pass("Change Safety collection, v1 baseline, source, and target selected through the browser");
+
+await click('.change-safety-mutation-toggle input', "Allow mutating requests");
+await waitFor('document.querySelector(".change-safety-mutation-toggle input")?.checked === true', "mutating rehearsal explicitly allowed");
+pass("mutating rehearsal requires and receives explicit browser confirmation");
 
 await clickText(".change-safety-dialog button", "Analyze saved change", "Analyze saved change");
 const analysisState = await retry(async () => {
