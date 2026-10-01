@@ -96,7 +96,8 @@ const drift = {
 };
 
 function fixtureService(overrides = {}) {
-	const calls = { proof: null, execute: null };
+	const calls = { proof: null, execute: null, contractDraft: null, sourceExecution: null };
+	let currentContract = null;
 	const service = createChangeSafetyService({
 		collections: { get: async () => collection },
 		environments: {
@@ -151,7 +152,45 @@ function fixtureService(overrides = {}) {
 			evidenceReferences: [],
 			summary: { candidates: 1, impacted: 1, executable: 1, excluded: 0, blocked: 0, unknown: 0, requiresConfirmation: 0, unresolvedDependencies: 0, cycles: 0, dependencyEdges: 0 },
 		}),
-		contracts: { getCurrentForRequest: async () => null },
+		contracts: {
+			getCurrentForRequest: async () => currentContract,
+			createDraftFromResponse: async (_profile, draftInput) => {
+				calls.contractDraft = draftInput;
+				return { contractId: "contract-1", sequence: 1 };
+			},
+			publish: async () => {
+				currentContract = {
+					contractId: "contract-1",
+					sequence: 1,
+					state: "PUBLISHED",
+					requestId: "request-1",
+					snapshotFingerprint: calls.contractDraft?.snapshotFingerprint ?? null,
+				};
+				return currentContract;
+			},
+		},
+		executions: {
+			send: async (_profile, input, internal) => {
+				calls.sourceExecution = { input, internal };
+				return {
+					executionId: input.executionId,
+					outcome: "response",
+					response: {
+						status: 200,
+						headers: [{ name: "content-type", value: "application/json" }],
+						body: { encoding: "text", value: '{"ok":true}', truncated: false },
+					},
+				};
+			},
+		},
+		inferContract: ({ name, description }) => ({
+			provenance: "inferred",
+			name,
+			description,
+			body: { status: 200, statuses: [], headers: [], bodyType: "object", body: { type: "object", properties: {}, requiredProperties: [] } },
+			warnings: [],
+		}),
+		newExecutionId: () => "source-execution-1",
 		execute: async (_profile, input) => {
 			calls.execute = input;
 			return {
@@ -201,6 +240,19 @@ describe("Phase 54 change-safety workflow", () => {
 		expect(result.blockers).toEqual([]);
 		expect(result.contractsByRequest).toBeUndefined();
 		expect(result.collection).toBeUndefined();
+	});
+
+	test("generates a published contract from a real source-environment response and binds it by snapshot fingerprint", async () => {
+		const { service, calls } = fixtureService();
+		const result = await service.generateContracts(PROFILE, { workspaceId: WORKSPACE }, input);
+		expect(result.generated).toHaveLength(1);
+		expect(result.generated[0].requestId).toBe("request-1");
+		expect(calls.sourceExecution.internal.workspaceId).toBe(WORKSPACE);
+		expect(calls.sourceExecution.input.context.environmentId).toBe(SOURCE_ENV);
+		expect(calls.contractDraft.snapshotId).toBeUndefined();
+		expect(calls.contractDraft.snapshotFingerprint).toBe("b".repeat(64));
+		expect(result.analysis.contracts.boundToCurrent).toBe(1);
+		expect(result.analysis.contracts.missing).toBe(0);
 	});
 
 	test("run sends the backend-produced plan/evidence into rehearsal and proof generation", async () => {
