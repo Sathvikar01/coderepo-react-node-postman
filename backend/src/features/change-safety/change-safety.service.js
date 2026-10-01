@@ -56,11 +56,28 @@ function collectionVersionDocument(version, collectionId, ownerProfileId) {
 }
 
 function workspaceForImpact({ collectionVersion, collectionId, ownerProfileId, environments, environmentId }) {
+	// Phase 39 predates workspace sharing and validates a single-profile graph.
+	// Change Safety has already authorized every resource through workspaceScope,
+	// so adapt workspace-scoped attribution to the requesting profile before it
+	// crosses that older boundary. Also normalize Mixed/Mongoose nested ids (the
+	// collaboration seed intentionally contains one ObjectId variable id) to the
+	// string identifiers Phase 39 requires.
+	const impactEnvironment = (environment) => {
+		const projected = toWorkspaceEnvironment(environment);
+		return {
+			...projected,
+			ownerProfileId,
+			variables: (projected.variables ?? []).map((variable) => ({
+				...variable,
+				id: idOf(variable?.id),
+			})),
+		};
+	};
 	return {
 		ownerProfileId,
 		environmentId,
 		collections: [toWorkspaceCollection(collectionVersionDocument(collectionVersion, collectionId, ownerProfileId))],
-		environments: environments.map((environment) => toWorkspaceEnvironment(environment)),
+		environments: environments.map(impactEnvironment),
 	};
 }
 
