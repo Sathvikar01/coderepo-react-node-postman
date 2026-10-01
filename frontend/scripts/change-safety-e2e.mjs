@@ -263,12 +263,12 @@ pass("Change Safety collection, baseline, source, and target selected through th
 await clickText(".change-safety-dialog button", "Analyze saved change", "Analyze saved change");
 const analysisState = await retry(async () => {
 	const state = await evaluate(
-		"(() => ({ error: document.querySelector('.change-safety-dialog .dialog-error')?.textContent.trim() || '', stages: [...document.querySelectorAll('.change-safety-stage')].map((node) => node.textContent.replace(/\\s+/g,' ').trim()) }))()"
+		"(() => { const button=[...document.querySelectorAll('.change-safety-dialog button')].find((node)=>node.textContent.includes('Analyz')); return { dialog: Boolean(document.querySelector('.change-safety-dialog')), error: document.querySelector('.change-safety-dialog .dialog-error')?.textContent.trim() || '', analyzeButton: button?.textContent.replace(/\\s+/g,' ').trim() || '', stages: [...document.querySelectorAll('.change-safety-stage')].map((node) => node.textContent.replace(/\\s+/g,' ').trim()), blockers: [...document.querySelectorAll('.change-safety-blockers p')].map((node)=>node.textContent.replace(/\\s+/g,' ').trim()) }; })()"
 	);
 	if (state.error) throw new Error("Analysis failed: " + state.error);
-	if (state.stages.length !== 5 || !state.stages[0]?.includes("Impact") || !state.stages[0]?.includes("affected")) return null;
-	return state;
-}, "Change Safety analysis");
+	if (state.stages.length === 5 && state.stages[0]?.includes("Impact") && state.stages[0]?.includes("affected")) return state;
+	throw new Error("Analysis not ready: " + JSON.stringify({ ...state, runtimeErrors: runtimeErrors.slice(-3) }));
+}, "Change Safety analysis", 15000);
 
 for (const label of ["Impact", "Environment drift", "Rehearsal", "Contract", "Proof"]) {
 	if (!analysisState.stages.some((value) => value.includes(label))) throw new Error("Missing stage: " + label);
