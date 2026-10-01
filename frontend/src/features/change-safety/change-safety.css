@@ -78,7 +78,7 @@
 	padding: 12px;
 	border: 1px solid var(--border);
 	border-radius: 10px;
-	background: var(--surface-subtle);
+	background: var(--surface-muted);
 }
 
 .change-safety-change-picker small {
@@ -118,7 +118,7 @@
 	height: 28px;
 	flex: 0 0 28px;
 	border-radius: 8px;
-	background: var(--surface-subtle);
+	background: var(--surface-muted);
 }
 
 .change-safety-stage > div {
