@@ -14,6 +14,7 @@ export function WorkspaceHeader({
 	onOpenEnvironments,
 	onOpenImport,
 	onOpenLocalRuntime,
+	onOpenChangeSafety,
 	onOpenProof,
 	onOpenProduct,
 	onLogout,
@@ -77,6 +78,16 @@ export function WorkspaceHeader({
 			<div className="app-header-spacer" />
 			<div className="app-header-actions rail-secondary">
 				{workspaceCommand}
+				<button
+					aria-label="Open Change Safety"
+					className="button rail-command"
+					title="Change Safety"
+					type="button"
+					onClick={onOpenChangeSafety}
+				>
+					<MaterialIcon size={19}>rule</MaterialIcon>
+					<span className="rail-command-label">Verify</span>
+				</button>
 				<button
 					aria-label="View Verification Proof"
 					className="button rail-command"
