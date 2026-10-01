@@ -60,6 +60,15 @@ jobs:
         run: bun frontend/scripts/phase30-e2e.mjs
       - name: Direct proof-to-review flow
         run: bun frontend/scripts/direct-review-promotion-e2e.mjs
+      - name: Complete Change Safety browser flow
+        run: bun frontend/scripts/change-safety-e2e.mjs
+      - name: Upload Change Safety screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: change-safety-browser-evidence
+          path: output/change-safety-e2e/
+          if-no-files-found: warn
       - name: Dump logs on failure
         if: failure()
         run: |
