@@ -54,6 +54,7 @@ export function ChangeSafetyDialog({
 	const [result, setResult] = useState(null);
 	const [busy, setBusy] = useState("");
 	const [error, setError] = useState("");
+	const [contractNotice, setContractNotice] = useState("");
 
 	const currentCollection = collections.find((item) => item._id === collectionId) ?? null;
 	const currentRevision = Number(currentCollection?.revision ?? 0);
@@ -65,6 +66,7 @@ export function ChangeSafetyDialog({
 		setAnalysis(null);
 		setResult(null);
 		setError("");
+		setContractNotice("");
 		if (!collectionId) return () => {
 			active = false;
 		};
@@ -147,6 +149,29 @@ export function ChangeSafetyDialog({
 		}
 	};
 
+	const generateContracts = async () => {
+		if (!analysis || !canExecute) return;
+		setBusy("contracts");
+		setError("");
+		setContractNotice("");
+		try {
+			const next = await changeSafetyApi.generateContracts(payload());
+			setAnalysis(next.analysis);
+			setResult(null);
+			const generated = next.generated?.length ?? 0;
+			const skipped = next.skipped?.length ?? 0;
+			setContractNotice(
+				generated > 0
+					? `Generated and published ${generated} contract${generated === 1 ? "" : "s"} from source-environment responses.${skipped ? ` ${skipped} already-current contract(s) were left unchanged.` : ""}`
+					: "All affected requests already have a current published contract.",
+			);
+		} catch (caught) {
+			setError(caught.message);
+		} finally {
+			setBusy("");
+		}
+	};
+
 	const run = async () => {
 		if (!analysis?.canRun || !canExecute) return;
 		setBusy("run");
@@ -169,6 +194,8 @@ export function ChangeSafetyDialog({
 	const executable = countOf(analysis?.plan?.summary?.executable);
 	const contractPublished = countOf(analysis?.contracts?.published);
 	const contractMissing = countOf(analysis?.contracts?.missing);
+	const contractStale = countOf(analysis?.contracts?.stale);
+	const contractCurrent = countOf(analysis?.contracts?.boundToCurrent) + countOf(analysis?.contracts?.unbound);
 	const proof = result?.proof ?? null;
 	const proofState = proof?.state ?? "Not generated";
 	const runState = result?.rehearsal?.run?.runState ?? result?.rehearsal?.run?.state ?? "Not run";
@@ -258,6 +285,7 @@ export function ChangeSafetyDialog({
 				</div>
 
 				{error && <p className="dialog-error" role="alert">{error}</p>}
+				{contractNotice && <p className="field-hint change-safety-contract-notice" role="status">{contractNotice}</p>}
 				{!canExecute && (
 					<p className="status-banner warning" role="status">
 						<MaterialIcon size={16}>visibility</MaterialIcon>
@@ -309,9 +337,9 @@ export function ChangeSafetyDialog({
 							<Stage
 								icon="fact_check"
 								title="Contract"
-								status={`${contractPublished} published`}
-								detail={`${contractMissing} affected request(s) have no published contract; missing evidence never becomes a pass.`}
-								tone={contractMissing > 0 ? "warning" : "ready"}
+								status={`${contractCurrent} current · ${contractPublished} published`}
+								detail={`${contractMissing} missing · ${contractStale} bound to an older snapshot. Contracts are inferred and published only from a real source-environment response.`}
+								tone={contractMissing > 0 || contractStale > 0 ? "warning" : "ready"}
 							/>
 							<Stage
 								icon="verified"
@@ -333,6 +361,16 @@ export function ChangeSafetyDialog({
 						)}
 
 						<div className="change-safety-run-row">
+							{(contractMissing > 0 || contractStale > 0) && (
+								<button
+									disabled={!canExecute || Boolean(busy)}
+									type="button"
+									onClick={generateContracts}
+								>
+									<MaterialIcon size={17}>contract_edit</MaterialIcon>
+									{busy === "contracts" ? "Generating contracts…" : "Generate contracts from source"}
+								</button>
+							)}
 							<button
 								className="primary-button"
 								disabled={!analysis.canRun || !canExecute || Boolean(busy)}
