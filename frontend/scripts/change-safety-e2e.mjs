@@ -121,18 +121,21 @@ async function selectMenu(label, optionText) {
 
 async function selectPreviousRevision() {
 	await click('[role="combobox"][aria-label="Baseline revision"]', "Baseline revision");
-	await retry(
-		() =>
-			evaluate(
-				"(() => { const options=[...document.querySelectorAll('.select-menu-list [role=option]')]; const node=options.find((item)=>!item.querySelector('small')?.textContent.includes('current saved revision')); if (!node) return false; node.focus(); node.click(); return true; })()",
-			),
-		"select previous saved revision",
+	const selected = await retry(
+		async () => {
+			const label = await evaluate(
+				"(() => { const options=[...document.querySelectorAll('.select-menu-list [role=option]')].map((node)=>({ node, label: node.querySelector('span')?.textContent.trim() || '', revision: Number((node.querySelector('span')?.textContent.match(/Revision v(\\d+)/) || [])[1]) })).filter((item)=>Number.isInteger(item.revision)); if (options.length < 2) return ''; options.sort((a,b)=>a.revision-b.revision); const choice=options[0]; choice.node.focus(); choice.node.click(); return choice.label; })()",
+			);
+			return label || null;
+		},
+		"select oldest saved revision",
 		10000,
 	);
 	await waitFor(
-		'document.querySelector(\'[role="combobox"][aria-label="Baseline revision"]\')?.textContent.includes("Revision v")',
-		"previous revision selected",
+		'(() => document.querySelector(\'[role="combobox"][aria-label="Baseline revision"]\')?.textContent.trim().includes(' + JSON.stringify(selected) + '))()',
+		"oldest saved revision selected",
 	);
+	return selected;
 }
 
 async function setInput(selector, value) {
@@ -255,9 +258,13 @@ pass("Escape closes dialog and returns focus");
 await click('[aria-label="Open Change Safety"]', "Verify rail command");
 await waitFor('document.querySelector(".change-safety-dialog") !== null', "Change Safety dialog reopened");
 await selectMenu("Change Safety collection", "Orders API");
-await selectPreviousRevision();
+const selectedBaseline = await selectPreviousRevision();
 await selectMenu("Source environment", "Local");
 await selectMenu("Target environment", "Staging");
+await waitFor(
+	'(() => document.querySelector(\'[role="combobox"][aria-label="Baseline revision"]\')?.textContent.trim().includes(' + JSON.stringify(selectedBaseline) + '))()',
+	"baseline selection remains stable",
+);
 pass("Change Safety collection, baseline, source, and target selected through the browser");
 
 await clickText(".change-safety-dialog button", "Analyze saved change", "Analyze saved change");
