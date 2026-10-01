@@ -11,8 +11,10 @@ import { projectChangeImpact, projectEnvironmentDrift } from "../core-integratio
 import { evaluateBlastRadius } from "../blast-radius-policy/index.js";
 import { planRehearsal } from "../rehearsal-planning/index.js";
 import { runRehearsal } from "../rehearsal-execution/index.js";
+import { randomUUID } from "node:crypto";
 import { compileRequest } from "../executions/request-compiler.js";
-import { contractRegistryService } from "../contract-registry/index.js";
+import { executionService } from "../executions/execution.service.js";
+import { contractRegistryService, inferContractFromResponse } from "../contract-registry/index.js";
 import { compareContractToResponse } from "../contract-compatibility/index.js";
 import { toObservedResponse } from "../rehearsal-execution/outcome-mapping.js";
 import { historyService } from "../history/history.service.js";
@@ -139,13 +141,26 @@ function planCanRun(plan) {
 	return Boolean(plan && (plan.summary?.executable ?? 0) > 0 && Array.isArray(plan.steps) && plan.steps.length > 0);
 }
 
-function summaryOfContracts(contractsByRequest, requestIds) {
+function summaryOfContracts(contractsByRequest, requestIds, snapshotFingerprint) {
 	let published = 0;
-	for (const requestId of requestIds) if (contractsByRequest.get(requestId)) published += 1;
+	let boundToCurrent = 0;
+	let stale = 0;
+	let unbound = 0;
+	for (const requestId of requestIds) {
+		const contract = contractsByRequest.get(requestId);
+		if (!contract) continue;
+		published += 1;
+		if (!contract.snapshotFingerprint) unbound += 1;
+		else if (contract.snapshotFingerprint === snapshotFingerprint) boundToCurrent += 1;
+		else stale += 1;
+	}
 	return {
 		requests: requestIds.length,
 		published,
 		missing: requestIds.length - published,
+		boundToCurrent,
+		stale,
+		unbound,
 	};
 }
 
@@ -173,6 +188,9 @@ export function createChangeSafetyService({
 	history = historyService,
 	proofs = verificationProofApiService,
 	compareContract = compareContractToResponse,
+	executions = executionService,
+	inferContract = inferContractFromResponse,
+	newExecutionId = randomUUID,
 	projectImpact = projectChangeImpact,
 	projectDrift = projectEnvironmentDrift,
 	resolveSecretAlias = (profileId, alias) => environmentService.resolveSecretAlias(profileId, alias),
@@ -374,7 +392,7 @@ export function createChangeSafetyService({
 			blastRadius: blast,
 			plan: rehearsalPlan,
 			compileErrors,
-			contracts: summaryOfContracts(contractsByRequest, requestIds),
+			contracts: summaryOfContracts(contractsByRequest, requestIds, currentSnapshot.snapshotFingerprint),
 			canRun: blockers.length === 0 && planCanRun(rehearsalPlan),
 			blockers,
 			contractsByRequest,
@@ -388,6 +406,122 @@ export function createChangeSafetyService({
 
 	async function analyze(profileId, workspaceScope, input) {
 		return publicAnalysis(await buildAnalysis(profileId, workspaceScope, input));
+	}
+
+	async function generateContracts(profileId, workspaceScope, input) {
+		const analysis = await buildAnalysis(profileId, workspaceScope, input);
+		if (!analysis.selectedImpact) {
+			throw new AppError(409, "CHANGE_SAFETY_NO_CHANGE", "Choose a detected saved change before generating contracts.");
+		}
+
+		const requestRows = uniqueRequestRows(analysis.selectedImpact);
+		const generated = [];
+		const skipped = [];
+		for (const row of requestRows) {
+			const request = requestById(analysis.collection, row.requestId);
+			if (!request) {
+				skipped.push({ requestId: row.requestId, code: "REQUEST_NOT_IN_CURRENT_COLLECTION" });
+				continue;
+			}
+
+			const existing = analysis.contractsByRequest.get(row.requestId) ?? null;
+			if (
+				existing &&
+				(!existing.snapshotFingerprint || existing.snapshotFingerprint === analysis.snapshot.snapshotFingerprint)
+			) {
+				skipped.push({ requestId: row.requestId, code: "CURRENT_CONTRACT_EXISTS", contractId: existing.contractId });
+				continue;
+			}
+
+			const method = String(request.method ?? "").toUpperCase();
+			const mutating = !["GET", "HEAD", "OPTIONS"].includes(method);
+			if (mutating && !input.allowMutating) {
+				throw new AppError(
+					409,
+					"CHANGE_SAFETY_CONTRACT_MUTATION_CONFIRMATION_REQUIRED",
+					"Generating this contract requires a source-environment execution of a mutating request. Enable the explicit mutating-request toggle first.",
+					{ requestId: row.requestId, method },
+				);
+			}
+
+			const executionId = newExecutionId();
+			const execution = await executions.send(
+				profileId,
+				{
+					executionId,
+					tabId: `change-safety-contract:${row.requestId}`,
+					draftVersion: null,
+					request: null,
+					context: {
+						collectionId: analysis.selection.collectionId,
+						collectionRevision: analysis.selection.currentRevision,
+						requestId: row.requestId,
+						environmentId: analysis.sourceIdentity.environmentId,
+						environmentRevision: analysis.sourceEnvironment.revision,
+					},
+				},
+				{ rateLimit: false, workspaceId: String(workspaceScope.workspaceId) },
+			);
+			if (execution?.outcome !== "response" || !execution.response) {
+				throw new AppError(
+					409,
+					"CHANGE_SAFETY_CONTRACT_SOURCE_FAILED",
+					"The source-environment request did not produce a response that can define an expected contract.",
+					{ requestId: row.requestId, executionId, outcome: execution?.outcome ?? null },
+				);
+			}
+
+			const headers = Array.isArray(execution.response.headers) ? execution.response.headers : [];
+			const contentType =
+				headers.find((header) => String(header?.name ?? "").toLowerCase() === "content-type")?.value ?? null;
+			const responseBody = execution.response.body;
+			const body =
+				responseBody?.encoding === "text" && responseBody?.truncated !== true && !responseBody?.omittedReason
+					? responseBody.value
+					: null;
+			const inferred = inferContract({
+				response: {
+					status: execution.response.status,
+					headers,
+					body,
+					contentType,
+				},
+				name: `${request.name ?? row.requestId} response`,
+				description: `Generated from ${analysis.sourceIdentity.environmentName ?? "source environment"} by Change Safety.`,
+			});
+
+			const draft = await contracts.createDraftFromResponse(
+				profileId,
+				{
+					...(existing?.contractId ? { contractId: existing.contractId } : {}),
+					collectionId: analysis.selection.collectionId,
+					workspaceId: String(workspaceScope.workspaceId),
+					requestId: row.requestId,
+					snapshotId: analysis.snapshot.snapshotId,
+					snapshotFingerprint: analysis.snapshot.snapshotFingerprint,
+					name: inferred.name,
+					description: inferred.description ?? "",
+					body: inferred.body,
+				},
+				inferred,
+			);
+			const published = await contracts.publish(profileId, draft.contractId, draft.sequence);
+			generated.push({
+				requestId: row.requestId,
+				requestName: request.name ?? null,
+				contractId: published.contractId,
+				sequence: published.sequence,
+				executionId,
+				warnings: inferred.warnings ?? [],
+			});
+		}
+
+		const refreshed = await buildAnalysis(profileId, workspaceScope, input);
+		return {
+			analysis: publicAnalysis(refreshed),
+			generated,
+			skipped,
+		};
 	}
 
 	async function run(profileId, workspaceScope, input) {
@@ -506,7 +640,7 @@ export function createChangeSafetyService({
 		};
 	}
 
-	return { analyze, run };
+	return { analyze, generateContracts, run };
 }
 
 export const changeSafetyService = createChangeSafetyService();
