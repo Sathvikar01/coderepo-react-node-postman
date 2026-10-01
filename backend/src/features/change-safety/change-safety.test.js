@@ -235,7 +235,7 @@ describe("Phase 54 change-safety workflow", () => {
 		expect(result.selectedImpact.summary.totalRequests).toBe(1);
 		expect(result.drift.identical).toBe(true);
 		expect(result.plan.summary.executable).toBe(1);
-		expect(result.contracts).toEqual({ requests: 1, published: 0, missing: 1 });
+		expect(result.contracts).toEqual({ requests: 1, published: 0, missing: 1, boundToCurrent: 0, stale: 0, unbound: 0 });
 		expect(result.canRun).toBe(true);
 		expect(result.blockers).toEqual([]);
 		expect(result.contractsByRequest).toBeUndefined();
