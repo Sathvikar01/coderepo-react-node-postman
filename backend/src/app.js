@@ -17,6 +17,7 @@ import { localRuntimeRouter } from "./features/local-runtime/local-runtime.route
 import { mockRouteRouter, mockRouter } from "./features/mocks/mock.routes.js";
 import { preferenceRouter, profileRouter } from "./features/profiles/profile.routes.js";
 import { reviewRouter } from "./features/reviews/review.routes.js";
+import { changeSafetyRouter } from "./features/change-safety/change-safety.routes.js";
 import { requestToolsRouter } from "./features/request-tools/request-tools.routes.js";
 import { verificationProofRouter } from "./features/verification-proof-api/verification-proof.routes.js";
 import { collectionVersionsRouter, environmentVersionsRouter } from "./features/versions/versions.routes.js";
@@ -179,6 +180,14 @@ export function createApp() {
 		requireWorkspaceAuth,
 		resolveProfileContext,
 		verificationProofRouter,
+	);
+	app.use(
+		"/api/v1/change-safety",
+		express.json({ limit: LIMITS.jsonBodyDefault }),
+		requireWorkspaceAuth,
+		resolveProfileContext,
+		resolveWorkspaceContext,
+		changeSafetyRouter,
 	);
 	// Phase 49 — "Why?" Inspector. A read-only projection over already-recorded
 	// execution evidence. Never persisted, so it cannot drift from the execution.
