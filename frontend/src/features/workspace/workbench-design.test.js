@@ -132,6 +132,8 @@ describe("Phase 54 change-safety browser workflow contracts", () => {
 	test("drives all authoritative stages through the backend API and opens the canonical proof dialog", () => {
 		expect(changeSafetyDialog).toContain("changeSafetyApi.analyze");
 		expect(changeSafetyDialog).toContain("changeSafetyApi.run");
+		expect(changeSafetyDialog).toContain("changeSafetyApi.generateContracts");
+		expect(changeSafetyDialog).toContain("Generate contracts from source");
 		expect(changeSafetyDialog).toContain("Impact");
 		expect(changeSafetyDialog).toContain("Environment drift");
 		expect(changeSafetyDialog).toContain("Rehearsal");
