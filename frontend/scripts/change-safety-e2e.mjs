@@ -216,20 +216,18 @@ await waitFor(
 await clickText(".tree-row .tree-label", "List orders", "List orders request");
 await waitFor('document.querySelector(".request-name-input")?.value === "List orders"', "List orders request builder");
 
-await clickText(".request-builder button", "Headers", "Headers tab");
-await waitFor('document.querySelector(\'.kv-editor[aria-label="Headers"]\') !== null', "Headers editor");
-const existingAuditHeader = await evaluate(
-	'[...document.querySelectorAll(\'.kv-editor[aria-label="Headers"] .kv-row input[placeholder="Key"]\')].some((node)=>node.value === "X-Change-Safety-Audit")',
+await clickText(".request-builder button", "Params", "Params tab");
+await waitFor('document.querySelector(\'.kv-editor[aria-label="Query parameters"]\') !== null', "Query parameters editor");
+const seededQuery = await evaluate(
+	"(() => { const editor=document.querySelector('.kv-editor[aria-label=\\"Query parameters\\"]'); const keys=[...editor.querySelectorAll('input[placeholder=\\"Key\\"]')].map((node)=>node.value); const values=[...editor.querySelectorAll('input[placeholder=\\"Value\\"]')].map((node)=>node.value); const index=keys.indexOf('status'); return index >= 0 ? values[index] : null; })()",
 );
-if (existingAuditHeader) throw new Error("Seed unexpectedly already contains the Change Safety audit header");
-
-await clickText('.kv-editor[aria-label="Headers"] button', "Add row", "Add header row");
-const headerRowCount = await waitFor(
-	'document.querySelectorAll(\'.kv-editor[aria-label="Headers"] .kv-row\').length',
-	"new header row",
+if (seededQuery !== "paid") throw new Error("Expected seeded status=paid query parameter, got " + JSON.stringify(seededQuery));
+const statusValueSelector = '.kv-editor[aria-label="Query parameters"] input[placeholder="Value"]';
+await setInput(statusValueSelector, "pending");
+await waitFor(
+	'document.querySelector(' + JSON.stringify(statusValueSelector) + ')?.value === "pending"',
+	"tracked query parameter changed",
 );
-await setInput('[aria-label="Key ' + headerRowCount + '"]', "X-Change-Safety-Audit");
-await setInput('[aria-label="Value ' + headerRowCount + '"]', "enabled");
 await waitFor('document.body.textContent.includes("Unsaved changes.")', "dirty saved request");
 
 await clickText(".request-title-row button", "Save", "Save request");
@@ -238,7 +236,7 @@ await waitFor(
 	"request saved through browser UI",
 );
 await waitFor('!document.body.textContent.includes("Unsaved changes.")', "saved draft clean");
-pass("saved collection change created through the request UI");
+pass("saved Phase-39-trackable collection change created through the request UI");
 
 await call("Page.reload", { ignoreCache: true });
 await waitFor(
