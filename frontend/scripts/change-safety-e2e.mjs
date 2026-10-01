@@ -258,14 +258,14 @@ pass("Escape closes dialog and returns focus");
 await click('[aria-label="Open Change Safety"]', "Verify rail command");
 await waitFor('document.querySelector(".change-safety-dialog") !== null', "Change Safety dialog reopened");
 await selectMenu("Change Safety collection", "Orders API");
-const selectedBaseline = await selectPreviousRevision();
+await selectMenu("Baseline revision", "Revision v1");
 await selectMenu("Source environment", "Local");
 await selectMenu("Target environment", "Staging");
 await waitFor(
-	'(() => document.querySelector(\'[role="combobox"][aria-label="Baseline revision"]\')?.textContent.trim().includes(' + JSON.stringify(selectedBaseline) + '))()',
-	"baseline selection remains stable",
+	'document.querySelector(\'[role="combobox"][aria-label="Baseline revision"]\')?.textContent.trim().includes("Revision v1")',
+	"v1 baseline selection remains stable",
 );
-pass("Change Safety collection, baseline, source, and target selected through the browser");
+pass("Change Safety collection, v1 baseline, source, and target selected through the browser");
 
 await clickText(".change-safety-dialog button", "Analyze saved change", "Analyze saved change");
 const analysisState = await retry(async () => {
