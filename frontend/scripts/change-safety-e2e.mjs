@@ -219,7 +219,7 @@ await waitFor('document.querySelector(".request-name-input")?.value === "List or
 await clickText(".request-builder button", "Params", "Params tab");
 await waitFor('document.querySelector(\'.kv-editor[aria-label="Query parameters"]\') !== null', "Query parameters editor");
 const seededQuery = await evaluate(
-	"(() => { const editor=document.querySelector('.kv-editor[aria-label=\\"Query parameters\\"]'); const keys=[...editor.querySelectorAll('input[placeholder=\\"Key\\"]')].map((node)=>node.value); const values=[...editor.querySelectorAll('input[placeholder=\\"Value\\"]')].map((node)=>node.value); const index=keys.indexOf('status'); return index >= 0 ? values[index] : null; })()",
+	`(() => { const editor=document.querySelector('.kv-editor[aria-label="Query parameters"]'); const keys=[...editor.querySelectorAll('input[placeholder="Key"]')].map((node)=>node.value); const values=[...editor.querySelectorAll('input[placeholder="Value"]')].map((node)=>node.value); const index=keys.indexOf("status"); return index >= 0 ? values[index] : null; })()`,
 );
 if (seededQuery !== "paid") throw new Error("Expected seeded status=paid query parameter, got " + JSON.stringify(seededQuery));
 const statusValueSelector = '.kv-editor[aria-label="Query parameters"] input[placeholder="Value"]';
