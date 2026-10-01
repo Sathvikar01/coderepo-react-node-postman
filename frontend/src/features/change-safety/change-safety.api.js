@@ -6,6 +6,11 @@ export const changeSafetyApi = {
 			method: "POST",
 			body: JSON.stringify(input),
 		}),
+	generateContracts: (input) =>
+		request("/change-safety/contracts", {
+			method: "POST",
+			body: JSON.stringify(input),
+		}),
 	run: (input) =>
 		request("/change-safety/run", {
 			method: "POST",
