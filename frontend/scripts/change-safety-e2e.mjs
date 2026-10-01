@@ -97,7 +97,7 @@ async function click(selector, label = selector) {
 		"(() => { const node = document.querySelector(" +
 		JSON.stringify(selector) +
 		"); if (!node || node.disabled || node.getClientRects().length === 0) return false; node.click(); return true; })()";
-	if (!(await evaluate(expression))) throw new Error("Could not click " + label);
+	await retry(() => evaluate(expression), "click " + label, 10000);
 }
 
 async function clickText(selector, text, label = text) {
@@ -107,7 +107,7 @@ async function clickText(selector, text, label = text) {
 		"; const node = [...document.querySelectorAll(" +
 		JSON.stringify(selector) +
 		")].find((n) => !n.disabled && n.getClientRects().length > 0 && n.textContent.replace(/\\s+/g, ' ').trim().includes(target)); if (!node) return false; node.click(); return true; })()";
-	if (!(await evaluate(expression))) throw new Error("Could not click " + label);
+	await retry(() => evaluate(expression), "click " + label, 10000);
 }
 
 async function setInput(selector, value) {
@@ -224,8 +224,6 @@ await waitFor(
 	'document.readyState === "complete" && document.querySelector(".app-shell") !== null && document.querySelector(\'[aria-label="Open Change Safety"]\')?.getClientRects().length > 0',
 	"workspace and Verify rail command after saved change",
 );
-await sleep(250);
-
 await click('[aria-label="Open Change Safety"]', "Verify rail command");
 await waitFor('document.querySelector(".change-safety-dialog") !== null', "Change Safety dialog");
 pass("Change Safety is reachable from the existing workbench rail");
