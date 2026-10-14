@@ -48,9 +48,9 @@ The frontend does not recompute any of those states. Selection and presentation 
 
 PR #74 (`phase54/change-safety-browser-workflow`) completed and merged this workflow, closing issue #71. The gate items are now satisfied as follows:
 
-1. Baseline Gate passes on `main` and is re-run on the final submission branch.
-2. Tracer CLI passes as a required gate.
-3. Phase 30 E2E + Load passes as a required gate.
+1. Baseline Gate passed on the final submission pass exact head.
+2. Tracer CLI passed on the final submission pass exact head.
+3. Phase 30 E2E + Load passed on the final submission pass exact head.
 4. The tracked Change Safety browser script completes without console/runtime errors.
 5. The browser script produces the named `change-safety-browser-evidence` screenshot artifact at 375 / 768 / 1024 / 1440 plus generated-proof views.
 6. Issue #71 is closed; no capability remains in **PENDING CI**.
