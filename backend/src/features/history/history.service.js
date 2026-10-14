@@ -1,8 +1,7 @@
 import { AppError } from "../../shared/errors/app-error.js";
 import { getConfig } from "../../shared/config/index.js";
 import { LIMITS } from "../../shared/utils/limits.js";
-import { profileRepository } from "../profiles/profile.repository.js";
-import { historyRepository } from "./history.repository.js";
+import { historyRepository, RETENTION_BATCH_SIZE } from "./history.repository.js";
 
 function decodeCursor(raw) {
 	if (!raw) return null;
@@ -92,10 +91,12 @@ export const historyService = {
 		return historyRepository.markStaleRunningInterrupted(cutoff, expiresAt);
 	},
 	async retentionPass() {
-		const profiles = await profileRepository.listIds();
-		for (const profileId of profiles) {
-			const excess = await historyRepository.selectBodyCandidates(profileId, getConfig().execution.retainedBodyRecords);
-			if (excess.length > 0) await historyRepository.trimBodies(excess.map((item) => item._id));
-		}
+		// One bounded set-based pass over every profile at once. No profile listing and
+		// no per-profile query; later ticks drain any remainder beyond the batch limit.
+		const { retainedBodyRecords } = getConfig().execution;
+		const excess = await historyRepository.selectRetentionCandidates(retainedBodyRecords, RETENTION_BATCH_SIZE);
+		if (excess.length === 0) return 0;
+		await historyRepository.trimBodies(excess.map((item) => item._id));
+		return excess.length;
 	},
 };
