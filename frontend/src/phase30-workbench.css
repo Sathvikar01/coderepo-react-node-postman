@@ -338,6 +338,41 @@ textarea:focus-visible,
 	text-transform: uppercase;
 }
 
+/* In a 55px rail the caret left room for only "LO…"; the name gets the full
+   width (title shows it in full) and the trigger gets the rail hover state. */
+.app-header .environment-picker .select-menu-trigger svg {
+	display: none;
+}
+
+.app-header .environment-picker .select-menu-value {
+	overflow: hidden;
+	max-width: 100%;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.app-header .environment-picker .select-menu-trigger:hover {
+	background: var(--wb-surface-3);
+}
+
+/* The rail picker sits near the bottom of the screen: open the list beside the
+   rail, bottom-aligned, instead of below the viewport edge. */
+.app-header .environment-picker .select-menu-list {
+	top: auto;
+	right: auto;
+	bottom: 0;
+	left: calc(100% + 8px);
+	width: max-content;
+	min-width: 220px;
+	max-width: 320px;
+	max-height: calc(100dvh - 24px);
+	overflow-y: auto;
+}
+
+.app-header .environment-picker .select-menu-option > span {
+	white-space: nowrap;
+}
+
 .profile-chip {
 	width: 100%;
 	height: 50px;
@@ -552,6 +587,8 @@ textarea:focus-visible,
 	align-items: flex-end;
 	gap: 3px;
 	overflow-x: auto;
+	/* Tabs overflow sideways only; a 1px vertical overflow drew a stray scrollbar. */
+	overflow-y: hidden;
 }
 
 .request-tab {
@@ -1275,6 +1312,18 @@ textarea:focus-visible,
 	}
 	.url-bar .code-button {
 		display: none;
+	}
+	/* The request name gets its own line instead of being squeezed to a few
+	   characters by the "Saved in" note; the note and Save share the next. */
+	.request-title-row {
+		flex-wrap: wrap;
+		row-gap: 6px;
+	}
+	.request-title-row .request-name-input {
+		flex-basis: 100%;
+	}
+	.request-title-row .field-hint {
+		margin-right: auto;
 	}
 	.rail-primary {
 		scrollbar-width: none;

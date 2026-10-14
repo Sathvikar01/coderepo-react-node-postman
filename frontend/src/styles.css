@@ -1531,6 +1531,24 @@ pre {
 .history-item-actions {
 	flex-wrap: wrap;
 	gap: 0 2px;
+	/* Pull back by the text-button padding so labels align with the row text. */
+	margin-inline-start: -8px;
+}
+/* Filters are UI controls, not code: use the interface face, not the URL mono. */
+.history-filter {
+	font-family: inherit;
+	font-size: 12.5px;
+}
+/* Aligns the scratch-request link with the editor body instead of the pane edge. */
+.request-builder-footer {
+	padding: 0 8px 10px;
+}
+.request-builder-footer .text-button {
+	color: var(--muted);
+	font-size: 12.5px;
+}
+.request-builder-footer .text-button:hover {
+	color: var(--ink-strong);
 }
 .outcome-chip {
 	padding: 2px 8px;
@@ -1660,7 +1678,11 @@ pre {
 	width: 28px;
 	height: 28px;
 }
+/* Inline-flex centers a leading icon on the label instead of the text baseline. */
 .text-button {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
 	padding: 4px 8px;
 	border: 0;
 	border-radius: 8px;
@@ -3254,8 +3276,9 @@ dialog::backdrop {
 	align-items: flex-start;
 	gap: 10px;
 	padding: 12px 14px;
+	/* Tone reads from the tinted fill, heading, and icon; a full 1px border
+	   replaces the old 3px side stripe. */
 	border: 1px solid var(--border);
-	border-left: 3px solid var(--border-strong);
 	border-radius: 12px;
 	background: var(--field);
 }
@@ -3270,28 +3293,28 @@ dialog::backdrop {
 	line-height: 1.45;
 }
 .proof-headline.success {
-	border-left-color: var(--success);
+	border-color: color-mix(in srgb, var(--success) 38%, var(--border));
 	background: color-mix(in srgb, var(--success-container) 55%, var(--field));
 }
 .proof-headline.success strong {
 	color: var(--success);
 }
 .proof-headline.warning {
-	border-left-color: var(--warning);
+	border-color: color-mix(in srgb, var(--warning) 38%, var(--border));
 	background: color-mix(in srgb, var(--warning-container) 55%, var(--field));
 }
 .proof-headline.warning strong {
 	color: var(--warning);
 }
 .proof-headline.danger {
-	border-left-color: var(--danger);
+	border-color: color-mix(in srgb, var(--danger) 38%, var(--border));
 	background: color-mix(in srgb, var(--danger-container) 55%, var(--field));
 }
 .proof-headline.danger strong {
 	color: var(--danger);
 }
 .proof-headline.unknown {
-	border-left-color: var(--border-strong);
+	border-color: var(--border-strong);
 }
 .proof-count-grid {
 	display: grid;

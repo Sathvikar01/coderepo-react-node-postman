@@ -32,7 +32,9 @@ function JsonValue({ value }) {
 }
 
 function JsonNode({ name, value, depth }) {
-	const [expanded, setExpanded] = useState(depth < 1);
+	// Two levels open by default: a small object such as { error: { code, message } }
+	// reads at a glance, while list items under a top-level array stay collapsed.
+	const [expanded, setExpanded] = useState(depth < 2);
 	const isArray = Array.isArray(value);
 	const isObject = Boolean(value) && typeof value === "object" && !isArray && !isNumberLiteral(value);
 	if (!isArray && !isObject) {

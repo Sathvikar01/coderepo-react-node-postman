@@ -167,6 +167,19 @@ describe("UI audit layout contracts", () => {
 		expect(block(css, "	.sidebar-scrim")).toContain("display: block");
 	});
 
+	test("the rail environment list opens beside the rail, inside the viewport", () => {
+		// It opened below a trigger that sits near the bottom of the rail, so the
+		// last environment was cut off at 1440 x 900.
+		const list = block(css, ".app-header .environment-picker .select-menu-list");
+		expect(list).toContain("bottom: 0");
+		expect(list).toContain("left: calc(100% + 8px)");
+		expect(list).toContain("max-height: calc(100dvh - 24px)");
+	});
+
+	test("the request tab strip scrolls sideways only", () => {
+		expect(block(css, ".request-tab-list")).toContain("overflow-y: hidden");
+	});
+
 	test("profile rows keep the avatar initials centered", () => {
 		expect(baseCss).toContain(".profile-account span:not(.profile-avatar, .icon-button) {");
 	});

@@ -99,7 +99,7 @@ export function HistoryPanel({ compareBaseId, onAnalyze, onCompare, onDelete, on
 			<div className="field-row" style={{ gap: 8 }}>
 				<select
 					aria-label="Filter by method"
-					className="url-input"
+					className="url-input history-filter"
 					style={{ height: 34 }}
 					value={method}
 					onChange={(event) => setMethod(event.target.value)}
@@ -113,7 +113,7 @@ export function HistoryPanel({ compareBaseId, onAnalyze, onCompare, onDelete, on
 				</select>
 				<select
 					aria-label="Filter by outcome"
-					className="url-input"
+					className="url-input history-filter"
 					style={{ height: 34 }}
 					value={outcome}
 					onChange={(event) => setOutcome(event.target.value)}
