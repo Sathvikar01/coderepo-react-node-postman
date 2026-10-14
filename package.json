@@ -16,7 +16,9 @@
 		"demo:flight-recorder": "cd backend && bun src/features/execution-intelligence/flight-recorder-demo.js",
 		"demo:investigation": "cd backend && bun src/features/execution-intelligence/investigation-demo.js",
 		"tracer": "cd backend && bun src/features/cli/main.js",
-		"test": "cd backend && bun test"
+		"test": "bun run test:backend && bun run test:frontend",
+		"test:backend": "cd backend && bun test",
+		"test:frontend": "cd frontend && bun test"
 	},
 	"devDependencies": {
 		"concurrently": "9.2.1"

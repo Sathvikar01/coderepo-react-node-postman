@@ -350,7 +350,9 @@ bun install --frozen-lockfile
 bash setup.sh --seed
 bun start
 
-bun test
+bun run test                  # full repository suite (backend + frontend)
+bun run test:backend          # backend tests only
+bun run test:frontend         # frontend tests only
 bun run demo:flight-recorder
 bun run demo:investigation
 bun frontend/scripts/phase24b-live-e2e.mjs  # two-browser live collaboration proof (app running)
