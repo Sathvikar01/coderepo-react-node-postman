@@ -231,6 +231,13 @@ function buildUiRuntime({ collections, environments, profileId, adapters }) {
 				Object.assign(record, patch);
 				return record;
 			},
+			async transition(owner, runId, expectedStatus, patch) {
+				if (expectedStatus !== "running") return null;
+				const record = runs.get(runId);
+				if (!record || record.status !== expectedStatus) return null;
+				Object.assign(record, patch);
+				return record;
+			},
 			async list() {
 				return [];
 			},

@@ -183,6 +183,17 @@ export function createMemoryCollectionRunRepository() {
 			Object.assign(record, patch);
 			return record;
 		},
+		// Compare-and-set mirror of the Mongo repository: the write applies only while the
+		// stored status still matches the expected source state, and a terminal state has
+		// no outgoing transition.
+		async transition(ownerProfileId, runId, expectedStatus, patch) {
+			if (expectedStatus === "completed" || expectedStatus === "cancelled" || expectedStatus === "failed") return null;
+			const key = keyOf(ownerProfileId, runId);
+			const record = records.get(key);
+			if (!record || record.status !== expectedStatus) return null;
+			Object.assign(record, patch);
+			return record;
+		},
 		async list(ownerProfileId, { collectionId = null, limit = 20 } = {}) {
 			return [...records.values()]
 				.filter((record) => record.ownerProfileId === ownerProfileId && (!collectionId || record.collectionId === collectionId))
