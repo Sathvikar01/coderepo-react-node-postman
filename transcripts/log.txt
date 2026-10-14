@@ -7488,3 +7488,356 @@ main_sync_commit=8f943cc70d2f74978978b97ff2a655cc1be307a4
 pr=84
 issue=76
 parent_agent=none
+
+
+## [2026-10-14] Fix Phase 54 Change Safety CI and complete browser workflow (#74)
+
+Implementation Prompt:
+Work in the existing Tracer repository:
+
+`C:\Users\arsat\Downloads\postman`
+
+Repository:
+`Sathvikar01/coderepo-react-node-postman`
+
+Existing PR:
+`#74 — Phase 54: complete Change Safety browser workflow`
+
+Existing branch:
+`phase54/change-safety-browser-workflow`
+
+Do NOT create a new feature branch or a new PR. Continue the existing Phase 54 branch and fix its CI.
+
+## Current CI state
+
+At PR head:
+
+`334e9943908b906485d126a2bc94f33a9909ed9f`
+
+The checks are:
+
+- Tracer CLI: PASS
+- Baseline Gate: PASS
+- Phase 30 Locust load: PASS
+- Existing browser E2E: PASS
+- Direct proof-to-review browser flow: PASS
+- Phase 54 Change Safety browser flow: FAIL
+
+The failing GitHub Actions job is `browser-e2e`, specifically:
+
+`Complete Change Safety browser flow`
+
+The exact failure is:
+
+`Change Safety analysis timed out: Analysis failed: The source environment is bound to a different snapshot than the plan snapshot.`
+
+The browser test successfully completes all steps before analysis:
+
+- login
+- open Orders API
+- modify the existing `Content-Type` header
+- save the request
+- reopen workspace
+- open Change Safety
+- select Orders API
+- select baseline Revision v1
+- select Local as source
+- select Staging as target
+- explicitly allow mutating requests
+
+It fails only after clicking:
+
+`Analyze saved change`
+
+## Suspected root cause already identified
+
+Inspect:
+
+`backend/src/features/change-safety/change-safety.service.js`
+
+Phase 54 currently constructs the Phase 46 rehearsal plan approximately like this:
+
+```js
+rehearsalPlan = plan({
+    workspaceId,
+    snapshot: currentSnapshot,
+    source: {
+        ...
+        snapshotId: baselineSnapshot.snapshotId,
+        snapshotFingerprint: baselineSnapshot.snapshotFingerprint,
+        ...
+    },
+    target: {
+        ...
+        snapshotId: currentSnapshot.snapshotId,
+        snapshotFingerprint: currentSnapshot.snapshotFingerprint,
+        ...
+    },
+    ...
+});
+```
+
+But Phase 46 intentionally validates that any snapshot identity explicitly attached to the source or target side agrees with the frozen snapshot of the rehearsal plan.
+
+Inspect:
+
+`backend/src/features/rehearsal-planning/plan-builder.js`
+
+It deliberately fails closed when:
+
+```text
+side.snapshotFingerprint != plan.snapshot.snapshotFingerprint
+```
+
+The existing Phase 46 tests explicitly verify this invariant.
+
+Therefore:
+
+**Do not weaken, remove, bypass, special-case, or relax the Phase 46 snapshot identity check.**
+
+That would make CI green by breaking an existing safety invariant and is not acceptable.
+
+## Required investigation
+
+Before changing code, trace the identity semantics through:
+
+- `backend/src/features/change-safety/change-safety.service.js`
+- `backend/src/features/rehearsal-planning/plan-builder.js`
+- `backend/src/features/rehearsal-planning/plan-schema.js`
+- Phase 46 planner tests
+- Phase 41 cross-environment verification input
+- Phase 54 Change Safety tests
+- `frontend/scripts/change-safety-e2e.mjs`
+
+Determine exactly which identity means:
+
+1. selected historical baseline revision,
+2. current changed collection snapshot,
+3. source environment,
+4. target environment,
+5. frozen snapshot against which the rehearsal plan executes,
+6. before/after identities used only for change comparison / verification evidence.
+
+The likely architectural correction is:
+
+- keep the historical baseline snapshot for the saved-change diff and Phase 41 before/after verification evidence;
+- bind the Phase 46 rehearsal plan itself to the current changed snapshot;
+- when Phase 46 `source` and `target` carry snapshot identities, those identities must describe that same frozen rehearsal snapshot;
+- do not pretend the source environment itself is the historical collection baseline if Phase 46 uses `source` as one side of an environment move over one frozen collection snapshot.
+
+However, verify this against the existing contracts before implementing it.
+
+## Fix requirements
+
+Make the smallest architecture-correct fix.
+
+Do not:
+
+- weaken Phase 46 validation;
+- delete the failing browser assertion;
+- catch and ignore `SNAPSHOT_STALE`;
+- omit snapshot identity merely to bypass validation unless the existing contract proves omission is semantically correct;
+- hard-code Revision v1;
+- special-case Orders API, Local, or Staging;
+- change Phase 39/40/41/45/46/47 semantics just to satisfy Phase 54;
+- turn a fail-closed path into permissive behavior;
+- rewrite unrelated Change Safety UI;
+- modify existing frozen test evidence unnecessarily.
+
+Preserve this intended product chain:
+
+`saved change → Impact → Environment Drift → Contract → Rehearsal → Verification → Proof`
+
+React must continue to render backend-owned truth only.
+
+## Regression tests
+
+Add or update backend tests proving the Phase 54 composition correctly distinguishes:
+
+`baseline snapshot != current snapshot`
+
+while still producing a valid Phase 46 plan bound to the correct frozen snapshot.
+
+At minimum cover:
+
+### Historical baseline + current changed snapshot
+
+Given:
+
+```text
+baseline revision = v1
+current revision = v2
+source environment = A
+target environment = B
+```
+
+Phase 54 analysis must not fail merely because `v1 != v2`.
+
+The baseline/current difference is the change being verified.
+
+### Phase 46 invariant remains intact
+
+A genuinely stale/mismatched snapshot passed directly into Phase 46 must still fail with the existing snapshot-stale behavior.
+
+Do not alter the existing Phase 46 safety test to make the new test pass.
+
+### Identity propagation
+
+Assert the resulting Phase 54 plan, execution and verification evidence are bound to the intended:
+
+- workspace
+- collection
+- current snapshot/fingerprint where required
+- baseline snapshot where required for before/after comparison
+- source environment
+- target environment
+
+No identity should be silently dropped.
+
+## Browser acceptance
+
+Run the exact Phase 54 browser workflow.
+
+The following must all pass:
+
+1. Save an existing-header change through the browser.
+2. Open Change Safety.
+3. Select an older saved baseline revision.
+4. Select different source and target environments.
+5. Analyze successfully.
+6. Render all five stages:
+   - Impact
+   - Environment drift
+   - Rehearsal
+   - Contract
+   - Proof
+7. Generate a missing/stale contract from the source when required.
+8. Run the target rehearsal.
+9. Produce canonical verification state:
+   - VERIFIED
+   - BLOCKED
+   - NEEDS_REHEARSAL
+   - UNKNOWN
+10. Generate a Verification Proof.
+11. Open the generated proof in the existing canonical Verification Proof dialog.
+12. Preserve phone/tablet/desktop overflow checks.
+13. Produce no browser runtime errors.
+
+## Verification
+
+Run the relevant focused tests first.
+
+Then run the full Phase 54 and repository gates required by PR #74, including the same commands exercised by GitHub Actions.
+
+At minimum verify:
+
+- backend tests
+- frontend tests
+- production frontend build
+- Baseline Gate
+- existing Phase 30 browser E2E
+- direct proof-to-review flow
+- Phase 54 `change-safety-e2e.mjs`
+- load gate if required by the workflow
+- Tracer CLI gate
+
+Do not stop because local focused tests pass.
+
+The acceptance condition is the **exact PR head** having all required GitHub Actions green.
+
+## Git workflow
+
+Work only on the existing:
+
+`phase54/change-safety-browser-workflow`
+
+Commit the minimal fix with tests.
+
+Push it to PR #74.
+
+Do not merge PR #74.
+
+After pushing, inspect CI. If a check fails, read the actual failing logs and fix the root cause. Do not repeatedly rerun unchanged failures.
+
+## Final report
+
+Return:
+
+- root cause;
+- exact semantic distinction between baseline snapshot and rehearsal snapshot;
+- files changed;
+- tests added/changed;
+- local verification results;
+- commit SHA;
+- PR #74 head SHA;
+- GitHub Actions results;
+- whether PR #74 is fully green and merge-ready.
+
+Do not claim completion until the exact pushed head is green.
+
+Agent Response Summary:
+PR #74 was repaired on `phase54/change-safety-browser-workflow` and verified green at implementation head `2c52b5c99b6b588922f96a87242b48a4586f4100`.
+
+Two real Phase 54 composition bugs were fixed.
+
+1. `SNAPSHOT_STALE`: Phase 54 built the rehearsal plan with the overall plan snapshot bound to the current saved revision, while the source side was still bound to the historical baseline snapshot. Phase 46 intentionally models one frozen collection snapshot moving between environments, so this mismatch correctly failed closed. The fix binds both rehearsal sides to the same current frozen snapshot. The historical baseline remains only for the saved-change diff and Phase 41 before/after evidence. Phase 46 validation was not weakened.
+
+2. `REHEARSAL_CHECKPOINT_MISSING_IDENTITY`: the Phase 46C executor report carries the display-oriented `presentRun` representation with flattened identity, while the Phase 47 proof builder validates the canonical Phase 46B nested run identity. Phase 54 now reloads the canonical checkpoint through `checkpoints.getRun(profileId, rehearsal.runId)`, fails closed with `CHANGE_SAFETY_REHEARSAL_RUN_MISSING` if it cannot be reloaded, and sends that canonical run to the proof builder while preserving the presentation's `pendingStepIds`.
+
+Only these implementation/test files changed in the final CI-fix commit:
+- `backend/src/features/change-safety/change-safety.service.js`
+- `backend/src/features/change-safety/change-safety.test.js`
+
+Regression coverage proves:
+- both Phase 46 rehearsal sides bind to the same frozen current snapshot;
+- the real Phase 46 planner accepts the composed plan without `SNAPSHOT_STALE`;
+- the proof builder receives canonical nested Phase 46B identity rather than the flattened executor presentation;
+- missing canonical run state fails closed.
+
+Agent verification:
+- Change Safety tests: 10 pass, 0 fail
+- full backend suite: 1605 pass, 2 skip, 0 fail
+- real HTTP `/api/v1/change-safety/run`: 201 with generated `proof_...`
+- local Change Safety browser E2E: 12/12
+- backend `node --check`: passed
+- frontend production build: passed
+- seven local root-suite `client.test.js` failures were reproduced on clean pre-fix head and attributed to the local Windows/Bun environment; CI does not reproduce them
+- temporary local verification files were removed
+
+Implementation head:
+`2c52b5c99b6b588922f96a87242b48a4586f4100`
+
+Original failing head:
+`334e9943908b906485d126a2bc94f33a9909ed9f`
+
+PR:
+`#74 — Phase 54: complete Change Safety browser workflow`
+
+ChatGPT independently reviewed the final Phase 54 fix. The Phase 46 contract requires one frozen snapshot across the cross-environment rehearsal, so binding both source and target sides to the current snapshot is correct while the baseline remains part of the diff/Phase 41 source evidence. The Phase 47 proof builder explicitly resolves `input.run` before `execution.run` and validates it with the canonical Phase 46B identity parser, so reloading and supplying the canonical checkpoint is the correct boundary repair. The original implementation head had Tracer CLI, Baseline Gate, browser E2E, direct proof-to-review, Change Safety browser checks, and Locust load all green.
+
+Because `main` advanced after issues #79, #80, #78, and #76 were merged, ChatGPT synchronized current `main` into the Phase 54 branch as merge commit `5ab01887340f44e5eb1ef23e5b819c6af1cc27e5`, preserving the verified Phase 54 versions of all 17 files changed by PR #74 and retaining current-main changes elsewhere.
+
+Actions:
+* diagnosed the Phase 54 snapshot identity mismatch instead of relaxing Phase 46
+* separated historical baseline identity from the current frozen rehearsal snapshot
+* kept Phase 41 before/after evidence semantics intact
+* diagnosed flattened Phase 46B presentation identity crossing into the Phase 47 proof boundary
+* reloaded the canonical checkpoint run from the owning core
+* added fail-closed handling when the canonical rehearsal run cannot be reloaded
+* added regression tests for both composition bugs
+* ran focused Change Safety tests, full backend tests, HTTP verification, browser E2E, syntax, and frontend build
+* pushed implementation commit `2c52b5c99b6b588922f96a87242b48a4586f4100`
+* verified the exact implementation head green in GitHub Actions
+* ChatGPT independently reviewed the Phase 46/47 identity contracts and implementation
+* synchronized latest `main` into PR #74
+* appended this implementation/audit record to the tracked repository transcript before merge
+
+Context:
+tool=agent harness + ChatGPT GitHub review
+branch=phase54/change-safety-browser-workflow
+original_failing_head=334e9943908b906485d126a2bc94f33a9909ed9f
+implementation_commit=2c52b5c99b6b588922f96a87242b48a4586f4100
+main_sync_commit=5ab01887340f44e5eb1ef23e5b819c6af1cc27e5
+pr=74
+issue=71
+parent_agent=none
