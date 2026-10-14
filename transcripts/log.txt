@@ -6656,3 +6656,166 @@ pr=73 MERGED
 merge_commit=fa66a64d3802613ae23b2ce3c5ec1231a55d7e09
 issue=71 OPEN
 parent_agent=none
+
+
+## [2026-10-14] Fix concurrent first Local Runtime creation race (#79)
+
+Implementation Prompt:
+Work in Tracer:
+`C:\Users\arsat\Downloads\postman`
+
+Repo:
+`Sathvikar01/coderepo-react-node-postman`
+
+Fix GitHub issue **#79: Handle concurrent first Local Runtime creation safely**.
+
+IMPORTANT:
+- Phase 54 / PR #74 is being fixed by another agent in parallel.
+- Do NOT touch `phase54/change-safety-browser-workflow`.
+- Do NOT modify Change Safety, rehearsal, verification, frontend, or CI files.
+- Create a separate branch from current `main`, e.g. `fix/79-local-runtime-create-race`.
+- Keep the change narrowly scoped to #79.
+
+## Problem
+
+Current Local Runtime update flow is effectively:
+
+`findByProfile → missing → create`
+
+Two concurrent first-time updates can both observe no record.
+One Mongo insert succeeds and the other can throw duplicate-key error.
+
+A duplicate-key race is expected concurrency behavior, not a server error.
+
+## Inspect first
+
+Read:
+- `backend/src/features/local-runtime/local-runtime.service.js`
+- `backend/src/features/local-runtime/local-runtime.repository.js`
+- `backend/src/features/local-runtime/local-runtime.model.js`
+- `backend/src/features/local-runtime/local-runtime.service.test.js`
+
+Also inspect existing revision/CAS conventions elsewhere before choosing semantics.
+
+## Required behavior
+
+Preserve the unique `ownerProfileId` constraint.
+
+For first creation:
+
+1. Try the normal create.
+2. If create succeeds, return it.
+3. If it fails specifically because another request concurrently created the row:
+   - fetch the canonical row now stored;
+   - never expose raw Mongo duplicate-key details;
+   - reconcile using existing revision/CAS semantics.
+4. If the concurrent winner represents an incompatible update, return the existing typed:
+   `LOCAL_RUNTIME_CHANGED`
+5. Do not catch unrelated database errors.
+
+Do NOT weaken revision checks.
+
+## Concurrency contract
+
+Two concurrent first updates must result in:
+
+- exactly one LocalRuntimeSetting document;
+- no raw duplicate-key/500 error;
+- deterministic public behavior;
+- revision remains valid and monotonic.
+
+Compatible concurrent requests may return the canonical record if that matches existing semantics.
+
+Conflicting requests should fail cleanly with:
+`LOCAL_RUNTIME_CHANGED`
+
+## Tests
+
+Add deterministic tests for:
+
+### Same first update concurrently
+Two equivalent first writes race.
+
+Assert:
+- one canonical document;
+- both calls have valid API-level outcomes;
+- no duplicate-key leak.
+
+### Different first updates concurrently
+Two conflicting first writes race.
+
+Assert:
+- one wins;
+- loser gets `LOCAL_RUNTIME_CHANGED`;
+- stored state equals the winner;
+- no silent overwrite.
+
+### Non-duplicate DB error
+Inject another repository/create failure.
+
+Assert it is NOT converted to `LOCAL_RUNTIME_CHANGED`.
+
+Avoid timing-only flaky tests.
+Use barriers/deferred promises or controlled repository doubles where useful.
+
+## Verification
+
+Run:
+- Local Runtime focused tests
+- relevant backend tests
+- full backend test suite
+
+Do not modify unrelated failing tests to make the branch green.
+
+## Git
+
+Commit the fix with tests.
+Push the new branch.
+Open a PR that closes #79.
+
+Do NOT merge it.
+Do NOT modify PR #74.
+
+## Final response
+
+Report only:
+- root cause
+- concurrency semantics chosen
+- files changed
+- tests added
+- test results
+- commit SHA
+- PR link
+- whether #79 acceptance criteria are fully satisfied
+
+Agent Response Summary:
+The Local Runtime first-create race was fixed on branch `fix/79-local-runtime-create-race`. The root cause was the non-atomic `findByProfile → missing → create` path: two requests with `expectedRevision: 0` could both observe no row, then race the unique `ownerProfileId` insert and leak raw Mongo E11000 from the loser.
+
+The implementation preserves the unique `ownerProfileId` index and all existing revision/CAS checks. A normal first create still returns directly. If create loses specifically to the `ownerProfileId` duplicate-key race, the service reloads the canonical row. Equivalent logical settings return that canonical row idempotently; conflicting settings return the existing typed `LOCAL_RUNTIME_CHANGED` 409. Unrelated duplicate keys and non-duplicate database errors still propagate unchanged.
+
+Deterministic barrier-based tests cover equivalent first writes, conflicting first writes, monotonic revision after the race, unrelated database failures, and duplicate keys on unrelated indexes. Focused Local Runtime tests passed 36/36, and the full backend suite passed 1600 with 2 skipped and 0 failures. Prettier and syntax checks were clean.
+
+ChatGPT independently reviewed PR #83 before merge. The diff is limited to the Local Runtime service and tests, the Mongoose model confirms `ownerProfileId` is the only explicit unique application index, the existing conditional replace/CAS path is unchanged, and the new concurrency tests do not rely on sleeps. On implementation head `4e9ee6394c6db74ad50dea614da04bc76711a77f`, Tracer CLI, Baseline Gate, and Phase 30 E2E + Load all passed.
+
+Actions:
+* diagnosed the first-create TOCTOU race
+* preserved the existing unique index and revision/CAS contract
+* added duplicate-key reconciliation only for the first-create race
+* made equivalent concurrent first writes idempotent
+* made conflicting concurrent first writes fail with `LOCAL_RUNTIME_CHANGED`
+* preserved unrelated database errors
+* added deterministic race regression tests
+* ran 36 focused Local Runtime tests successfully
+* ran 1600 backend tests with 2 skipped and 0 failures
+* verified formatting and syntax gates
+* opened PR #83 closing issue #79
+* ChatGPT reviewed the PR diff, model/index assumptions, tests, and PR-head CI
+* appended this implementation/audit record to the tracked transcript before merge
+
+Context:
+tool=local coding agent + ChatGPT GitHub review
+branch=fix/79-local-runtime-create-race
+implementation_commit=4e9ee6394c6db74ad50dea614da04bc76711a77f
+pr=83
+issue=79
+parent_agent=none
