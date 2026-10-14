@@ -11,6 +11,7 @@ import { projectChangeImpact, projectEnvironmentDrift } from "../core-integratio
 import { evaluateBlastRadius } from "../blast-radius-policy/index.js";
 import { planRehearsal } from "../rehearsal-planning/index.js";
 import { runRehearsal } from "../rehearsal-execution/index.js";
+import { createRehearsalCheckpointService } from "../rehearsal-checkpoints/index.js";
 import { randomUUID } from "node:crypto";
 import { compileRequest } from "../executions/request-compiler.js";
 import { executionService } from "../executions/execution.service.js";
@@ -201,6 +202,7 @@ export function createChangeSafetyService({
 	blastRadius = evaluateBlastRadius,
 	plan = planRehearsal,
 	execute = runRehearsal,
+	checkpoints = createRehearsalCheckpointService(),
 	contracts = contractRegistryService,
 	history = historyService,
 	proofs = verificationProofApiService,
@@ -351,11 +353,16 @@ export function createChangeSafetyService({
 				source: {
 					workspaceId: String(workspaceScope.workspaceId),
 					collectionId: String(input.collectionId),
-					snapshotId: baselineSnapshot.snapshotId,
-					snapshotFingerprint: baselineSnapshot.snapshotFingerprint,
+					// Phase 46 binds one frozen snapshot to the whole cross-environment
+					// move, so both sides describe the snapshot being rehearsed (the
+					// current saved revision). The historical baseline snapshot belongs
+					// to the saved-change diff and the Phase 41 before/after verification
+					// input, never to the rehearsal plan's side identity.
+					snapshotId: currentSnapshot.snapshotId,
+					snapshotFingerprint: currentSnapshot.snapshotFingerprint,
 					environmentId: sourceIdentity.environmentId,
 					environmentName: sourceIdentity.environmentName,
-					revision: baselineRevision,
+					revision: currentRevision,
 				},
 				target: {
 					workspaceId: String(workspaceScope.workspaceId),
@@ -606,6 +613,20 @@ export function createChangeSafetyService({
 			{ workspaceId: String(workspaceScope.workspaceId) },
 		);
 
+		// The executor report carries the Phase 46B *presentation* of the run
+		// (`presentRun`), whose identity is flattened for display. The Phase 47 proof
+		// builder validates the run against the canonical 46B identity schema, so
+		// reload the run from the core that owns it and hand the proof that record
+		// instead of the presentation projection.
+		const canonicalRun = await checkpoints.getRun(profileId, rehearsal.runId);
+		if (!canonicalRun) {
+			throw new AppError(409, "CHANGE_SAFETY_REHEARSAL_RUN_MISSING", "The rehearsal run could not be reloaded for proof generation.");
+		}
+		const proofRun = {
+			...canonicalRun,
+			pendingStepIds: rehearsal.run?.pendingStepIds ?? [],
+		};
+
 		const compatibility = [];
 		for (const outcome of rehearsal.stepOutcomes ?? []) {
 			if (!outcome?.executionId || !outcome?.requestId) continue;
@@ -641,6 +662,7 @@ export function createChangeSafetyService({
 				environmentName: analysis.targetIdentity.environmentName,
 			},
 			plan: analysis.plan,
+			run: proofRun,
 			execution: rehearsal,
 			impact: analysis.selectedImpact,
 			drift: analysis.drift,

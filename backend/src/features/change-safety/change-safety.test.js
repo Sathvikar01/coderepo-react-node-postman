@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { createChangeSafetyService } from "./change-safety.service.js";
+import { planRehearsal } from "../rehearsal-planning/index.js";
+import { parseRunIdentity } from "../rehearsal-checkpoints/checkpoint-schema.js";
+import { initConfig } from "../../shared/config/index.js";
+
+initConfig();
 
 const PROFILE = "profile-1";
 const WORKSPACE = "workspace-1";
@@ -54,6 +59,35 @@ const collection = {
 
 const sourceEnvironment = { _id: SOURCE_ENV, name: "Local", revision: 1, variables: [] };
 const targetEnvironment = { _id: TARGET_ENV, name: "Staging", revision: 1, variables: [] };
+
+// The Phase 46B core projects a run two ways: `normalizeRun` (canonical, nested
+// identity) and `presentRun` (flattened identity for display). The executor
+// report carries the presentation; the proof builder requires the canonical one.
+const canonicalRun = {
+	id: "checkpoint-1",
+	ownerProfileId: PROFILE,
+	runId: "run-1",
+	schemaVersion: 1,
+	kind: "tracer.rehearsal-checkpoint",
+	identity: {
+		workspaceId: WORKSPACE,
+		snapshotId: `collection:${COLLECTION}:v2`,
+		snapshotFingerprint: "b".repeat(64),
+		targetEnvironment: { environmentId: TARGET_ENV, environmentName: "Staging", environmentFingerprint: "c".repeat(64) },
+		planId: "plan-1",
+		planFingerprint: "plan-1",
+		policyId: "policy-1",
+		policyFingerprint: "e".repeat(64),
+	},
+	identityFingerprint: "d".repeat(64),
+	plan: { steps: [{ stepId: "step-1", refId: "request-1" }] },
+	planFingerprint: "plan-1",
+	runState: "COMPLETED",
+	generation: 2,
+	completedStepIds: ["step-1"],
+	currentStepId: null,
+	nextStepId: null,
+};
 
 const impact = {
 	schemaVersion: 1,
@@ -132,7 +166,7 @@ function fixtureService(overrides = {}) {
 			identity: { planFingerprint: "plan-1", fingerprintKeyId: "key-1" },
 			workspace: { workspaceId: WORKSPACE },
 			snapshot: { snapshotId: `collection:${COLLECTION}:v2`, snapshotFingerprint: "b".repeat(64) },
-			source: { environmentId: SOURCE_ENV, snapshotFingerprint: "a".repeat(64) },
+			source: { environmentId: SOURCE_ENV, snapshotFingerprint: "b".repeat(64) },
 			target: { environmentId: TARGET_ENV, snapshotFingerprint: "b".repeat(64) },
 			impactedRequestIds: ["request-1"],
 			executableRequestIds: ["request-1"],
@@ -191,10 +225,29 @@ function fixtureService(overrides = {}) {
 			warnings: [],
 		}),
 		newExecutionId: () => "source-execution-1",
+		checkpoints: { getRun: async () => canonicalRun },
 		execute: async (_profile, input) => {
 			calls.execute = input;
 			return {
-				run: { runState: "COMPLETED" },
+				runId: "run-1",
+				run: {
+					runId: "run-1",
+					runState: "COMPLETED",
+					identity: {
+						workspaceId: WORKSPACE,
+						snapshotId: `collection:${COLLECTION}:v2`,
+						snapshotFingerprint: "b".repeat(64),
+						environmentId: TARGET_ENV,
+						environmentFingerprint: "c".repeat(64),
+						planId: "plan-1",
+						planFingerprint: "plan-1",
+						policyId: "policy-1",
+						policyFingerprint: "e".repeat(64),
+					},
+					identityFingerprint: "d".repeat(64),
+					completedStepIds: ["step-1"],
+					pendingStepIds: [],
+				},
 				evidence: { executions: [], assertions: [] },
 				verification: { state: "VERIFIED" },
 				executedStepIds: ["step-1"],
@@ -289,6 +342,26 @@ describe("Phase 54 change-safety workflow", () => {
 		expect(result.proof).toEqual({ proofId: "proof-1", state: "VERIFIED" });
 	});
 
+	test("hands the proof builder the canonical 46B run, not the flattened presentation", async () => {
+		const { service, calls } = fixtureService();
+		await service.run(PROFILE, { workspaceId: WORKSPACE }, input);
+		// The executor report's `run` is the Phase 46B presentation (flat identity):
+		// the proof builder cannot validate it.
+		expect(() => parseRunIdentity(calls.proof.execution.run.identity)).toThrow();
+		// Phase 54 must reload the run from the core that owns it and forward the
+		// canonical, nested identity instead.
+		expect(calls.proof.run).toEqual({ ...canonicalRun, pendingStepIds: [] });
+		expect(() => parseRunIdentity(calls.proof.run.identity)).not.toThrow();
+		expect(calls.proof.run.identity.targetEnvironment.environmentId).toBe(TARGET_ENV);
+	});
+
+	test("fails closed when the rehearsal run cannot be reloaded for the proof", async () => {
+		const { service } = fixtureService({ checkpoints: { getRun: async () => null } });
+		expect(service.run(PROFILE, { workspaceId: WORKSPACE }, input)).rejects.toMatchObject({
+			code: "CHANGE_SAFETY_REHEARSAL_RUN_MISSING",
+		});
+	});
+
 	test("identical revisions fail closed instead of fabricating a rehearsal", async () => {
 		const { service } = fixtureService({
 			versions: {
@@ -307,5 +380,50 @@ describe("Phase 54 change-safety workflow", () => {
 		expect(service.analyze(PROFILE, { workspaceId: WORKSPACE }, { ...input, targetEnvironmentId: SOURCE_ENV })).rejects.toMatchObject({
 			code: "CHANGE_SAFETY_ENVIRONMENTS_MATCH",
 		});
+	});
+
+	test("binds both rehearsal-plan sides to the frozen snapshot, not the diff baseline", async () => {
+		let planInput = null;
+		const { service } = fixtureService({
+			plan: (raw) => {
+				planInput = raw;
+				return {
+					kind: "tracer.rehearsal-plan",
+					schemaVersion: 1,
+					state: "READY",
+					identity: { planFingerprint: "plan-1", fingerprintKeyId: "key-1" },
+					workspace: { workspaceId: WORKSPACE },
+					snapshot: { snapshotId: raw.snapshot.snapshotId, snapshotFingerprint: raw.snapshot.snapshotFingerprint },
+					source: { environmentId: raw.source.environmentId, snapshotFingerprint: raw.source.snapshotFingerprint },
+					target: { environmentId: raw.target.environmentId, snapshotFingerprint: raw.target.snapshotFingerprint },
+					steps: [{ stepId: "step-1", requestId: "request-1", collectionId: COLLECTION, ordinal: 0, state: "EXECUTABLE" }],
+					summary: { candidates: 1, impacted: 1, executable: 1 },
+				};
+			},
+		});
+		const result = await service.analyze(PROFILE, { workspaceId: WORKSPACE }, input);
+		// The plan is bound to the current saved revision...
+		expect(planInput.snapshot.snapshotFingerprint).toBe("b".repeat(64));
+		expect(planInput.snapshot.snapshotId).toBe(`collection:${COLLECTION}:v2`);
+		// ...and both sides describe that SAME frozen rehearsal snapshot. A source
+		// side bound to the historical baseline is the exact Phase 46
+		// SNAPSHOT_STALE failure this composition must prevent.
+		expect(planInput.source.snapshotFingerprint).toBe(planInput.snapshot.snapshotFingerprint);
+		expect(planInput.source.snapshotId).toBe(planInput.snapshot.snapshotId);
+		expect(planInput.target.snapshotFingerprint).toBe(planInput.snapshot.snapshotFingerprint);
+		expect(planInput.target.snapshotId).toBe(planInput.snapshot.snapshotId);
+		// The historical baseline is still carried for the diff and Phase 41 evidence.
+		expect(result.baselineSnapshot.snapshotFingerprint).toBe("a".repeat(64));
+		expect(result.snapshot.snapshotFingerprint).toBe("b".repeat(64));
+	});
+
+	test("composes a plan the real Phase 46 planner accepts without SNAPSHOT_STALE", async () => {
+		const { service } = fixtureService({ plan: planRehearsal });
+		const result = await service.analyze(PROFILE, { workspaceId: WORKSPACE }, input);
+		expect(result.plan).not.toBeNull();
+		expect(result.plan.kind).toBe("tracer.rehearsal-plan");
+		expect(result.plan.snapshot.snapshotFingerprint).toBe("b".repeat(64));
+		expect(result.plan.source.snapshotFingerprint).toBe(result.plan.snapshot.snapshotFingerprint);
+		expect(result.plan.target.snapshotFingerprint).toBe(result.plan.snapshot.snapshotFingerprint);
 	});
 });
