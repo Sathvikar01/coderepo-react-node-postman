@@ -59,12 +59,13 @@ export const historyRepository = {
 	selectRetentionCandidates: (retainPerProfile, limit = RETENTION_BATCH_SIZE) =>
 		ExecutionHistory.aggregate([
 			{ $match: { visible: true, status: "terminal", "response.body.value": { $type: "string", $ne: "" } } },
+			// $documentNumber only accepts a single sortBy field, so fold the
+			// deterministic (startedAt desc, _id desc) order into one composite key.
+			{ $set: { retentionSort: { startedAt: "$startedAt", id: "$_id" } } },
 			{
 				$setWindowFields: {
 					partitionBy: "$ownerProfileId",
-					// Match the existing deterministic newest-first retention order.
-					// _id is the unique tie-breaker when two records share startedAt.
-					sortBy: { startedAt: -1, _id: -1 },
+					sortBy: { retentionSort: -1 },
 					output: { retentionRank: { $documentNumber: {} } },
 				},
 			},
