@@ -1,4 +1,5 @@
 import { utf8Bytes } from "../../shared/utils/limits.js";
+import { currentClientOrigin } from "../../shared/middleware/client-origin.js";
 import { Profile } from "../profiles/profile.model.js";
 import { workspaceActivityRepository } from "./workspace-activity.repository.js";
 import { publishWorkspaceEvent } from "./workspace-events.js";
@@ -59,6 +60,7 @@ export async function recordWorkspaceActivity(entry) {
 			revision: entry.newRevision ?? entry.previousRevision ?? null,
 			actorProfileId: entry.actorProfileId ?? null,
 			actorName,
+			originClientId: currentClientOrigin(),
 			timestamp: created.createdAt instanceof Date ? created.createdAt.toISOString() : new Date().toISOString(),
 		});
 	} catch {

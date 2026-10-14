@@ -837,3 +837,57 @@ describe("investigation engine — cancellation and interruption", () => {
 		await harness.service.wait(PROFILE_A, created.investigationId);
 	});
 });
+
+describe("investigation engine — a completed run is never misread as interrupted", () => {
+	test("status stays running in the window between the last stage and the final result write", async () => {
+		const debugRow = sharedRow("debug", "1");
+		const harness = makeHarness({
+			failWhen: ({ request }) => request.query.some((entry) => entry.key === "debug" && entry.value === "1"),
+		});
+		const good = harness.seed(makeRecord({ request: makeRequest({ query: [rowLike(debugRow, "0")] }), outcome: "success", status: 200 }));
+		const failing = harness.seed(
+			makeRecord({ request: makeRequest({ query: [debugRow] }), startedAt: new Date(1760000000000 + 60000) }),
+		);
+
+		// Regression guard: the run previously cleared its ACTIVE handle in the
+		// `finally` around the stage work, i.e. BEFORE the assembled result was
+		// persisted. A `status` poll landing in that window saw `status: "running"`
+		// with no ACTIVE entry, concluded a server restart, and stamped a
+		// just-completed investigation as `failed` with a null result. Hold the
+		// final write open and poll exactly there.
+		let reachFinalWrite;
+		const reached = new Promise((resolve) => {
+			reachFinalWrite = resolve;
+		});
+		let releaseFinalWrite;
+		const gate = new Promise((resolve) => {
+			releaseFinalWrite = resolve;
+		});
+		const realUpdate = harness.repository.update.bind(harness.repository);
+		harness.repository.update = async (profileId, investigationId, patch) => {
+			if (Object.hasOwn(patch, "result")) {
+				reachFinalWrite();
+				await gate;
+			}
+			return realUpdate(profileId, investigationId, patch);
+		};
+
+		const created = await harness.service.start(PROFILE_A, {
+			failingExecutionId: failing.executionId,
+			goodExecutionId: good.executionId,
+			predicate: { type: "status", equals: 500 },
+			targetMode: "execution",
+		});
+		await reached;
+
+		const observed = await harness.service.status(PROFILE_A, created.investigationId);
+		expect(observed.status).toBe("running");
+		expect(observed.error).toBeNull();
+
+		releaseFinalWrite();
+		const finished = await harness.service.wait(PROFILE_A, created.investigationId);
+		expect(finished.status).toBe("completed");
+		expect(finished.result).not.toBeNull();
+		expect(finished.error).toBeNull();
+	});
+});

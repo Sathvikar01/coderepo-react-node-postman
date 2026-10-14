@@ -6,6 +6,22 @@ const PROFILE_ID_KEY = "request-desk-profile-id";
 // header, so which workspace the UI is looking at is decided in exactly one place.
 const WORKSPACE_ID_KEY = "request-desk-workspace-id";
 
+// Phase 24B — per-session mutation origin. This value is generated fresh in each
+// browser session and never persisted; two tabs (or two machines) sharing one
+// profile get different origins. Mutations send it as `x-tracer-origin` so the
+// live event stream can mark an event as this session's own echo. The value is
+// correlation metadata only — it grants no access and carries no secret.
+function createClientOrigin() {
+	try {
+		if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+	} catch {}
+	const random = Math.random().toString(36).slice(2);
+	return `origin-${Date.now().toString(36)}-${random}`;
+}
+
+const CLIENT_ORIGIN = createClientOrigin();
+export const getClientOrigin = () => CLIENT_ORIGIN;
+
 let sessionToken = localStorage.getItem(SESSION_KEY) || "";
 let profileToken = localStorage.getItem(PROFILE_TOKEN_KEY) || "";
 let workspaceId = localStorage.getItem(WORKSPACE_ID_KEY) || "";
@@ -74,12 +90,17 @@ export function apiHeaders(extra = {}) {
 }
 
 export async function request(path, options = {}) {
+	// Only mutations carry the session origin: the server tags events caused by a
+	// state change, and reads must not pretend to have caused one.
+	const method = String(options.method || "GET").toUpperCase();
+	const originHeader = method === "GET" || method === "HEAD" ? {} : { "x-tracer-origin": CLIENT_ORIGIN };
 	let response;
 	try {
 		response = await fetch(apiUrl(path), {
 			...options,
 			headers: {
 				"Content-Type": "application/json",
+				...originHeader,
 				...apiHeaders(options.headers),
 			},
 		});

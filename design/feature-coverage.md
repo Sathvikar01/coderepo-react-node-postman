@@ -1,7 +1,7 @@
 # Tracer Feature Coverage
 
-Updated: 2026-10-01  
-Branch: `phase54/change-safety-browser-workflow`
+Updated: 2026-10-14  
+Branch: `main`
 
 This is the repository-visible coverage map for the ten submission capability groups. It distinguishes UI reachability from backend authority and names the browser/screenshot evidence rather than treating code existence as product coverage.
 
@@ -21,11 +21,11 @@ Status vocabulary:
 | 7 | Examples & deterministic mocks | Examples tab, Save as example, Mock Send / mock URL controls | Examples/mocks APIs; mock resolution never uses live transport | Profile-scoped examples + capability token | Example/mock route, persistence and browser acceptance coverage | Full-UI audit example/mock states | TARGETED |
 | 8 | Workspaces, collaboration & versioning | Compact Workspace rail command, Manage/Activity/Reviews, Versions dialogs | Workspace/member/role APIs, versions API, authenticated SSE freshness | Workspaces, activity, immutable resource versions | Phase 24 24/24, Phase 24B 29/29, permission/security suites | Collaboration/versioning browser captures | COMPLETE |
 | 9 | Flight Recorder & investigation | History → Passport / Compare / Investigate / Why? | Execution-intelligence and Investigation cores; Why? backend projection | Receipts, comparisons, investigation records, reproduction evidence | Flight Recorder demo, Phases 36/37 browser suites, Phase 49 browser suite | Investigation / Why? browser captures | COMPLETE |
-| 10 | Change verification & human review | **Verify** rail command → Change Safety dialog → canonical Verification Proof → Reviews | `/api/v1/change-safety` orchestrates existing Phase 39/40/41/42/43/45/46/47 cores; Reviews stays Phase 50 authority | Saved collection versions, contract registry, rehearsal checkpoints/execution history, Verification Proof, review rows | New `change-safety-e2e.mjs` plus backend orchestration tests and existing direct Proof→Review E2E | New CI artifact `change-safety-browser-evidence`: analysis at 1440/1024/768/375, proof at 1440/375 | **PENDING CI** |
+| 10 | Change verification & human review | **Verify** rail command → Change Safety dialog → canonical Verification Proof → Reviews | `/api/v1/change-safety` orchestrates existing Phase 39/40/41/42/43/45/46/47 cores; Reviews stays Phase 50 authority | Saved collection versions, contract registry, rehearsal checkpoints/execution history, Verification Proof, review rows | `change-safety-e2e.mjs` plus backend orchestration tests and the direct Proof→Review E2E, run by the required **Phase 30 E2E + Load** job | CI artifact `change-safety-browser-evidence`: analysis at 1440/1024/768/375, proof at 1440/375 | COMPLETE |
 
 ## Capability 10 browser journey
 
-The browser path under verification on this branch is:
+The browser path exercised by `frontend/scripts/change-safety-e2e.mjs` is:
 
 ```text
 saved collection revision
@@ -44,11 +44,11 @@ The frontend does not recompute any of those states. Selection and presentation 
 
 ## Phase 54 acceptance gate
 
-Before changing Capability 10 from **PENDING CI** to **COMPLETE**:
+PR #74 (`phase54/change-safety-browser-workflow`) completed and merged this workflow, closing issue #71. The gate items are now satisfied as follows:
 
-1. Baseline Gate must pass on the exact PR head.
-2. Tracer CLI must pass.
-3. Phase 30 E2E + Load must pass.
-4. The tracked Change Safety browser script must complete without console/runtime errors.
-5. The browser script must produce the named screenshot artifact at 375 / 768 / 1024 / 1440 plus generated-proof views.
-6. Issue #71 must remain open until those results are verified on the exact merge candidate.
+1. Baseline Gate passes on `main` and is re-run on the final submission branch.
+2. Tracer CLI passes as a required gate.
+3. Phase 30 E2E + Load passes as a required gate.
+4. The tracked Change Safety browser script completes without console/runtime errors.
+5. The browser script produces the named `change-safety-browser-evidence` screenshot artifact at 375 / 768 / 1024 / 1440 plus generated-proof views.
+6. Issue #71 is closed; no capability remains in **PENDING CI**.

@@ -532,47 +532,53 @@ export function createInvestigationService({
 				finalStatus = "failed";
 				finalError = publicError(error);
 			}
+		}
+
+		// Assemble and persist one coherent InvestigationV1 - including for
+		// cancelled and failed runs, where the completed stages remain
+		// evidence-linked and later stages degrade truthfully. The run must stay
+		// in ACTIVE until this final write lands: `status` treats a `running`
+		// record with no ACTIVE entry as a restarted server, so deleting too early
+		// made a just-completed investigation intermittently read as interrupted
+		// with a null result. Persist the result and clear ACTIVE atomically.
+		try {
+			let result = null;
+			try {
+				result = buildInvestigationV1({
+					investigationId: entry.investigationId,
+					failingExecutionId: failingRecord.executionId,
+					goodExecutionId,
+					predicate: input.predicate ?? failurePredicateForRecord(failingRecord),
+					targetMode: input.targetMode,
+					status: finalStatus,
+					error: finalError,
+					regression: stages.regression ?? { source: "none", timeline: null, unavailableReason: "not_reached" },
+					comparison: stages.comparison ?? null,
+					counterfactual: stages.counterfactual ?? null,
+					minimization: stages.minimization ?? null,
+					reproducibility: stages.reproducibility ?? null,
+					capsule: stages.capsule ?? null,
+					stageOutputs,
+				});
+				result = scrubSecrets(result, probeSecrets);
+			} catch {
+				result = null;
+				if (finalStatus === "completed") {
+					finalStatus = "failed";
+					finalError = { code: "INVESTIGATION_INVALID", message: "The investigation result failed strict schema validation." };
+				}
+			}
+
+			return await repository.update(profileId, entry.investigationId, {
+				status: finalStatus,
+				result,
+				error: finalError,
+				stage: finalStatus === "completed" ? "capsule" : stageOutputs.interruptedAt ?? "capsule",
+				finishedAt: new Date(),
+			});
 		} finally {
 			ACTIVE.delete(entry.investigationId);
 		}
-
-		// Assemble one coherent InvestigationV1 - including for cancelled and
-		// failed runs, where the completed stages remain evidence-linked and
-		// later stages degrade truthfully.
-		let result = null;
-		try {
-			result = buildInvestigationV1({
-				investigationId: entry.investigationId,
-				failingExecutionId: failingRecord.executionId,
-				goodExecutionId,
-				predicate: input.predicate ?? failurePredicateForRecord(failingRecord),
-				targetMode: input.targetMode,
-				status: finalStatus,
-				error: finalError,
-				regression: stages.regression ?? { source: "none", timeline: null, unavailableReason: "not_reached" },
-				comparison: stages.comparison ?? null,
-				counterfactual: stages.counterfactual ?? null,
-				minimization: stages.minimization ?? null,
-				reproducibility: stages.reproducibility ?? null,
-				capsule: stages.capsule ?? null,
-				stageOutputs,
-			});
-			result = scrubSecrets(result, probeSecrets);
-		} catch {
-			result = null;
-			if (finalStatus === "completed") {
-				finalStatus = "failed";
-				finalError = { code: "INVESTIGATION_INVALID", message: "The investigation result failed strict schema validation." };
-			}
-		}
-
-		return repository.update(profileId, entry.investigationId, {
-			status: finalStatus,
-			result,
-			error: finalError,
-			stage: finalStatus === "completed" ? "capsule" : stageOutputs.interruptedAt ?? "capsule",
-			finishedAt: new Date(),
-		});
 	}
 
 	async function start(profileId, input) {

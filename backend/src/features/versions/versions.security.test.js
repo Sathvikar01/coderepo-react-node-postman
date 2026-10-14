@@ -279,8 +279,23 @@ describe("phase 24B version/stream security", () => {
 		const envelope = JSON.stringify(event);
 		expect(envelope).not.toContain("top-secret-live");
 		expect(envelope).not.toContain("Bearer");
+		// `originClientId` is an opaque, client-generated per-session correlation token:
+		// it authorizes nothing, carries no credential, and is null when no request
+		// context produced the event (seed/CLI writes).
+		expect(event.originClientId).toBeNull();
 		expect(Object.keys(event).sort()).toEqual(
-			["action", "actorName", "actorProfileId", "id", "resourceId", "resourceType", "revision", "timestamp", "workspaceId"].sort(),
+			[
+				"action",
+				"actorName",
+				"actorProfileId",
+				"id",
+				"originClientId",
+				"resourceId",
+				"resourceType",
+				"revision",
+				"timestamp",
+				"workspaceId",
+			].sort(),
 		);
 	});
 

@@ -31,7 +31,9 @@ jobs:
         run: bun install && bash setup.sh --seed
       - name: Frozen lockfile check
         run: bun install --frozen-lockfile
-      - name: Test
+      - name: "Test (canonical: backend + frontend workspaces)"
+        run: bun run test
+      - name: Test (Bun native multi-workspace discovery)
         run: bun test
       - name: Backend syntax
         run: find backend/src -name '*.js' -print0 | xargs -0 -n1 node --check

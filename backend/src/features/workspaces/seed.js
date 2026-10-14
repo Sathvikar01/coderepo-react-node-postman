@@ -10,6 +10,7 @@
 // The result is still fully deterministic and idempotent: the baseline seed clears the
 // database first, and this wrapper only ever writes collaboration records.
 import { spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
 import mongoose from "mongoose";
@@ -156,7 +157,10 @@ async function seedCollaboration() {
 		{
 			$push: {
 				variables: {
-					id: new mongoose.Types.ObjectId(),
+					// Environment variable rows are validated against a UUID identifier
+					// schema on update, so the seeded row must use a UUID (not an ObjectId)
+					// or the environment becomes impossible to edit through the API.
+					id: randomUUID(),
 					key: "alex_private_token",
 					kind: "secretRef",
 					alias: "alex_private_token",

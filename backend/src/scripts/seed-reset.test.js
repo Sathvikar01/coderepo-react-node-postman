@@ -37,7 +37,6 @@ function collectModelFiles(dir, out = []) {
 
 describe("seed reset covers every persisted model", () => {
 	const modelFiles = collectModelFiles(featuresDir);
-
 	test("feature model files are discovered", () => {
 		expect(modelFiles.length).toBeGreaterThanOrEqual(10);
 	});
@@ -50,5 +49,15 @@ describe("seed reset covers every persisted model", () => {
 		expect(names.length).toBeGreaterThanOrEqual(10);
 		const missing = names.filter((name) => !seedSource.includes(`${name}.deleteMany({})`));
 		expect(missing).toEqual([]);
+	});
+
+	test("seeded environment variable rows use UUID identifiers, not ObjectIds", () => {
+		// The API validates environment variable rows with `variableSchema`, whose
+		// `id` is `z.uuid()`. A seeded row with a `new mongoose.Types.ObjectId()` id
+		// therefore fails `PUT /api/v1/environments/:id` with VALIDATION_ERROR and
+		// makes the seeded Local environment un-editable (this broke the documented
+		// `bun run demo:flight-recorder` flow). Guard against reintroducing it.
+		const objectIdVariableId = /id:\s*new mongoose\.Types\.ObjectId\(\)[\s\S]{0,80}?key:/;
+		expect(objectIdVariableId.test(seedSource)).toBe(false);
 	});
 });
