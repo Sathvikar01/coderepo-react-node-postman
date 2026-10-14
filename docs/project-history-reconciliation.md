@@ -73,7 +73,7 @@ Those results remain valid for the exact gate and commit they describe.
 
 The current overall status changed on 2026-10-14:
 
-> **CURRENT PRODUCT / SUBMISSION VERDICT: READY TO SUBMIT — final exact-head CI pending**
+> **CURRENT PRODUCT / SUBMISSION VERDICT: READY TO SUBMIT — final exact-head CI is green**
 
 The post-PR70 UI audit's finding was that **Impact → Environment Drift → Rehearsal → Contract Compatibility → Verification Proof was not yet a complete browser-driven workflow**. PR #74 (`phase54/change-safety-browser-workflow`) implemented exactly that browser chain (`frontend/scripts/change-safety-e2e.mjs`), wired it into the required **Phase 30 E2E + Load** job, applied it to the canonical `/api/v1/change-safety` orchestration, and closed issue #71. `design/feature-coverage.md` now records Capability 10 as **COMPLETE** with the `change-safety-browser-evidence` artifact.
 
@@ -151,5 +151,5 @@ Counts from different scopes or environments must not be described as an increas
 - Historical phase-specific acceptance results: **remain valid for their exact commits/scopes**.
 - Full browser end-to-end change-safety workflow: **COMPLETE** (PR #74, `change-safety-e2e.mjs`, required Phase 30 E2E + Load job).
 - Issue #71: **CLOSED** by PR #74.
-- Fully submission-ready claim: **READY TO SUBMIT pending final exact-head CI** (Baseline Gate, Tracer CLI, Phase 30 E2E + Load).
-- Final submission pass test evidence (2026-10-14): `bun run test` → backend 1659 pass / 2 skip / 0 fail; frontend 457 pass / 0 fail; root `bun test` → 2116 pass / 2 skip / 0 fail.
+- Fully submission-ready claim: **READY TO SUBMIT** — Baseline Gate, Tracer CLI, and Phase 30 E2E + Load are green on the final submission pass.
+- Final submission pass test evidence (2026-10-14, exact-head Baseline Gate): `bun run test` → backend 1662 pass / 1 skip / 0 fail; frontend 457 pass / 0 fail; root `bun test` → 2119 pass / 1 skip / 0 fail.
