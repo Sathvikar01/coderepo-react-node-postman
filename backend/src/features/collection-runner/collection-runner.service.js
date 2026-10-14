@@ -104,11 +104,50 @@ export function createCollectionRunnerService({
 	executions = executionService,
 } = {}) {
 	const active = new Map();
+	// Admission reservations. A slot is claimed synchronously, before the first await
+	// of a start request, and converted into the real active entry once the run record
+	// exists. Both limits count reservations, so two starts racing for one remaining
+	// slot cannot both observe free capacity.
+	const reservations = new Map();
 
 	function countFor(profileId) {
 		let count = 0;
 		for (const entry of active.values()) if (entry.profileId === profileId) count += 1;
+		for (const reservedProfileId of reservations.values()) if (reservedProfileId === profileId) count += 1;
 		return count;
+	}
+
+	function inUse() {
+		return active.size + reservations.size;
+	}
+
+	// Synchronous admission: both limits are checked and a slot is reserved in one
+	// uninterrupted turn, so no await can interleave between observing free capacity and
+	// claiming it. The reservation is released by the caller on every failure path.
+	function admit(profileId) {
+		const runId = randomUUID();
+		const reservationKey = key(profileId, runId);
+		if (inUse() >= RUN_LIMITS.activeRunsPerProcess)
+			throw new AppError(429, "RUN_CONCURRENCY_LIMIT", "The server is already running the maximum number of collection runs.", {
+				limit: RUN_LIMITS.activeRunsPerProcess,
+				scope: "process",
+			});
+		if (countFor(profileId) >= RUN_LIMITS.activeRunsPerProfile)
+			throw new AppError(429, "RUN_CONCURRENCY_LIMIT", "This profile already has a collection run in progress.", {
+				limit: RUN_LIMITS.activeRunsPerProfile,
+				scope: "profile",
+			});
+		reservations.set(reservationKey, profileId);
+		return { runId, reservationKey };
+	}
+
+	// Applies a lifecycle transition atomically. If the expected source state no longer
+	// matches, another writer already moved the run, so reload the canonical stored
+	// record instead of retrying or overwriting the winner.
+	async function finalize(profileId, runId, expectedStatus, patch) {
+		const updated = await repository.transition(profileId, runId, expectedStatus, patch);
+		if (updated) return updated;
+		return repository.get(profileId, runId);
 	}
 
 	async function executeRun(profileId, workspaceId, record, plan, initialVariables, signal, entry) {
@@ -129,7 +168,9 @@ export function createCollectionRunnerService({
 			finishedAt: null,
 			snapshot: step.snapshot,
 		}));
-		const persist = (patch) => repository.update(profileId, record.runId, patch);
+		// Progress writes stay compare-and-set on `running` so a late progress writer can
+		// never rewrite the results of a run another writer has already finalized.
+		const persist = (patch) => repository.transition(profileId, record.runId, "running", patch);
 		const runWrites = new Map();
 		const deadlineAt = Date.now() + RUN_LIMITS.durationMs;
 		let stopReason = null;
@@ -210,7 +251,7 @@ export function createCollectionRunnerService({
 				? { ...step, status: "skipped", failureReason: SKIP_REASONS[stopReason] ?? SKIP_REASONS.interrupted }
 				: step,
 		);
-		await persist({
+		return finalize(profileId, record.runId, "running", {
 			status,
 			stopReason,
 			results: finalSteps.map(publicStep),
@@ -225,16 +266,21 @@ export function createCollectionRunnerService({
 	// an EDITOR can run a collection that a collaborator authored.
 	async function start(profileId, input, scope = null) {
 		const workspaceId = scope?.workspaceId ?? null;
-		if (active.size >= RUN_LIMITS.activeRunsPerProcess)
-			throw new AppError(429, "RUN_CONCURRENCY_LIMIT", "The server is already running the maximum number of collection runs.", {
-				limit: RUN_LIMITS.activeRunsPerProcess,
-				scope: "process",
-			});
-		if (countFor(profileId) >= RUN_LIMITS.activeRunsPerProfile)
-			throw new AppError(429, "RUN_CONCURRENCY_LIMIT", "This profile already has a collection run in progress.", {
-				limit: RUN_LIMITS.activeRunsPerProfile,
-				scope: "profile",
-			});
+		// Reserve a slot synchronously, before the first await, so two concurrent starts
+		// cannot both observe free capacity and both proceed.
+		const { runId, reservationKey } = admit(profileId);
+		try {
+			return await startReserved(profileId, runId, reservationKey, workspaceId, input);
+		} catch (error) {
+			// Every failure path releases the reservation and any partially registered
+			// active entry, so a failed start never leaks capacity or leaves a ghost run.
+			reservations.delete(reservationKey);
+			active.delete(reservationKey);
+			throw error;
+		}
+	}
+
+	async function startReserved(profileId, runId, reservationKey, workspaceId, input) {
 		const collection =
 			workspaceId && collections.findByIdInWorkspace
 				? await collections.findByIdInWorkspace(input.collectionId, workspaceId)
@@ -262,7 +308,6 @@ export function createCollectionRunnerService({
 		}
 		const plan = buildRunPlan({ collection, selection: input.selection, iterations: input.iterations });
 		const initialVariables = plainRunVariables(input.variables, collection, environment);
-		const runId = randomUUID();
 		const startedAt = new Date();
 		const storedInput = {
 			selection: input.selection,
@@ -307,16 +352,21 @@ export function createCollectionRunnerService({
 		});
 		const controller = new AbortController();
 		const entry = { profileId, controller, currentExecutionId: null, promise: null };
-		// Register before the loop starts so cancellation can reach the in-flight
-		// execution immediately.
-		active.set(key(profileId, runId), entry);
+		// Convert the reservation into the real active entry before the run loop starts so
+		// cancellation can reach the in-flight execution immediately. The reservation is
+		// removed first so the combined in-use count never exceeds the limit.
+		reservations.delete(reservationKey);
+		active.set(reservationKey, entry);
 		entry.promise = executeRun(profileId, workspaceId, { ...created, input: storedInput }, plan, initialVariables, controller.signal, entry)
 			.catch(async (error) => {
 				const steps = skippedSteps(
 					(await repository.get(profileId, runId))?.results ?? [],
 					SKIP_REASONS.interrupted,
 				);
-				await repository.update(profileId, runId, {
+				// Terminal transitions require the run to still be `running` and fail closed
+				// otherwise, so this recovery cannot overwrite a completion or cancellation
+				// that already won. A lost CAS reloads the canonical terminal record.
+				await finalize(profileId, runId, "running", {
 					status: "failed",
 					stopReason: "error",
 					error: {
@@ -328,7 +378,7 @@ export function createCollectionRunnerService({
 					finishedAt: new Date(),
 				});
 			})
-			.finally(() => active.delete(key(profileId, runId)));
+			.finally(() => active.delete(reservationKey));
 		return presentRun(created);
 	}
 
@@ -337,7 +387,9 @@ export function createCollectionRunnerService({
 		if (!record) throw new AppError(404, "RUN_NOT_FOUND", "The requested collection run does not exist.");
 		if (record.status === "running" && !active.has(key(profileId, runId))) {
 			const steps = skippedSteps(record.results ?? [], SKIP_REASONS.interrupted);
-			record = await repository.update(profileId, runId, {
+			// Fail closed: recover only an actually-running record, and reload the
+			// canonical state if another writer finalized it first.
+			record = await finalize(profileId, runId, "running", {
 				status: "failed",
 				stopReason: record.stopReason ?? "interrupted",
 				error: { code: "RUN_INTERRUPTED", message: "The server restarted before this run completed." },
@@ -388,7 +440,13 @@ export function createCollectionRunnerService({
 		return records.map((record) => presentRun(record, { includeResults: false }));
 	}
 
-	return { start, status, wait, cancel, rerun, list };
+	// Internal admission accounting probe. Not part of the HTTP response surface; it
+	// exists so concurrency tests can assert the reservation lifecycle directly.
+	function stats() {
+		return { active: active.size, reserved: reservations.size };
+	}
+
+	return { start, status, wait, cancel, rerun, list, stats };
 }
 
 export const collectionRunnerService = createCollectionRunnerService();

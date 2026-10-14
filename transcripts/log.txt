@@ -8176,3 +8176,334 @@ ci_fix_commit=b3bb10f
 main_sync_head=4f72af0b195d87bc356aa27237f423570f9ffbfc
 pr=85
 parent_agent=Claude Code
+
+
+## [2026-10-14] Fix Collection Runner atomic status transitions and admission (#75, #77)
+
+Implementation Prompt:
+Work in Tracer:
+
+`C:\Users\arsat\Downloads\postman`
+
+Repo:
+
+`Sathvikar01/coderepo-react-node-postman`
+
+Fix these two GitHub issues together:
+
+- **#75 — Make Collection Run status transitions atomic**
+- **#77 — Make Collection Run concurrency admission atomic**
+
+Create one branch from latest `main`:
+
+`fix/75-77-collection-runner-concurrency`
+
+Keep this PR strictly scoped to Collection Runner concurrency/state correctness.
+
+## Context
+
+All other HackerRank remediation work is already being handled separately.
+
+Do NOT modify:
+
+- Change Safety
+- Minimization
+- Local Runtime
+- History retention
+- frontend
+- root test commands
+- GitHub Actions
+
+unless a test absolutely requires a tiny shared helper.
+
+## Problem A — #75 terminal status race
+
+Current Collection Run persistence can update by:
+
+`{ ownerProfileId, runId }`
+
+without requiring the current status.
+
+That means stale async writers can overwrite a terminal result.
+
+Examples that must become impossible:
+
+`cancelled → completed`
+
+`completed → failed`
+
+`failed → completed`
+
+Use the same compare-and-set pattern already used by Execution History and the fixed Minimization implementation.
+
+## Required #75 design
+
+Inspect:
+
+- `backend/src/features/collection-runner/collection-run.repository.js`
+- `backend/src/features/collection-runner/collection-runner.service.js`
+- Collection Run model/tests
+- History finalization CAS
+- Minimization CAS now present on current `main`
+
+Implement an atomic repository transition such as:
+
+`transition(ownerProfileId, runId, expectedStatus, patch)`
+
+using one conditional database operation:
+
+`findOneAndUpdate({ ownerProfileId, runId, status: expectedStatus }, ...)`
+
+Terminal transitions must require:
+
+`running → completed`
+
+`running → failed`
+
+`running → cancelled`
+
+Recovery must also fail closed if the run is no longer `running`.
+
+If CAS loses:
+- reload canonical persisted state;
+- never retry the stale terminal write;
+- never overwrite the winner.
+
+## Problem B — #77 admission race
+
+Current start flow checks concurrency limits before asynchronous work, approximately:
+
+`check active count → await work → active.set(...)`
+
+Two simultaneous starts can both observe free capacity and both start.
+
+The configured concurrency limit can therefore be exceeded.
+
+## Required #77 design
+
+Preserve the existing architecture assumption that Collection Runner admission is **per process** unless current code explicitly supports distributed admission.
+
+Do not invent Redis/database leases.
+
+Make admission atomic inside the current process.
+
+The critical requirement:
+
+**capacity must be reserved synchronously before the first await after admission succeeds.**
+
+Two starts racing for one remaining slot must not both pass.
+
+Use a reservation/token/placeholder mechanism in the existing active-run structure or another small in-process primitive.
+
+The reservation must be released on every failure path:
+
+- collection load failure
+- environment/load failure
+- repository create failure
+- execution setup failure
+- unexpected exception
+
+Once the run successfully starts, convert the reservation into the real active-run entry.
+
+## Concurrency semantics
+
+For a configured capacity of 1:
+
+Two simultaneous starts:
+
+- exactly one is admitted;
+- the second gets the existing concurrency-limit error;
+- active count never becomes 2.
+
+For per-profile limits:
+
+- Profile A must not consume Profile B's quota incorrectly;
+- global and per-profile limits must both remain correct.
+
+No slot leak is allowed after failed startup.
+
+## Required tests
+
+Use deterministic barriers/deferred promises.
+
+Do NOT use arbitrary sleeps.
+
+Add tests for:
+
+### #75
+
+1. running → completed succeeds.
+2. running → failed succeeds.
+3. running → cancelled succeeds.
+4. completion vs cancellation: exactly one terminal state wins.
+5. completion vs recovery failure: recovery cannot overwrite completion.
+6. terminal → terminal transition is refused.
+7. loser returns/reloads canonical terminal state.
+
+### #77
+
+8. two simultaneous starts with global limit 1 → exactly one admitted.
+9. two simultaneous starts with per-profile limit 1 → exactly one admitted.
+10. different profiles remain independent where configured.
+11. failed startup releases its reservation.
+12. repository/create failure releases its reservation.
+13. after failed admission/startup, a later valid run can start.
+14. active count never temporarily exceeds the configured limit.
+
+Assert both:
+- API/service result;
+- persisted run status;
+- active/reservation count after the race.
+
+## Preserve existing behavior
+
+Do NOT change:
+
+- collection execution semantics
+- request ordering
+- retries
+- result aggregation
+- cancellation meaning
+- collection-run status vocabulary
+- concurrency configuration values
+- per-process architecture
+- public API shape unless required for existing typed errors
+
+Do not add a distributed lock.
+
+Do not weaken any limit to make tests pass.
+
+## Review for interaction between #75 and #77
+
+These fixes must work together.
+
+Check scenarios such as:
+
+- run reserves a slot, starts, then gets cancelled while execution completion arrives;
+- failed start releases reservation and does not create a ghost active run;
+- terminal run always releases active capacity exactly once;
+- duplicate cleanup is harmless;
+- cancellation does not free another run's reservation.
+
+## Verification
+
+Run:
+
+- focused Collection Runner repository tests
+- focused Collection Runner service tests
+- concurrency/race tests
+- relevant execution tests
+- full backend suite
+- backend syntax check
+
+Then push and verify the exact PR head in GitHub Actions.
+
+Required green checks:
+
+- Tracer CLI
+- Baseline Gate
+- Phase 30 E2E + Load
+
+Do not claim completion from local tests alone.
+
+## Git
+
+Commit coherent changes with tests.
+
+Push:
+
+`fix/75-77-collection-runner-concurrency`
+
+Open **one PR**.
+
+The PR body must contain:
+
+`Closes #75`
+`Closes #77`
+
+Do NOT merge it.
+
+## Final report
+
+Return only:
+
+- #75 root cause
+- #75 CAS design
+- #77 root cause
+- #77 atomic admission design
+- race semantics
+- reservation cleanup behavior
+- files changed
+- tests added
+- focused test results
+- full backend result
+- GitHub Actions results
+- commit SHA
+- PR link
+- whether both #75 and #77 acceptance criteria are fully satisfied
+
+Agent Response Summary:
+Pi agent harness implemented both Collection Runner remediation issues together on branch `fix/75-77-collection-runner-concurrency`.
+
+#75 root cause:
+`collectionRunRepository.update(ownerProfileId, runId, patch)` matched only `ownerProfileId` and `runId`, so stale progress/finalization/recovery writers could overwrite a terminal result.
+
+#75 design:
+The repository now exposes `transition(ownerProfileId, runId, expectedStatus, patch)`, implemented as one conditional `findOneAndUpdate` whose filter includes the expected status. Terminal source states are refused. The service uses a `finalize` helper: if the CAS returns null, it reloads the canonical run instead of retrying or overwriting the winner. Progress writes also use a `running` CAS, and completion/failure/cancellation/restart-recovery all fail closed from `running`.
+
+#77 root cause:
+Admission checked active counts before asynchronous collection/environment/setup work, leaving an await window in which two starts could both see spare capacity.
+
+#77 design:
+A synchronous `admit(profileId)` reserves a per-process slot before the first await. Both global and per-profile accounting include active runs plus reservations. The reservation is removed immediately before the real active entry is inserted, with no await between those operations, so the combined in-use count cannot transiently exceed the configured limit. Startup failures remove both reservation and any partial active entry. No distributed locking was introduced.
+
+The cancellation path was independently checked by ChatGPT: `cancel()` aborts the live controller and waits for the run promise; the run loop observes `signal.aborted` and finalizes through the same `running → cancelled` CAS. Thus completion and cancellation race through the same atomic transition, and exactly one terminal result is persisted.
+
+Files changed:
+- `backend/src/features/collection-runner/collection-run.repository.js`
+- `backend/src/features/collection-runner/collection-runner.service.js`
+- `backend/src/features/collection-runner/collection-runner.service.test.js`
+- `backend/src/features/collection-runner/collection-run.repository.test.js`
+- `backend/src/features/cli/memory-stores.js`
+- `backend/src/features/cli/cli.test.js`
+
+The CLI/in-memory repositories were updated to mirror the production CAS contract rather than bypassing the new service dependency.
+
+Pi agent verification:
+- focused repository + service tests: 32 pass, 0 fail
+- Collection Runner + CLI memory-store tests: 57 pass, 0 fail
+- full backend: 1650 pass, 2 skip, 0 fail
+- syntax: all 385 backend JS files pass `node --check`
+- exact implementation head GitHub Actions: Tracer CLI, Baseline Gate, and Phase 30 E2E + Load all green
+
+Implementation commit:
+`8ec7aa3c47e25f0c2efa3b116a726b5f9ade5f34`
+
+PR:
+`#86 — fix(collection-runner): atomic run status transitions and concurrency admission (#75, #77)`
+
+ChatGPT independently reviewed PR #86. The repository CAS uses one conditional database operation, stale lifecycle writes cannot leave a terminal state, progress writes are guarded by `running`, restart recovery reloads canonical state after a lost CAS, admission reserves capacity synchronously before any await, global/per-profile counts include reservations, and all documented startup failure paths release capacity. Deterministic deferred-gate tests cover the required race interleavings without arbitrary sleeps.
+
+Actions:
+* replaced blind Collection Run lifecycle writes with expected-state compare-and-set transitions
+* made progress writes status-conditional
+* made terminal losers reload canonical persisted state
+* made restart recovery fail closed
+* introduced synchronous in-process admission reservations before any await
+* counted reservations in both process-wide and per-profile limits
+* released reservations/partial active entries on startup failure
+* converted reservation to active state without an interleaving point
+* updated CLI in-memory repositories to match the production transition contract
+* added deterministic service and real-Mongo race tests
+* verified focused tests, full backend tests, syntax, and exact-head GitHub Actions
+* opened one PR containing `Closes #75` and `Closes #77`
+* ChatGPT reviewed repository/service/cancel/wait behavior and test coverage
+* appended this canonical implementation/audit entry to the tracked repository transcript before merge
+
+Context:
+tool=Pi agent harness + ChatGPT GitHub review
+branch=fix/75-77-collection-runner-concurrency
+implementation_commit=8ec7aa3c47e25f0c2efa3b116a726b5f9ade5f34
+pr=86
+issues=75,77
+parent_agent=Pi agent harness
