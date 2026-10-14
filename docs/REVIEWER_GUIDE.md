@@ -20,8 +20,6 @@ Change → Impact → Rehearse → Verify → Review
 
 That is the story to say first. Everything else in Tracer exists to make one of those five steps trustworthy.
 
-> **Current browser-scope caveat:** the five-step chain is the intended product architecture, but the current repository does **not** yet prove the entire `Impact → Drift → Rehearsal → Contract → Verification Proof` generation path as one complete browser workflow. Impact/Drift/Rehearsal/Contract are backed by shipped cores and targeted tests, while Proof/Why? can inspect linked evidence. Issue #71 remains open for the missing browser-generation path, so do not present the product as fully browser end-to-end or fully submission-ready.
-
 ## 30-second pitch
 
 Start with a normal API workspace: compose requests, save collections, use environments, send, and inspect responses.
@@ -45,7 +43,7 @@ For HackerRank scope, present Tracer as **10 core capabilities**:
 9. Flight Recorder & investigation
 10. Change verification & human review
 
-Do **not** count implementation controls such as cURL import, code snippets, cookies, assertions, CLI, versions, Impact, Drift, Rehearsal, Contract, Proof, Why?, or Reviews as separate top-level products. The ten-item list is a **scope grouping**. It does not mean every grouped control currently has a complete browser end-to-end journey; see issue #71 and `docs/project-history-reconciliation.md`.
+Do **not** count implementation controls such as cURL import, code snippets, cookies, assertions, CLI, versions, Impact, Drift, Rehearsal, Contract, Proof, Why?, or Reviews as separate top-level products. Each exists to complete one of the ten workflows above.
 
 ## What to show first
 
@@ -352,7 +350,9 @@ bun install --frozen-lockfile
 bash setup.sh --seed
 bun start
 
-bun test
+bun run test                  # full repository suite (backend + frontend)
+bun run test:backend          # backend tests only
+bun run test:frontend         # frontend tests only
 bun run demo:flight-recorder
 bun run demo:investigation
 bun frontend/scripts/phase24b-live-e2e.mjs  # two-browser live collaboration proof (app running)

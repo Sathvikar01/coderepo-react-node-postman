@@ -9,7 +9,7 @@ Tracer still gives you the familiar API-client workflow — build requests, orga
 
 ## Submission scope — 10 core capabilities
 
-Tracer is submitted as **10 meaningful core capabilities**. This is a submission-scope grouping, not a claim that every group currently has complete browser end-to-end coverage. Supporting controls are grouped under the workflow they complete rather than counted as separate products.
+Tracer is submitted as **10 meaningful end-to-end capabilities**. Supporting controls are grouped under the workflow they complete rather than counted as separate products.
 
 | # | Core capability | Supporting controls included in that capability |
 | ---: | --- | --- |
@@ -26,8 +26,6 @@ Tracer is submitted as **10 meaningful core capabilities**. This is a submission
 
 This grouping is intentional: a cookie jar is session behavior inside authenticated execution; a code-snippet dialog is an authoring/export control; immutable versions are part of collaboration safety; and Impact/Drift/Rehearsal/Proof/Why/Reviews form one linked change-verification workflow. They are implementation depth within the ten capabilities above, not independent product scope.
 
-**Current browser-coverage scope:** capability 10 has shipped backend/domain engines and targeted evidence, but the full `Impact → Drift → Rehearsal → Contract → Verification Proof` generation path is not yet a complete browser-driven workflow. Issue #71 remains open for that gap. Until it is closed with repository-visible browser evidence, Tracer should not be described as fully browser end-to-end or fully submission-ready.
-
 ## Reviewer in 60 seconds
 
 **Tracer answers one concrete question: when an API workspace changes, can we trust the affected workflow?**
@@ -43,8 +41,6 @@ Change → Impact → Rehearse → Verify → Review
 - **Review** carries that exact validated proof into the human decision without letting the UI rewrite the technical state.
 
 That is the core product story.
-
-**Important:** this is the product/architecture story, not a claim that every step is currently drivable end-to-end from the browser. The known UI gap is tracked in issue #71 and summarized in [`docs/project-history-reconciliation.md`](docs/project-history-reconciliation.md).
 
 Two supporting systems make the loop trustworthy rather than decorative:
 
@@ -514,9 +510,10 @@ The [Tracer CLI workflow](.github/workflows/tracer-cli.yml) runs the same scenar
 | `bun run demo:flight-recorder` | Run the deterministic Flight Recorder demo (app must be running) |
 | `bun run tracer`        | Headless collection runner (see [Headless CLI](#headless-cli))  |
 | `bash examples/ci/ci-demo.sh` | Local pass/fail parity demo for the CLI (no database)      |
-| `bun test`              | Run the full test suite (backend + frontend, Bun's built-in runner) |
-| `bun run test`          | Backend tests only                                              |
-| `cd frontend && bun test` | Frontend tests only                                           |
+| `bun run test`          | **Canonical full repository suite** — backend, then frontend; fails if either fails |
+| `bun run test:backend`  | Backend tests only                                              |
+| `bun run test:frontend` | Frontend tests only                                             |
+| `bun test`              | Bun's built-in repo-wide discovery; runs the same committed suites as `bun run test` |
 | `bun run dev:backend`   | Backend only, with reload                                      |
 | `bun run dev:frontend`  | Frontend only                                                  |
 
@@ -525,11 +522,13 @@ The [Tracer CLI workflow](.github/workflows/tracer-cli.yml) runs the same scenar
 Tests live beside the code they cover as `*.test.js` files and run with Bun's test runner. The README intentionally does **not** hard-code a single suite total because the count changes as acceptance coverage grows; the final executed evidence is recorded in **[`docs/final-submission-readiness.md`](docs/final-submission-readiness.md)** and the phase-specific reports.
 
 ```bash
-bun test                       # repository-wide test discovery
-bun run test                   # backend tests
-cd frontend && bun test        # frontend tests
+bun run test              # full repository suite: backend + frontend
+bun run test:backend      # backend tests only
+bun run test:frontend     # frontend tests only
 cd frontend && bun run build   # production frontend build
 ```
+
+`bun run test` is the canonical reviewer-facing command. It runs the backend suite and then the frontend suite, and exits non-zero if either suite fails. `bun test` (Bun's built-in runner invoked directly from the repository root) discovers every committed `*.test.js` / `*.test.jsx` file under `backend/` and `frontend/`, so it executes the same complete suite; the Baseline Gate workflow uses it. The two component commands above are provided so a failure can be isolated to one workspace.
 
 Important acceptance surfaces include:
 

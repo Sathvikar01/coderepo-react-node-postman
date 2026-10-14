@@ -65,9 +65,9 @@ function memoryRepository() {
 			const value = records.get(key(profileId, jobId));
 			return value ? structuredClone(value) : null;
 		},
-		async update(profileId, jobId, patch) {
+		async transition(profileId, jobId, expectedStatus, patch) {
 			const current = records.get(key(profileId, jobId));
-			if (!current) return null;
+			if (!current || current.status !== expectedStatus) return null;
 			const next = { ...current, ...structuredClone(patch), updatedAt: new Date() };
 			records.set(key(profileId, jobId), next);
 			return structuredClone(next);
@@ -99,6 +99,27 @@ function harness({ source = sourceRecord(), execute, mockResolve } = {}) {
 		},
 	});
 	return { service, repository, executeCalls, mockCalls };
+}
+
+function serviceOverRepository(repository, { execute } = {}) {
+	return createMinimizationService({
+		repository,
+		history: {
+			get: async (profileId, executionId) => (profileId === PROFILE && executionId === SOURCE ? sourceRecord() : null),
+		},
+		executions: {
+			async send(profileId, input) {
+				if (execute) return execute(input);
+				const failed = input.request.query.some((item) => item.key === "required");
+				return { outcome: "response", response: { status: failed ? 500 : 200 }, scriptResults: null };
+			},
+		},
+		mocks: {
+			async resolve() {
+				return { result: { outcome: "mock", response: { status: 500 }, scriptResults: null } };
+			},
+		},
+	});
 }
 
 async function errorOf(promise) {
@@ -180,5 +201,141 @@ describe("MinimizationJobV1 service", () => {
 		});
 		const reconciled = await orphan.service.status(PROFILE, jobId);
 		expect(reconciled).toMatchObject({ status: "failed", error: { code: "MINIMIZATION_INTERRUPTED" } });
+	});
+});
+
+describe("MinimizationJobV1 atomic terminal transitions", () => {
+	function runningJob(jobId) {
+		return {
+			ownerProfileId: PROFILE,
+			jobId,
+			schemaVersion: 1,
+			kind: "tracer.minimization-job",
+			sourceExecutionId: SOURCE,
+			status: "running",
+			predicate: { type: "status", equals: 500 },
+			targetMode: "execution",
+			probeBudget: 12,
+			result: null,
+			error: null,
+			startedAt: new Date(),
+			finishedAt: null,
+			expiresAt: new Date(Date.now() + 60_000),
+		};
+	}
+
+	test("running → completed persists the canonical terminal state", async () => {
+		const { service, repository } = harness();
+		const started = await service.start(PROFILE, { sourceExecutionId: SOURCE, predicate: { type: "status", equals: 500 } });
+		const completed = await service.wait(PROFILE, started.jobId);
+
+		expect(completed.status).toBe("completed");
+		const persisted = await repository.get(PROFILE, started.jobId);
+		expect(persisted.status).toBe("completed");
+		expect(persisted.result.request.query.map((item) => item.key)).toEqual(["required"]);
+	});
+
+	test("running → failed persists the canonical terminal state", async () => {
+		const { service, repository } = harness({
+			execute: async () => ({ outcome: "response", response: { status: 200 }, scriptResults: null }),
+		});
+		const started = await service.start(PROFILE, { sourceExecutionId: SOURCE, predicate: { type: "status", equals: 500 } });
+		const failed = await service.wait(PROFILE, started.jobId);
+
+		expect(failed.status).toBe("failed");
+		expect(failed.error.code).toBe("MINIMIZATION_PREDICATE_NOT_MET");
+		const persisted = await repository.get(PROFILE, started.jobId);
+		expect(persisted.status).toBe("failed");
+		expect(persisted.error.code).toBe("MINIMIZATION_PREDICATE_NOT_MET");
+	});
+
+	test("running → cancelled persists the canonical terminal state", async () => {
+		let release;
+		const pending = new Promise((resolve) => {
+			release = resolve;
+		});
+		const running = harness({ execute: async () => pending });
+		const started = await running.service.start(PROFILE, { sourceExecutionId: SOURCE, predicate: { type: "status", equals: 500 } });
+		const cancelPromise = running.service.cancel(PROFILE, started.jobId);
+		release({ outcome: "response", response: { status: 500 }, scriptResults: null });
+		const cancelled = await cancelPromise;
+
+		expect(cancelled.status).toBe("cancelled");
+		const persisted = await running.repository.get(PROFILE, started.jobId);
+		expect(persisted.status).toBe("cancelled");
+	});
+
+	test("completion racing a cancellation never overwrites the cancelled state", async () => {
+		const base = memoryRepository();
+		const repository = {
+			...base,
+			async transition(profileId, jobId, expectedStatus, patch) {
+				if (expectedStatus === "running" && patch.status === "completed") {
+					// Deterministically let a concurrent cancellation win before completion's
+					// conditional write lands, exactly like two atomic database writers.
+					await base.transition(profileId, jobId, "running", {
+						status: "cancelled",
+						result: null,
+						error: { code: "MINIMIZATION_CANCELLED", message: "Failure minimization was cancelled." },
+						finishedAt: new Date(),
+					});
+				}
+				return base.transition(profileId, jobId, expectedStatus, patch);
+			},
+		};
+		const service = serviceOverRepository(repository);
+		const started = await service.start(PROFILE, { sourceExecutionId: SOURCE, predicate: { type: "status", equals: 500 } });
+		const result = await service.wait(PROFILE, started.jobId);
+
+		expect(result.status).toBe("cancelled");
+		expect(result.result).toBeNull();
+		const persisted = await base.get(PROFILE, started.jobId);
+		expect(persisted.status).toBe("cancelled");
+		expect(persisted.result).toBeNull();
+	});
+
+	test("interrupted recovery never overwrites a job completed concurrently", async () => {
+		const base = memoryRepository();
+		const jobId = randomUUID();
+		await base.create(runningJob(jobId));
+		const repository = {
+			...base,
+			async transition(profileId, id, expectedStatus, patch) {
+				if (expectedStatus === "running" && patch.error?.code === "MINIMIZATION_INTERRUPTED") {
+					// A concurrent completion wins before recovery's conditional write lands.
+					await base.transition(profileId, id, "running", {
+						status: "completed",
+						result: { minimal: true },
+						error: null,
+						finishedAt: new Date(),
+					});
+				}
+				return base.transition(profileId, id, expectedStatus, patch);
+			},
+		};
+		const service = serviceOverRepository(repository);
+		const result = await service.status(PROFILE, jobId);
+
+		expect(result.status).toBe("completed");
+		expect(result.error).toBeNull();
+		const persisted = await base.get(PROFILE, jobId);
+		expect(persisted.status).toBe("completed");
+		expect(persisted.error).toBeNull();
+	});
+
+	test("a terminal state cannot transition again", async () => {
+		const { service, repository } = harness();
+		const started = await service.start(PROFILE, { sourceExecutionId: SOURCE, predicate: { type: "status", equals: 500 } });
+		await service.wait(PROFILE, started.jobId);
+
+		const late = await repository.transition(PROFILE, started.jobId, "running", {
+			status: "failed",
+			error: { code: "MINIMIZATION_INTERRUPTED", message: "stale write" },
+			finishedAt: new Date(),
+		});
+		expect(late).toBeNull();
+		const persisted = await repository.get(PROFILE, started.jobId);
+		expect(persisted.status).toBe("completed");
+		expect(persisted.error).toBeNull();
 	});
 });

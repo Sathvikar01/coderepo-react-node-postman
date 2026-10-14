@@ -54,6 +54,15 @@ export function createMinimizationService({
 } = {}) {
 	const active = new Map();
 
+	// Applies a terminal transition atomically. If the expected source state no longer
+	// matches, another writer already finalized the job, so reload and return the
+	// canonical stored terminal record instead of overwriting the winner.
+	async function finalize(profileId, jobId, expectedStatus, patch) {
+		const updated = await repository.transition(profileId, jobId, expectedStatus, patch);
+		if (updated) return updated;
+		return repository.get(profileId, jobId);
+	}
+
 	async function sourceRecord(profileId, executionId) {
 		const record = await history.get(profileId, executionId);
 		if (!record || record.expired || record.visible === false)
@@ -148,7 +157,7 @@ export function createMinimizationService({
 		})
 			.then(async (result) => {
 				const sanitized = sanitizeCapsuleRequest(result.request);
-				return repository.update(profileId, jobId, {
+				return finalize(profileId, jobId, "running", {
 					status: "completed",
 					result: { ...result, request: sanitized.request, requiredInputs: [...sanitized.state.inputs.values()] },
 					error: null,
@@ -156,7 +165,7 @@ export function createMinimizationService({
 				});
 			})
 			.catch(async (error) =>
-				repository.update(profileId, jobId, {
+				finalize(profileId, jobId, "running", {
 					status: error?.code === "MINIMIZATION_CANCELLED" ? "cancelled" : "failed",
 					result: null,
 					error: publicFailure(error),
@@ -172,7 +181,7 @@ export function createMinimizationService({
 		let record = await repository.get(profileId, jobId);
 		if (!record) throw new AppError(404, "MINIMIZATION_NOT_FOUND", "The minimization job does not exist.");
 		if (record.status === "running" && !active.has(key(profileId, jobId))) {
-			record = await repository.update(profileId, jobId, {
+			record = await finalize(profileId, jobId, "running", {
 				status: "failed",
 				error: { code: "MINIMIZATION_INTERRUPTED", message: "The server restarted before minimization completed." },
 				finishedAt: new Date(),
