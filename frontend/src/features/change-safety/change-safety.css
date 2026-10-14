@@ -1,0 +1,217 @@
+.change-safety-modal {
+	width: min(980px, calc(100vw - 32px));
+	max-height: min(880px, calc(100vh - 32px));
+	padding: 0;
+	overflow: hidden;
+}
+
+.change-safety-dialog {
+	width: 100%;
+	max-width: none;
+	max-height: inherit;
+	display: flex;
+	flex-direction: column;
+}
+
+.change-safety-header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 24px;
+}
+
+.change-safety-header h2 {
+	margin: 2px 0 6px;
+}
+
+.change-safety-picker-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 12px;
+}
+
+.change-safety-picker-grid > label,
+.change-safety-change-picker {
+	display: grid;
+	gap: 7px;
+	min-width: 0;
+}
+
+.change-safety-picker-grid > label > span,
+.change-safety-change-picker > span {
+	font-size: 12px;
+	font-weight: 700;
+}
+
+.change-safety-picker-grid .select-menu,
+.change-safety-picker-grid .select-menu-trigger,
+.change-safety-change-picker .select-menu,
+.change-safety-change-picker .select-menu-trigger {
+	width: 100%;
+	min-width: 0;
+}
+
+.change-safety-actions,
+.change-safety-run-row {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 12px;
+}
+
+.change-safety-mutation-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 12px;
+}
+
+.change-safety-results {
+	display: grid;
+	gap: 14px;
+	min-height: 0;
+	overflow: auto;
+	padding-right: 2px;
+}
+
+.change-safety-change-picker {
+	padding: 12px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: var(--surface-muted);
+}
+
+.change-safety-change-picker small {
+	color: var(--text-muted);
+	line-height: 1.4;
+}
+
+.change-safety-stages {
+	display: grid;
+	grid-template-columns: repeat(5, minmax(0, 1fr));
+	gap: 8px;
+}
+
+.change-safety-stage {
+	display: flex;
+	align-items: flex-start;
+	gap: 9px;
+	min-width: 0;
+	padding: 12px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: var(--surface);
+}
+
+.change-safety-stage.ready {
+	border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
+}
+
+.change-safety-stage.warning {
+	border-color: color-mix(in srgb, var(--warning) 45%, var(--border));
+}
+
+.change-safety-stage-icon {
+	display: inline-grid;
+	place-items: center;
+	width: 28px;
+	height: 28px;
+	flex: 0 0 28px;
+	border-radius: 8px;
+	background: var(--surface-muted);
+}
+
+.change-safety-stage > div {
+	display: grid;
+	gap: 4px;
+	min-width: 0;
+}
+
+.change-safety-stage span,
+.change-safety-stage small {
+	font-size: 11px;
+	color: var(--text-muted);
+}
+
+.change-safety-stage strong {
+	font-size: 13px;
+	word-break: break-word;
+}
+
+.change-safety-stage small {
+	line-height: 1.35;
+}
+
+.change-safety-blockers {
+	padding: 12px 14px;
+	border: 1px solid color-mix(in srgb, var(--warning) 42%, var(--border));
+	border-radius: 10px;
+	background: color-mix(in srgb, var(--warning) 7%, var(--surface));
+}
+
+.change-safety-blockers h3 {
+	margin: 0 0 8px;
+	font-size: 13px;
+}
+
+.change-safety-blockers p {
+	margin: 5px 0;
+	font-size: 12px;
+	line-height: 1.45;
+}
+
+.change-safety-dialog footer {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+}
+
+.change-safety-dialog footer .field-hint {
+	max-width: 680px;
+	margin: 0;
+}
+
+@media (max-width: 840px) {
+	.change-safety-modal {
+		width: min(720px, calc(100vw - 20px));
+		max-height: calc(100vh - 20px);
+	}
+
+	.change-safety-stages {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 600px) {
+	.change-safety-modal {
+		width: calc(100vw - 12px);
+		max-height: calc(100vh - 12px);
+	}
+
+	.change-safety-picker-grid,
+	.change-safety-stages {
+		grid-template-columns: 1fr;
+	}
+
+	.change-safety-header {
+		gap: 12px;
+	}
+
+	.change-safety-actions,
+	.change-safety-run-row,
+	.change-safety-dialog footer {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.change-safety-actions > button,
+	.change-safety-run-row > button,
+	.change-safety-dialog footer > button {
+		width: 100%;
+	}
+
+	.change-safety-dialog footer .field-hint {
+		order: 2;
+	}
+}

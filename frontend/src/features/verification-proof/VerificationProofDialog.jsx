@@ -257,11 +257,11 @@ function IntegrityView({ proof, artifact }) {
 	);
 }
 
-export function VerificationProofDialog({ onClose, onOpenHelp, onPromoteToReview }) {
+export function VerificationProofDialog({ initialProof = null, onClose, onOpenHelp, onPromoteToReview }) {
 	const [tab, setTab] = useState("proof");
 	const [artifactText, setArtifactText] = useState("");
 	const [validatedArtifactText, setValidatedArtifactText] = useState("");
-	const [proof, setProof] = useState(null);
+	const [proof, setProof] = useState(initialProof);
 	const [artifact, setArtifact] = useState(null);
 	const [report, setReport] = useState(null);
 	const [importResult, setImportResult] = useState(null);
@@ -294,6 +294,32 @@ export function VerificationProofDialog({ onClose, onOpenHelp, onPromoteToReview
 			if (requestToken.current === token) setBusy("");
 		}
 	};
+
+	// A proof produced by Change Safety is already backend-minted. Re-check it
+	// through the existing Phase 47B verify route on open so this dialog renders
+	// the same report semantics as imported artifacts.
+	useEffect(() => {
+		if (!initialProof) return;
+		setProof(initialProof);
+		setArtifact(null);
+		setImportResult(null);
+		setTab("proof");
+		const token = requestToken.current + 1;
+		requestToken.current = token;
+		setBusy("verify");
+		setError("");
+		verificationProofApi
+			.verify({ proof: initialProof })
+			.then((value) => {
+				if (requestToken.current === token) setReport(value);
+			})
+			.catch((caught) => {
+				if (requestToken.current === token) setError(proofErrorMessage(caught));
+			})
+			.finally(() => {
+				if (requestToken.current === token) setBusy("");
+			});
+	}, [initialProof]);
 
 	// Import never trusts the artifact. It parses it strictly, and the proof only
 	// becomes inspectable after the backend has decided its status.

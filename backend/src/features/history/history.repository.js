@@ -5,6 +5,11 @@ function cursorPredicate(cursor) {
 	return { $or: [{ startedAt: { $lt: cursor.startedAt } }, { startedAt: cursor.startedAt, _id: { $lt: cursor.id } }] };
 }
 
+// Upper bound on how many body records a single retention tick may trim. The
+// set-based aggregation finds every excess record, but the write stays bounded so
+// one maintenance pass cannot run unbounded work; later ticks drain the remainder.
+export const RETENTION_BATCH_SIZE = 500;
+
 export const historyRepository = {
 	insertAdmission: (entry) => ExecutionHistory.create(entry),
 	findByExecutionId: (ownerProfileId, executionId) => ExecutionHistory.findOne({ ownerProfileId, executionId }).lean(),
@@ -46,13 +51,29 @@ export const historyRepository = {
 			.lean();
 		return find;
 	},
-	selectBodyCandidates: (ownerProfileId, limit) =>
-		ExecutionHistory.find({ ownerProfileId, visible: true, status: "terminal", "response.body.value": { $ne: "" } })
-			.sort({ startedAt: -1, _id: -1 })
-			.skip(limit)
-			.select("_id")
-			.limit(200)
-			.lean(),
+	// Set-based retention: rank visible terminal body records per profile in a single
+	// aggregation and return only the records that fall beyond the newest N for their
+	// profile. This never enumerates profiles and never issues one query per profile.
+	// "Stored response body" means a non-empty string value, so already-trimmed and
+	// body-less (response: null) records are not candidates.
+	selectRetentionCandidates: (retainPerProfile, limit = RETENTION_BATCH_SIZE) =>
+		ExecutionHistory.aggregate([
+			{ $match: { visible: true, status: "terminal", "response.body.value": { $type: "string", $ne: "" } } },
+			// $documentNumber only accepts a single sortBy field, so fold the
+			// deterministic (startedAt desc, _id desc) order into one composite key.
+			{ $set: { retentionSort: { startedAt: "$startedAt", id: "$_id" } } },
+			{
+				$setWindowFields: {
+					partitionBy: "$ownerProfileId",
+					sortBy: { retentionSort: -1 },
+					output: { retentionRank: { $documentNumber: {} } },
+				},
+			},
+			{ $match: { retentionRank: { $gt: retainPerProfile } } },
+			{ $sort: { startedAt: -1, _id: -1 } },
+			{ $limit: limit },
+			{ $project: { _id: 1 } },
+		]).allowDiskUse(true),
 	trimBodies: (ids) =>
 		ExecutionHistory.updateMany(
 			{ _id: { $in: ids } },

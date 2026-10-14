@@ -10,6 +10,8 @@ const baseCss = readFileSync(fileURLToPath(new URL("../../styles.css", import.me
 const whyCss = readFileSync(fileURLToPath(new URL("../why-inspector/why-inspector.css", import.meta.url)), "utf8");
 const historyPanel = readFileSync(fileURLToPath(new URL("../history/HistoryPanel.jsx", import.meta.url)), "utf8");
 const proofDialog = readFileSync(fileURLToPath(new URL("../verification-proof/VerificationProofDialog.jsx", import.meta.url)), "utf8");
+const changeSafetyDialog = readFileSync(fileURLToPath(new URL("../change-safety/ChangeSafetyDialog.jsx", import.meta.url)), "utf8");
+const changeSafetyCss = readFileSync(fileURLToPath(new URL("../change-safety/change-safety.css", import.meta.url)), "utf8");
 
 describe("Phase 30 workbench contracts", () => {
 	test("styles the classes the real request/response UI renders", () => {
@@ -182,5 +184,35 @@ describe("UI audit layout contracts", () => {
 
 	test("profile rows keep the avatar initials centered", () => {
 		expect(baseCss).toContain(".profile-account span:not(.profile-avatar, .icon-button) {");
+	});
+});
+
+describe("Phase 54 change-safety browser workflow contracts", () => {
+	test("keeps Change Safety in the existing command rail instead of adding a sidebar product", () => {
+		expect(header).toContain('aria-label="Open Change Safety"');
+		expect(header).toContain("onClick={onOpenChangeSafety}");
+		expect(app).toContain("<ChangeSafetyDialog");
+		expect(app).toContain("setChangeSafetyOpen(true)");
+		expect(app).not.toContain('setSidebarTab("change-safety")');
+	});
+
+	test("drives all authoritative stages through the backend API and opens the canonical proof dialog", () => {
+		expect(changeSafetyDialog).toContain("changeSafetyApi.analyze");
+		expect(changeSafetyDialog).toContain("changeSafetyApi.run");
+		expect(changeSafetyDialog).toContain("changeSafetyApi.generateContracts");
+		expect(changeSafetyDialog).toContain("Generate contracts from source");
+		expect(changeSafetyDialog).toContain("Impact");
+		expect(changeSafetyDialog).toContain("Environment drift");
+		expect(changeSafetyDialog).toContain("Rehearsal");
+		expect(changeSafetyDialog).toContain("Contract");
+		expect(changeSafetyDialog).toContain("Open Verification Proof");
+		expect(app).toContain("initialProof={proofSeed}");
+	});
+
+	test("has responsive single-column coverage without changing the four-slot resource index", () => {
+		expect(changeSafetyCss).toContain("@media (max-width: 840px)");
+		expect(changeSafetyCss).toContain("@media (max-width: 600px)");
+		expect(changeSafetyCss).toContain("grid-template-columns: 1fr");
+		expect(css).toContain("grid-template-columns: repeat(4, 1fr)");
 	});
 });

@@ -159,7 +159,7 @@ export function createRehearsalExecutor({
 				request,
 				context,
 			},
-			{ rateLimit: false },
+			{ rateLimit: false, workspaceId: input.context?.workspaceId ?? null },
 		);
 		return { kind: "result", result, executionId };
 	}

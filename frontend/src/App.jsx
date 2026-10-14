@@ -25,6 +25,7 @@ import { environmentApi } from "./features/environments/environment.api.js";
 import { executionApi } from "./features/executions/execution.api.js";
 import { FlightRecorderDialog } from "./features/execution-intelligence/FlightRecorderDialog.jsx";
 import { InvestigationDialog } from "./features/execution-intelligence/InvestigationDialog.jsx";
+import { ChangeSafetyDialog } from "./features/change-safety/ChangeSafetyDialog.jsx";
 import { VerificationProofDialog } from "./features/verification-proof/VerificationProofDialog.jsx";
 import { WhyInspectorDialog } from "./features/why-inspector/WhyInspectorDialog.jsx";
 import { ReviewsPanel } from "./features/reviews/ReviewsPanel.jsx";
@@ -131,6 +132,8 @@ export default function App() {
 	const [historyRefresh, setHistoryRefresh] = useState(0);
 	const [flightRecorder, setFlightRecorder] = useState(null);
 	const [proofOpen, setProofOpen] = useState(false);
+	const [proofSeed, setProofSeed] = useState(null);
+	const [changeSafetyOpen, setChangeSafetyOpen] = useState(false);
 	const [reviewPromotion, setReviewPromotion] = useState(null);
 	const [productSurface, setProductSurface] = useState(null);
 	const [investigation, setInvestigation] = useState(null);
@@ -1476,9 +1479,30 @@ export default function App() {
 
 	const proofNode = proofOpen ? (
 		<VerificationProofDialog
-			onClose={() => setProofOpen(false)}
+			initialProof={proofSeed}
+			onClose={() => {
+				setProofOpen(false);
+				setProofSeed(null);
+			}}
 			onOpenHelp={() => setProductSurface("help")}
 			onPromoteToReview={workspaceRole === "VIEWER" ? null : openReviewPromotion}
+		/>
+	) : null;
+
+	const changeSafetyNode = changeSafetyOpen ? (
+		<ChangeSafetyDialog
+			activeCollectionId={activeCollection?._id ?? collections[0]?._id ?? null}
+			activeEnvironmentId={state.activeEnvironmentId}
+			canExecute={workspaceCapabilities.execute === true}
+			collections={collections}
+			environments={environments}
+			onClose={() => setChangeSafetyOpen(false)}
+			onProofGenerated={(proof) => {
+				setProofSeed(proof);
+				setChangeSafetyOpen(false);
+				setProofOpen(true);
+				setHistoryRefresh((current) => current + 1);
+			}}
 		/>
 	) : null;
 
@@ -1606,6 +1630,7 @@ export default function App() {
 		<div className="app-shell">
 			{exampleDialogNode}
 			{productNode}
+			{changeSafetyNode}
 			{proofNode}
 			{flightRecorderNode}
 			{runnerNode}
@@ -1648,7 +1673,11 @@ export default function App() {
 				onOpenEnvironments={() => openDialog({ kind: "environments" })}
 				onOpenImport={() => openDialog({ kind: "import-curl" })}
 				onOpenLocalRuntime={() => openDialog({ kind: "local-runtime" })}
-				onOpenProof={() => setProofOpen(true)}
+				onOpenChangeSafety={() => setChangeSafetyOpen(true)}
+				onOpenProof={() => {
+					setProofSeed(null);
+					setProofOpen(true);
+				}}
 				onOpenProduct={(surfaceId) => setProductSurface(surfaceId || DEFAULT_PRODUCT_SURFACE)}
 				onToggleSidebar={() => {
 					setSidebarTab("collections");

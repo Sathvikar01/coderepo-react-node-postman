@@ -6656,3 +6656,1188 @@ pr=73 MERGED
 merge_commit=fa66a64d3802613ae23b2ce3c5ec1231a55d7e09
 issue=71 OPEN
 parent_agent=none
+
+
+## [2026-10-14] Fix concurrent first Local Runtime creation race (#79)
+
+Implementation Prompt:
+Work in Tracer:
+`C:\Users\arsat\Downloads\postman`
+
+Repo:
+`Sathvikar01/coderepo-react-node-postman`
+
+Fix GitHub issue **#79: Handle concurrent first Local Runtime creation safely**.
+
+IMPORTANT:
+- Phase 54 / PR #74 is being fixed by another agent in parallel.
+- Do NOT touch `phase54/change-safety-browser-workflow`.
+- Do NOT modify Change Safety, rehearsal, verification, frontend, or CI files.
+- Create a separate branch from current `main`, e.g. `fix/79-local-runtime-create-race`.
+- Keep the change narrowly scoped to #79.
+
+## Problem
+
+Current Local Runtime update flow is effectively:
+
+`findByProfile → missing → create`
+
+Two concurrent first-time updates can both observe no record.
+One Mongo insert succeeds and the other can throw duplicate-key error.
+
+A duplicate-key race is expected concurrency behavior, not a server error.
+
+## Inspect first
+
+Read:
+- `backend/src/features/local-runtime/local-runtime.service.js`
+- `backend/src/features/local-runtime/local-runtime.repository.js`
+- `backend/src/features/local-runtime/local-runtime.model.js`
+- `backend/src/features/local-runtime/local-runtime.service.test.js`
+
+Also inspect existing revision/CAS conventions elsewhere before choosing semantics.
+
+## Required behavior
+
+Preserve the unique `ownerProfileId` constraint.
+
+For first creation:
+
+1. Try the normal create.
+2. If create succeeds, return it.
+3. If it fails specifically because another request concurrently created the row:
+   - fetch the canonical row now stored;
+   - never expose raw Mongo duplicate-key details;
+   - reconcile using existing revision/CAS semantics.
+4. If the concurrent winner represents an incompatible update, return the existing typed:
+   `LOCAL_RUNTIME_CHANGED`
+5. Do not catch unrelated database errors.
+
+Do NOT weaken revision checks.
+
+## Concurrency contract
+
+Two concurrent first updates must result in:
+
+- exactly one LocalRuntimeSetting document;
+- no raw duplicate-key/500 error;
+- deterministic public behavior;
+- revision remains valid and monotonic.
+
+Compatible concurrent requests may return the canonical record if that matches existing semantics.
+
+Conflicting requests should fail cleanly with:
+`LOCAL_RUNTIME_CHANGED`
+
+## Tests
+
+Add deterministic tests for:
+
+### Same first update concurrently
+Two equivalent first writes race.
+
+Assert:
+- one canonical document;
+- both calls have valid API-level outcomes;
+- no duplicate-key leak.
+
+### Different first updates concurrently
+Two conflicting first writes race.
+
+Assert:
+- one wins;
+- loser gets `LOCAL_RUNTIME_CHANGED`;
+- stored state equals the winner;
+- no silent overwrite.
+
+### Non-duplicate DB error
+Inject another repository/create failure.
+
+Assert it is NOT converted to `LOCAL_RUNTIME_CHANGED`.
+
+Avoid timing-only flaky tests.
+Use barriers/deferred promises or controlled repository doubles where useful.
+
+## Verification
+
+Run:
+- Local Runtime focused tests
+- relevant backend tests
+- full backend test suite
+
+Do not modify unrelated failing tests to make the branch green.
+
+## Git
+
+Commit the fix with tests.
+Push the new branch.
+Open a PR that closes #79.
+
+Do NOT merge it.
+Do NOT modify PR #74.
+
+## Final response
+
+Report only:
+- root cause
+- concurrency semantics chosen
+- files changed
+- tests added
+- test results
+- commit SHA
+- PR link
+- whether #79 acceptance criteria are fully satisfied
+
+Agent Response Summary:
+The Local Runtime first-create race was fixed on branch `fix/79-local-runtime-create-race`. The root cause was the non-atomic `findByProfile → missing → create` path: two requests with `expectedRevision: 0` could both observe no row, then race the unique `ownerProfileId` insert and leak raw Mongo E11000 from the loser.
+
+The implementation preserves the unique `ownerProfileId` index and all existing revision/CAS checks. A normal first create still returns directly. If create loses specifically to the `ownerProfileId` duplicate-key race, the service reloads the canonical row. Equivalent logical settings return that canonical row idempotently; conflicting settings return the existing typed `LOCAL_RUNTIME_CHANGED` 409. Unrelated duplicate keys and non-duplicate database errors still propagate unchanged.
+
+Deterministic barrier-based tests cover equivalent first writes, conflicting first writes, monotonic revision after the race, unrelated database failures, and duplicate keys on unrelated indexes. Focused Local Runtime tests passed 36/36, and the full backend suite passed 1600 with 2 skipped and 0 failures. Prettier and syntax checks were clean.
+
+ChatGPT independently reviewed PR #83 before merge. The diff is limited to the Local Runtime service and tests, the Mongoose model confirms `ownerProfileId` is the only explicit unique application index, the existing conditional replace/CAS path is unchanged, and the new concurrency tests do not rely on sleeps. On implementation head `4e9ee6394c6db74ad50dea614da04bc76711a77f`, Tracer CLI, Baseline Gate, and Phase 30 E2E + Load all passed.
+
+Actions:
+* diagnosed the first-create TOCTOU race
+* preserved the existing unique index and revision/CAS contract
+* added duplicate-key reconciliation only for the first-create race
+* made equivalent concurrent first writes idempotent
+* made conflicting concurrent first writes fail with `LOCAL_RUNTIME_CHANGED`
+* preserved unrelated database errors
+* added deterministic race regression tests
+* ran 36 focused Local Runtime tests successfully
+* ran 1600 backend tests with 2 skipped and 0 failures
+* verified formatting and syntax gates
+* opened PR #83 closing issue #79
+* ChatGPT reviewed the PR diff, model/index assumptions, tests, and PR-head CI
+* appended this implementation/audit record to the tracked transcript before merge
+
+Context:
+tool=local coding agent + ChatGPT GitHub review
+branch=fix/79-local-runtime-create-race
+implementation_commit=4e9ee6394c6db74ad50dea614da04bc76711a77f
+pr=83
+issue=79
+parent_agent=none
+
+
+## [2026-10-14] Make the root test command run the complete repository suite (#80)
+
+Implementation Prompt:
+Work in Tracer:
+`C:\Users\arsat\Downloads\postman`
+
+Repo:
+`Sathvikar01/coderepo-react-node-postman`
+
+Fix GitHub issue **#80: Make the root test command run the complete repository suite**.
+
+IMPORTANT:
+- PR #74 Phase 54 and other fixes may be running in parallel.
+- Create a separate branch from current `main`:
+  `fix/80-canonical-test-command`
+- Do NOT touch product/backend/frontend implementation code.
+- Avoid CI workflow edits unless they are strictly required for the test contract.
+- Do NOT modify PR #74.
+
+## Reviewer feedback
+
+HackerRank reported that the documented test command previously ran only part of the committed tests because it executed from `backend/`, leaving frontend tests out.
+
+Current ambiguity:
+
+README says:
+
+`bun test` = full repository suite
+
+but root `package.json` currently has approximately:
+
+`"test": "cd backend && bun test"`
+
+This is reviewer-hostile because `bun test` and `bun run test` can mean different things.
+
+## Goal
+
+Create one explicit canonical root command that always runs:
+
+1. backend tests
+2. frontend tests
+
+Failure in either suite must fail the root command.
+
+Also expose clear component commands.
+
+Preferred contract:
+
+```json
+"test": "<full repository suite>",
+"test:backend": "<backend tests>",
+"test:frontend": "<frontend tests>"
+```
+
+Choose the simplest Bun-native implementation compatible with Bun 1.3.14 and the current repo.
+
+## Inspect first
+
+Read:
+
+- root `package.json`
+- `backend/package.json`
+- `frontend/package.json`
+- README testing instructions
+- current GitHub Actions test commands
+- `hackerrank.yml`
+- repository test directory layout
+
+Determine exactly which committed test files each existing command discovers.
+
+Do not assume file counts.
+
+## Requirements
+
+The canonical documented command must execute every intended backend and frontend test suite.
+
+Prefer:
+
+`bun run test`
+
+as the explicit reviewer-facing command if that removes ambiguity.
+
+The README, package scripts, HackerRank instructions/config, and CI references must not contradict each other.
+
+Do NOT:
+
+- hard-code a test count in documentation;
+- delete or skip slow/failing tests;
+- rename tests just to change discovery;
+- silently exclude frontend tests;
+- add new dependencies;
+- change product code;
+- weaken CI.
+
+## Verification
+
+Prove separately that:
+
+`bun run test:backend`
+
+runs the expected backend suite.
+
+`bun run test:frontend`
+
+runs the expected frontend suite.
+
+Then prove:
+
+`bun run test`
+
+runs both and returns non-zero if either child suite fails.
+
+If root-level tests outside backend/frontend exist and are part of the supported suite, include them explicitly rather than ignoring them.
+
+Check test discovery against committed files.
+
+## CI
+
+Inspect current workflows.
+
+If CI already runs both suites correctly, do not rewrite it unnecessarily.
+
+Only change CI when needed so the canonical repository test contract is represented accurately.
+
+Do not touch Phase 54-specific E2E/load behavior.
+
+## Documentation
+
+Make README instructions unambiguous.
+
+State clearly:
+
+- full repository tests
+- backend-only tests
+- frontend-only tests
+- production frontend build if relevant
+
+Do not publish a static total test count.
+
+## Tests
+
+If practical, add a lightweight contract test or script-level guard proving the root test command references all required suites.
+
+Do not add brittle tests that inspect formatting.
+
+## Git
+
+Commit only #80 changes.
+Push the branch.
+Open a PR that closes #80.
+
+Do NOT merge it.
+
+## Final report
+
+Return only:
+
+- old ambiguity
+- canonical command chosen
+- files changed
+- exact commands verified
+- backend result
+- frontend result
+- full-suite result
+- commit SHA
+- PR link
+- whether #80 is fully satisfied
+
+Agent Response Summary:
+The Pi agent harness fixed the root test-command ambiguity on branch `fix/80-canonical-test-command`.
+
+Previously, root `package.json` mapped `test` to `cd backend && bun test`, while README documentation described `bun test` as the full repository suite and `bun run test` as backend-only. That meant the reviewer-facing script could silently skip all frontend tests.
+
+The canonical contract is now:
+- `bun run test` = `bun run test:backend && bun run test:frontend`
+- `bun run test:backend` = `cd backend && bun test`
+- `bun run test:frontend` = `cd frontend && bun test`
+- direct root `bun test` remains Bun's native repository-wide discovery command.
+
+Files changed:
+- `package.json`
+- `README.md`
+- `docs/REVIEWER_GUIDE.md`
+- `backend/src/scripts/test-command-contract.test.js`
+
+A lightweight contract test now checks that the root script exposes both component suites and is not backend-only. No product code, dependencies, CI workflows, or existing tests were removed or weakened.
+
+Local Pi-agent verification:
+- `bun run test:backend` exited 0 with 1602 tests / 98 files, 1600 pass, 2 skip, 0 fail.
+- `bun run test:frontend` discovered 412 tests / 31 files and exited 1 locally because Bun 1.3.9 did not expose `localStorage` globally; 405 passed, with 7 failures plus 1 error. These failures were pre-existing/environment-specific and no tests were skipped or deleted.
+- `bun run test` correctly ran backend first, then frontend, and propagated the frontend failure.
+- A temporary failing backend test proved the canonical command also propagates backend failure and short-circuits before frontend; the temporary file was removed afterward.
+
+Implementation commit:
+`df8b5f1a80289553c35a89aa9c77d80368a362c0`
+
+PR:
+`#81 — Fix #80: make the root test command run the full repository suite`
+
+ChatGPT independently reviewed the PR. On the original PR head, Tracer CLI, Baseline Gate, and Phase 30 E2E + Load were all green. Baseline Gate's direct root `bun test` run visibly executed both frontend and backend test files and completed with 2020 pass, 0 fail across 2021 tests / 129 files, confirming the repository-wide discovery claim under CI's Bun environment.
+
+Because `main` advanced after PR #83 merged, PR #81 became temporarily non-mergeable. ChatGPT reconciled current `main` into the branch as merge commit `4938426a123135e2340222f8000de723b9065c87`, preserving the Pi agent implementation commit and current-main history without changing the #80 patch.
+
+Actions:
+* audited the root package scripts and reviewer-facing test documentation
+* made `bun run test` the explicit full-suite command
+* added backend-only and frontend-only component commands
+* updated README and reviewer guide to remove contradictory instructions
+* added a lightweight root test-command contract guard
+* proved child-suite failures propagate through the canonical command
+* preserved direct root `bun test` for Bun's repository-wide discovery and left CI unchanged
+* opened PR #81 closing issue #80
+* ChatGPT independently verified the diff and PR-head CI
+* ChatGPT verified from Baseline Gate logs that frontend and backend tests both execute under root `bun test`
+* synchronized current `main` into the PR branch after PR #83 advanced the base
+* appended this implementation/audit record to the tracked transcript before merge
+
+Context:
+tool=Pi agent harness + ChatGPT GitHub review
+branch=fix/80-canonical-test-command
+implementation_commit=df8b5f1a80289553c35a89aa9c77d80368a362c0
+main_sync_commit=4938426a123135e2340222f8000de723b9065c87
+pr=81
+issue=80
+parent_agent=none
+
+
+## [2026-10-14] Replace per-profile History retention loop with set-based database work (#78)
+
+Implementation Prompt:
+Work in Tracer:
+`C:\Users\arsat\Downloads\postman`
+
+Repo:
+`Sathvikar01/coderepo-react-node-postman`
+
+Fix GitHub issue **#78: Replace per-profile History retention loop with set-based database work**.
+
+IMPORTANT:
+- PR #74, #79, and #76 may be running in parallel.
+- Do NOT touch Change Safety, Local Runtime, Minimization, Collection Runner, frontend, or CI.
+- Create a separate branch from current `main`:
+  `fix/78-set-based-history-retention`
+- Keep scope strictly limited to #78.
+
+## Current problem
+
+`historyService.retentionPass()` currently does roughly:
+
+`list every profile → query history separately for each profile → trim excess bodies`
+
+This creates an N+1 maintenance pattern.
+
+Maintenance cost grows with total profile count even when almost no history records need cleanup.
+
+Current relevant files:
+
+- `backend/src/features/history/history.service.js`
+- `backend/src/features/history/history.repository.js`
+- History model/tests
+- execution retention config/limits
+
+## Goal
+
+Remove the per-profile maintenance loop while preserving:
+
+- newest N retained response bodies **per profile**
+- history metadata
+- expiration semantics
+- visibility rules
+- bounded maintenance work
+- secret/data handling behavior
+
+Do NOT change the configured retention policy itself.
+
+## Inspect first
+
+Understand:
+
+- `retainedBodyRecords`
+- `selectBodyCandidates`
+- `trimBodies`
+- history indexes
+- current sort order
+- hidden/expired records
+- terminal/running semantics
+
+Check whether MongoDB aggregation/window operators available in the project's Mongo version can safely express per-profile ranking.
+
+## Required design
+
+Implement a set-based repository operation that finds only body records eligible for trimming.
+
+Preferred semantics:
+
+For each profile independently:
+
+1. consider eligible visible terminal records with stored response bodies;
+2. order newest first using the existing deterministic ordering;
+3. retain the newest configured N;
+4. select only records beyond N;
+5. trim those records.
+
+Do this without first enumerating every profile.
+
+Use bounded batches so one maintenance tick cannot process an unlimited number of records.
+
+Possible implementation:
+- Mongo aggregation with partition/rank per `ownerProfileId`;
+- or another genuinely set-based query.
+
+Do NOT merely move the existing profile loop into another service function.
+
+## Preserve trim behavior
+
+Eligible records should still be updated to the existing retention form, e.g.:
+
+- response body cleared
+- `truncated: true`
+- `omittedReason: "retention"`
+
+Do not delete the history record.
+
+Do not trim:
+- active/running records;
+- already-empty bodies;
+- records that belong within that profile's newest-N retained-body allowance.
+
+## Tests
+
+Add deterministic multi-profile tests.
+
+Cover:
+
+1. Profile A has fewer than N records → nothing trimmed.
+2. Profile A has N+K records → only oldest K trimmed.
+3. Profile B's records do not affect Profile A's allowance.
+4. Multiple profiles with excess records are handled in one pass.
+5. Running/non-terminal records are ignored.
+6. Already-trimmed/empty-body records are ignored.
+7. Batch limit prevents unbounded work.
+8. Re-running retention is idempotent.
+
+Also assert `profileRepository.listIds()` is no longer used by retention.
+
+## Performance correctness
+
+If the query needs an index, inspect existing indexes first.
+
+Add an index only if justified by the actual query shape.
+Do not add speculative indexes.
+
+## Verification
+
+Run:
+
+- focused History retention tests
+- History repository/service tests
+- full backend suite
+
+Do not modify unrelated tests.
+
+## Git
+
+Commit with tests.
+Push the branch.
+Open a PR that closes #78.
+
+Do NOT merge it.
+Do NOT modify PR #74, #76, or #79 branches.
+
+## Final report
+
+Return only:
+
+- old N+1 behavior
+- new set-based strategy
+- Mongo query/aggregation used
+- files changed
+- tests added
+- performance/boundedness behavior
+- test results
+- commit SHA
+- PR link
+- whether #78 acceptance criteria are fully satisfied
+
+Agent Response Summary:
+Issue #78 was implemented on `fix/78-set-based-history-retention`.
+
+The old retention pass enumerated all profiles and then issued a body-candidate query per profile. The new implementation uses one MongoDB aggregation over eligible visible terminal records with non-empty stored string bodies. It partitions by `ownerProfileId`, ranks each profile newest-first, selects only rows beyond that profile's configured retained-body count, and trims those records in one bounded write batch.
+
+The trim behavior is unchanged:
+- `response.body.value` becomes an empty string
+- `response.body.truncated` becomes `true`
+- `response.body.omittedReason` becomes `"retention"`
+- history records are never deleted
+
+`RETENTION_BATCH_SIZE` is 500, so each tick updates at most 500 records. The aggregation itself still scans/ranks the eligible set; the boundedness claim applies to the selected/write batch rather than to total read/sort work.
+
+No new index was added. The existing per-profile history index cannot directly bound a global partitioned scan because `ownerProfileId` is unconstrained, and a new dedicated index would add write cost without eliminating the window ranking work. `allowDiskUse(true)` is used for the aggregation sort.
+
+Files changed:
+- `backend/src/features/history/history.repository.js`
+- `backend/src/features/history/history.service.js`
+- `backend/src/features/history/history-retention.test.js`
+
+Nine deterministic tests cover below-N behavior, N+K oldest-only trimming, profile isolation, multiple profiles in one pass, running/hidden records, already-trimmed/body-less records, batch limiting, idempotent reruns, and proof that retention no longer calls `profileRepository.listIds()`.
+
+Agent verification:
+- `bun install --frozen-lockfile` succeeded with the lockfile unchanged
+- focused history-retention/history-CAS/persistence tests: 44 pass, 0 fail
+- full backend suite: 1604 pass, 2 skip, 0 fail
+- backend syntax gate passed
+
+Implementation commit:
+`4e8d6d2923eff3d4e07f313b10f16a383ece8a24`
+
+PR:
+`#82 — fix(history): replace per-profile retention loop with a set-based pass`
+
+ChatGPT independently reviewed PR #82. The implementation correctly removes the per-profile service loop, preserves newest-N semantics per profile, keeps trim-only persistence behavior, ignores non-eligible records, and adds focused multi-profile regression coverage. The original PR-head Tracer CLI, Baseline Gate, and Phase 30 E2E + Load workflows were all green.
+
+Because `main` advanced after #79 and #80 were merged, ChatGPT synchronized current `main` into the #78 branch as merge commit `0dc1a88d6a19e489c31fa7f105ed1015f2f7802d`.
+
+During review, ChatGPT briefly changed the window sort to direct `sortBy: { startedAt: -1, _id: -1 }` based on the generic `$setWindowFields` sort syntax. MongoDB 7 CI correctly rejected that for `$documentNumber` with error code 5371602: `$documentNumber must be specified with a top level sortBy expression with exactly one element`. That review-only change was reverted in commit `187206b140128e654dccab876b5f3faa973f15af`, restoring the agent's original computed composite sort key. No failing review experiment remains in the final code.
+
+Actions:
+* replaced the N+1 per-profile retention loop with one set-based aggregation
+* preserved newest-N body retention independently per profile
+* preserved body trimming semantics and record retention
+* excluded running, hidden, already-trimmed, and body-less records from ranking
+* bounded each trim/write batch to 500 records
+* avoided an unjustified new index
+* added nine deterministic Mongo-backed retention tests
+* verified focused, full-backend, and syntax gates
+* opened PR #82 closing issue #78
+* ChatGPT reviewed the aggregation, history indexes, tests, and PR-head CI
+* synchronized current `main` into the branch
+* tested an alternative window sort in CI, observed the Mongo 7 rank-operator restriction, and reverted the review-only change
+* appended this implementation/audit record to the tracked transcript before merge
+
+Context:
+tool=agent harness + ChatGPT GitHub review
+branch=fix/78-set-based-history-retention
+implementation_commit=4e8d6d2923eff3d4e07f313b10f16a383ece8a24
+main_sync_commit=0dc1a88d6a19e489c31fa7f105ed1015f2f7802d
+review_revert_commit=187206b140128e654dccab876b5f3faa973f15af
+pr=82
+issue=78
+parent_agent=none
+
+
+## [2026-10-14] Make Minimization Job status transitions atomic (#76)
+
+Implementation Prompt:
+Work in Tracer:
+`C:\Users\arsat\Downloads\postman`
+
+Repo:
+`Sathvikar01/coderepo-react-node-postman`
+
+Fix GitHub issue **#76: Make Minimization Job status transitions atomic**.
+
+IMPORTANT:
+- PR #74 Phase 54 is being fixed separately.
+- Issue #79 may also be running in parallel.
+- Do NOT touch Change Safety, Local Runtime, Collection Runner, frontend, or CI files.
+- Create a separate branch from current `main`:
+  `fix/76-atomic-minimization-status`
+- Keep scope strictly limited to #76.
+
+## Problem
+
+Current Minimization repository updates match only:
+
+`{ ownerProfileId, jobId }`
+
+without checking the current job status.
+
+Late asynchronous completion, cancellation, failure, or recovery can overwrite an already-terminal result.
+
+Examples that must become impossible:
+
+`cancelled → completed`
+`completed → failed`
+`failed → completed`
+
+## Inspect first
+
+Read:
+
+- `backend/src/features/execution-intelligence/minimization.service.js`
+- `backend/src/features/execution-intelligence/minimization.repository.js`
+- `backend/src/features/execution-intelligence/minimization.model.js`
+- minimization tests
+- `backend/src/features/history/history.repository.js`
+
+Use History finalization as a reference for compare-and-set semantics.
+
+## Required design
+
+Implement atomic state transitions at the database boundary.
+
+Terminal transitions must require the expected source state:
+
+`running → completed`
+`running → failed`
+`running → cancelled`
+
+Prefer a repository API such as:
+
+`transition(ownerProfileId, jobId, expectedStatus, patch)`
+
+implemented using one conditional `findOneAndUpdate`.
+
+Do NOT:
+
+- read status and then update separately;
+- silently retry a stale terminal write;
+- allow terminal → terminal transitions;
+- weaken cancellation behavior;
+- change minimization algorithm semantics.
+
+## Race behavior
+
+If two operations race:
+
+### Completion vs cancellation
+
+Exactly one transition wins.
+
+The loser must:
+- detect that its expected-state update did not apply;
+- reload/return the canonical stored terminal result;
+- never overwrite the winner.
+
+### Completion vs interrupted recovery
+
+Recovery must not overwrite a job that completed concurrently.
+
+### Duplicate terminal writes
+
+A second terminal transition must be harmless and deterministic.
+
+## Tests
+
+Add deterministic concurrency tests.
+
+Cover at least:
+
+1. `running → completed`
+2. `running → failed`
+3. `running → cancelled`
+4. completion vs cancellation
+5. completion vs interrupted recovery
+6. terminal state cannot transition again
+
+Use barriers/deferred promises or repository doubles.
+Do not rely on arbitrary sleeps.
+
+Assert both:
+- returned API result;
+- persisted canonical status.
+
+## Preserve
+
+Do not change:
+
+- `MINIMIZATION_MAX_PROBES`
+- probe logic
+- failure predicate logic
+- Repro Capsule behavior
+- execution safety rules
+- existing public status vocabulary
+
+## Verification
+
+Run:
+
+- focused minimization tests
+- execution-intelligence tests
+- full backend test suite
+
+Fix only failures caused by this change.
+
+## Git
+
+Commit with tests.
+Push the branch.
+Open a PR that closes #76.
+
+Do NOT merge it.
+Do NOT modify PR #74 or #79 branches.
+
+## Final report
+
+Return only:
+
+- root cause
+- atomic transition design
+- race semantics
+- files changed
+- tests added
+- test results
+- commit SHA
+- PR link
+- whether #76 acceptance criteria are fully satisfied
+
+Agent Response Summary:
+Issue #76 was implemented on `fix/76-atomic-minimization-status`.
+
+The root cause was an unconditional repository update keyed only by `ownerProfileId` and `jobId`. Completion, failure, cancellation, and interrupted recovery could therefore race and let a stale terminal write overwrite a newer terminal state.
+
+The repository now exposes `transition(ownerProfileId, jobId, expectedStatus, patch)`, implemented as one conditional `findOneAndUpdate` whose filter includes the expected source status. The service adds a `finalize` helper that attempts the atomic transition and, if another writer already won, reloads and returns the canonical persisted record without retrying or overwriting it.
+
+All terminal service paths now require `running` as the source state:
+- running → completed
+- running → failed
+- running → cancelled
+- interrupted recovery → failed only if the job is still running
+
+Exactly one concurrent terminal writer can win. Losers observe a null conditional update, reload canonical state, and return the winner's result. Cancellation remains fail-closed and no minimization algorithm, probe, predicate, capsule, or execution-safety semantics were changed.
+
+Files changed:
+- `backend/src/features/execution-intelligence/minimization.repository.js`
+- `backend/src/features/execution-intelligence/minimization.service.js`
+- `backend/src/features/execution-intelligence/minimization.service.test.js`
+- `backend/src/features/execution-intelligence/minimization.repository.test.js`
+
+Tests cover running → completed/failed/cancelled, completion vs cancellation, completion vs interrupted recovery, refusal of late terminal transitions, repository filter shape, real-Mongo CAS behavior, and profile scoping. The race tests are deterministic and do not depend on arbitrary sleeps.
+
+Agent verification:
+- focused minimization tests: 14 pass, 0 fail
+- execution-intelligence suite: 182 pass, 1 skip, 0 fail
+- full backend suite: 1605 pass, 2 skip, 0 fail
+- `node --check` on all four changed files passed
+
+Implementation commit:
+`7ceff1d0d8df02857a5b0ac58da08e1d4a561625`
+
+PR:
+`#84 — fix(execution-intelligence): make minimization job status transitions atomic`
+
+ChatGPT independently reviewed PR #84. The repository CAS filter includes `status: expectedStatus` in the same atomic `findOneAndUpdate`, every production terminal service path uses `expectedStatus: "running"`, losers reload canonical state, and active-job cleanup still occurs in the existing `finally` path. The real-Mongo tests verify exactly-one-winner behavior and refuse stale terminal writes. The original implementation head had Tracer CLI, Baseline Gate, and Phase 30 E2E + Load all green.
+
+Because `main` advanced after issues #79, #80, and #78 were merged, ChatGPT synchronized current `main` into the branch as merge commit `8f943cc70d2f74978978b97ff2a655cc1be307a4`, preserving the original minimization implementation unchanged.
+
+Actions:
+* replaced unconditional MinimizationJob terminal writes with atomic compare-and-set transitions
+* routed completion, failure, cancellation, and interrupted recovery through one expected-state finalization helper
+* made concurrent losers reload canonical persisted state instead of retrying
+* preserved cancellation and minimization semantics
+* added deterministic service race tests and real-Mongo repository CAS tests
+* verified focused, execution-intelligence, full-backend, and syntax checks
+* opened PR #84 closing issue #76
+* ChatGPT reviewed the service lifecycle, repository filter, model, tests, and original PR-head CI
+* synchronized current `main` into the branch without altering the issue #76 patch
+* appended this implementation/audit record to the tracked transcript before merge
+
+Context:
+tool=agent harness + ChatGPT GitHub review
+branch=fix/76-atomic-minimization-status
+implementation_commit=7ceff1d0d8df02857a5b0ac58da08e1d4a561625
+main_sync_commit=8f943cc70d2f74978978b97ff2a655cc1be307a4
+pr=84
+issue=76
+parent_agent=none
+
+
+## [2026-10-14] Fix Phase 54 Change Safety CI and complete browser workflow (#74)
+
+Implementation Prompt:
+Work in the existing Tracer repository:
+
+`C:\Users\arsat\Downloads\postman`
+
+Repository:
+`Sathvikar01/coderepo-react-node-postman`
+
+Existing PR:
+`#74 — Phase 54: complete Change Safety browser workflow`
+
+Existing branch:
+`phase54/change-safety-browser-workflow`
+
+Do NOT create a new feature branch or a new PR. Continue the existing Phase 54 branch and fix its CI.
+
+## Current CI state
+
+At PR head:
+
+`334e9943908b906485d126a2bc94f33a9909ed9f`
+
+The checks are:
+
+- Tracer CLI: PASS
+- Baseline Gate: PASS
+- Phase 30 Locust load: PASS
+- Existing browser E2E: PASS
+- Direct proof-to-review browser flow: PASS
+- Phase 54 Change Safety browser flow: FAIL
+
+The failing GitHub Actions job is `browser-e2e`, specifically:
+
+`Complete Change Safety browser flow`
+
+The exact failure is:
+
+`Change Safety analysis timed out: Analysis failed: The source environment is bound to a different snapshot than the plan snapshot.`
+
+The browser test successfully completes all steps before analysis:
+
+- login
+- open Orders API
+- modify the existing `Content-Type` header
+- save the request
+- reopen workspace
+- open Change Safety
+- select Orders API
+- select baseline Revision v1
+- select Local as source
+- select Staging as target
+- explicitly allow mutating requests
+
+It fails only after clicking:
+
+`Analyze saved change`
+
+## Suspected root cause already identified
+
+Inspect:
+
+`backend/src/features/change-safety/change-safety.service.js`
+
+Phase 54 currently constructs the Phase 46 rehearsal plan approximately like this:
+
+```js
+rehearsalPlan = plan({
+    workspaceId,
+    snapshot: currentSnapshot,
+    source: {
+        ...
+        snapshotId: baselineSnapshot.snapshotId,
+        snapshotFingerprint: baselineSnapshot.snapshotFingerprint,
+        ...
+    },
+    target: {
+        ...
+        snapshotId: currentSnapshot.snapshotId,
+        snapshotFingerprint: currentSnapshot.snapshotFingerprint,
+        ...
+    },
+    ...
+});
+```
+
+But Phase 46 intentionally validates that any snapshot identity explicitly attached to the source or target side agrees with the frozen snapshot of the rehearsal plan.
+
+Inspect:
+
+`backend/src/features/rehearsal-planning/plan-builder.js`
+
+It deliberately fails closed when:
+
+```text
+side.snapshotFingerprint != plan.snapshot.snapshotFingerprint
+```
+
+The existing Phase 46 tests explicitly verify this invariant.
+
+Therefore:
+
+**Do not weaken, remove, bypass, special-case, or relax the Phase 46 snapshot identity check.**
+
+That would make CI green by breaking an existing safety invariant and is not acceptable.
+
+## Required investigation
+
+Before changing code, trace the identity semantics through:
+
+- `backend/src/features/change-safety/change-safety.service.js`
+- `backend/src/features/rehearsal-planning/plan-builder.js`
+- `backend/src/features/rehearsal-planning/plan-schema.js`
+- Phase 46 planner tests
+- Phase 41 cross-environment verification input
+- Phase 54 Change Safety tests
+- `frontend/scripts/change-safety-e2e.mjs`
+
+Determine exactly which identity means:
+
+1. selected historical baseline revision,
+2. current changed collection snapshot,
+3. source environment,
+4. target environment,
+5. frozen snapshot against which the rehearsal plan executes,
+6. before/after identities used only for change comparison / verification evidence.
+
+The likely architectural correction is:
+
+- keep the historical baseline snapshot for the saved-change diff and Phase 41 before/after verification evidence;
+- bind the Phase 46 rehearsal plan itself to the current changed snapshot;
+- when Phase 46 `source` and `target` carry snapshot identities, those identities must describe that same frozen rehearsal snapshot;
+- do not pretend the source environment itself is the historical collection baseline if Phase 46 uses `source` as one side of an environment move over one frozen collection snapshot.
+
+However, verify this against the existing contracts before implementing it.
+
+## Fix requirements
+
+Make the smallest architecture-correct fix.
+
+Do not:
+
+- weaken Phase 46 validation;
+- delete the failing browser assertion;
+- catch and ignore `SNAPSHOT_STALE`;
+- omit snapshot identity merely to bypass validation unless the existing contract proves omission is semantically correct;
+- hard-code Revision v1;
+- special-case Orders API, Local, or Staging;
+- change Phase 39/40/41/45/46/47 semantics just to satisfy Phase 54;
+- turn a fail-closed path into permissive behavior;
+- rewrite unrelated Change Safety UI;
+- modify existing frozen test evidence unnecessarily.
+
+Preserve this intended product chain:
+
+`saved change → Impact → Environment Drift → Contract → Rehearsal → Verification → Proof`
+
+React must continue to render backend-owned truth only.
+
+## Regression tests
+
+Add or update backend tests proving the Phase 54 composition correctly distinguishes:
+
+`baseline snapshot != current snapshot`
+
+while still producing a valid Phase 46 plan bound to the correct frozen snapshot.
+
+At minimum cover:
+
+### Historical baseline + current changed snapshot
+
+Given:
+
+```text
+baseline revision = v1
+current revision = v2
+source environment = A
+target environment = B
+```
+
+Phase 54 analysis must not fail merely because `v1 != v2`.
+
+The baseline/current difference is the change being verified.
+
+### Phase 46 invariant remains intact
+
+A genuinely stale/mismatched snapshot passed directly into Phase 46 must still fail with the existing snapshot-stale behavior.
+
+Do not alter the existing Phase 46 safety test to make the new test pass.
+
+### Identity propagation
+
+Assert the resulting Phase 54 plan, execution and verification evidence are bound to the intended:
+
+- workspace
+- collection
+- current snapshot/fingerprint where required
+- baseline snapshot where required for before/after comparison
+- source environment
+- target environment
+
+No identity should be silently dropped.
+
+## Browser acceptance
+
+Run the exact Phase 54 browser workflow.
+
+The following must all pass:
+
+1. Save an existing-header change through the browser.
+2. Open Change Safety.
+3. Select an older saved baseline revision.
+4. Select different source and target environments.
+5. Analyze successfully.
+6. Render all five stages:
+   - Impact
+   - Environment drift
+   - Rehearsal
+   - Contract
+   - Proof
+7. Generate a missing/stale contract from the source when required.
+8. Run the target rehearsal.
+9. Produce canonical verification state:
+   - VERIFIED
+   - BLOCKED
+   - NEEDS_REHEARSAL
+   - UNKNOWN
+10. Generate a Verification Proof.
+11. Open the generated proof in the existing canonical Verification Proof dialog.
+12. Preserve phone/tablet/desktop overflow checks.
+13. Produce no browser runtime errors.
+
+## Verification
+
+Run the relevant focused tests first.
+
+Then run the full Phase 54 and repository gates required by PR #74, including the same commands exercised by GitHub Actions.
+
+At minimum verify:
+
+- backend tests
+- frontend tests
+- production frontend build
+- Baseline Gate
+- existing Phase 30 browser E2E
+- direct proof-to-review flow
+- Phase 54 `change-safety-e2e.mjs`
+- load gate if required by the workflow
+- Tracer CLI gate
+
+Do not stop because local focused tests pass.
+
+The acceptance condition is the **exact PR head** having all required GitHub Actions green.
+
+## Git workflow
+
+Work only on the existing:
+
+`phase54/change-safety-browser-workflow`
+
+Commit the minimal fix with tests.
+
+Push it to PR #74.
+
+Do not merge PR #74.
+
+After pushing, inspect CI. If a check fails, read the actual failing logs and fix the root cause. Do not repeatedly rerun unchanged failures.
+
+## Final report
+
+Return:
+
+- root cause;
+- exact semantic distinction between baseline snapshot and rehearsal snapshot;
+- files changed;
+- tests added/changed;
+- local verification results;
+- commit SHA;
+- PR #74 head SHA;
+- GitHub Actions results;
+- whether PR #74 is fully green and merge-ready.
+
+Do not claim completion until the exact pushed head is green.
+
+Agent Response Summary:
+PR #74 was repaired on `phase54/change-safety-browser-workflow` and verified green at implementation head `2c52b5c99b6b588922f96a87242b48a4586f4100`.
+
+Two real Phase 54 composition bugs were fixed.
+
+1. `SNAPSHOT_STALE`: Phase 54 built the rehearsal plan with the overall plan snapshot bound to the current saved revision, while the source side was still bound to the historical baseline snapshot. Phase 46 intentionally models one frozen collection snapshot moving between environments, so this mismatch correctly failed closed. The fix binds both rehearsal sides to the same current frozen snapshot. The historical baseline remains only for the saved-change diff and Phase 41 before/after evidence. Phase 46 validation was not weakened.
+
+2. `REHEARSAL_CHECKPOINT_MISSING_IDENTITY`: the Phase 46C executor report carries the display-oriented `presentRun` representation with flattened identity, while the Phase 47 proof builder validates the canonical Phase 46B nested run identity. Phase 54 now reloads the canonical checkpoint through `checkpoints.getRun(profileId, rehearsal.runId)`, fails closed with `CHANGE_SAFETY_REHEARSAL_RUN_MISSING` if it cannot be reloaded, and sends that canonical run to the proof builder while preserving the presentation's `pendingStepIds`.
+
+Only these implementation/test files changed in the final CI-fix commit:
+- `backend/src/features/change-safety/change-safety.service.js`
+- `backend/src/features/change-safety/change-safety.test.js`
+
+Regression coverage proves:
+- both Phase 46 rehearsal sides bind to the same frozen current snapshot;
+- the real Phase 46 planner accepts the composed plan without `SNAPSHOT_STALE`;
+- the proof builder receives canonical nested Phase 46B identity rather than the flattened executor presentation;
+- missing canonical run state fails closed.
+
+Agent verification:
+- Change Safety tests: 10 pass, 0 fail
+- full backend suite: 1605 pass, 2 skip, 0 fail
+- real HTTP `/api/v1/change-safety/run`: 201 with generated `proof_...`
+- local Change Safety browser E2E: 12/12
+- backend `node --check`: passed
+- frontend production build: passed
+- seven local root-suite `client.test.js` failures were reproduced on clean pre-fix head and attributed to the local Windows/Bun environment; CI does not reproduce them
+- temporary local verification files were removed
+
+Implementation head:
+`2c52b5c99b6b588922f96a87242b48a4586f4100`
+
+Original failing head:
+`334e9943908b906485d126a2bc94f33a9909ed9f`
+
+PR:
+`#74 — Phase 54: complete Change Safety browser workflow`
+
+ChatGPT independently reviewed the final Phase 54 fix. The Phase 46 contract requires one frozen snapshot across the cross-environment rehearsal, so binding both source and target sides to the current snapshot is correct while the baseline remains part of the diff/Phase 41 source evidence. The Phase 47 proof builder explicitly resolves `input.run` before `execution.run` and validates it with the canonical Phase 46B identity parser, so reloading and supplying the canonical checkpoint is the correct boundary repair. The original implementation head had Tracer CLI, Baseline Gate, browser E2E, direct proof-to-review, Change Safety browser checks, and Locust load all green.
+
+Because `main` advanced after issues #79, #80, #78, and #76 were merged, ChatGPT synchronized current `main` into the Phase 54 branch as merge commit `5ab01887340f44e5eb1ef23e5b819c6af1cc27e5`, preserving the verified Phase 54 versions of all 17 files changed by PR #74 and retaining current-main changes elsewhere.
+
+Actions:
+* diagnosed the Phase 54 snapshot identity mismatch instead of relaxing Phase 46
+* separated historical baseline identity from the current frozen rehearsal snapshot
+* kept Phase 41 before/after evidence semantics intact
+* diagnosed flattened Phase 46B presentation identity crossing into the Phase 47 proof boundary
+* reloaded the canonical checkpoint run from the owning core
+* added fail-closed handling when the canonical rehearsal run cannot be reloaded
+* added regression tests for both composition bugs
+* ran focused Change Safety tests, full backend tests, HTTP verification, browser E2E, syntax, and frontend build
+* pushed implementation commit `2c52b5c99b6b588922f96a87242b48a4586f4100`
+* verified the exact implementation head green in GitHub Actions
+* ChatGPT independently reviewed the Phase 46/47 identity contracts and implementation
+* synchronized latest `main` into PR #74
+* appended this implementation/audit record to the tracked repository transcript before merge
+
+Context:
+tool=agent harness + ChatGPT GitHub review
+branch=phase54/change-safety-browser-workflow
+original_failing_head=334e9943908b906485d126a2bc94f33a9909ed9f
+implementation_commit=2c52b5c99b6b588922f96a87242b48a4586f4100
+main_sync_commit=5ab01887340f44e5eb1ef23e5b819c6af1cc27e5
+pr=74
+issue=71
+parent_agent=none
