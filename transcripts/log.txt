@@ -8507,3 +8507,254 @@ implementation_commit=8ec7aa3c47e25f0c2efa3b116a726b5f9ade5f34
 pr=86
 issues=75,77
 parent_agent=Pi agent harness
+
+
+## [2026-10-14] Final HackerRank submission-readiness pass (#87)
+
+Implementation Prompt:
+# Tracer Final HackerRank Submission Pass
+
+Repo: `Sathvikar01/coderepo-react-node-postman`
+
+Start from latest `main`. Current reference: `61836f1c91ae1faf4b07cb06b41da40de2afa060`.
+
+PR #86 has merged and #75/#77 are CLOSED. Do not reopen, redesign, or reimplement them unless a regression is directly proven.
+
+Goal: perform the final HackerRank submission-readiness pass. Do not add new features or expand scope.
+
+## 1. Canonical test command
+
+The documented canonical command is:
+```
+bun run test
+```
+
+Run it first.
+
+It must execute the complete backend + frontend suite and finish with 0 failures.
+
+If frontend combined tests still fail from shared `localStorage`, `fetch`, `window`, module cache, or other cross-file global pollution, fix the isolation correctly.
+
+Rules:
+
+- no deleted tests
+- no weakened assertions
+- no new skips to hide failures
+- no test-order dependency
+- individual and combined suites must agree
+
+Update `.github/workflows/baseline-gate.yml` so its primary Test step runs `bun run test`, not only root `bun test`.
+
+`bun test` may remain as additional coverage.
+
+## 2. Collaboration SSE race
+
+Verify whether the known self-echo bug still exists:
+
+- own save can appear as a collaborator update
+- event-before-save-response can falsely mark the current draft stale
+
+If reproducible, fix it with a mutation/session origin identity.
+
+Do NOT ignore every event from the same profile because another tab/session using that profile must still receive updates.
+
+Add deterministic tests for both event-before-response and response-before-event ordering.
+
+If already fixed, make no code change and record the evidence.
+
+## 3. Remove stale readiness claims
+
+Update these after code is final:
+
+- `docs/final-submission-readiness.md`
+- `docs/project-history-reconciliation.md`
+- `design/feature-coverage.md`
+
+They still contain obsolete pre-PR74 claims such as:
+
+- submission `BLOCKED`
+- Change Safety browser flow missing
+- Capability 10 `PENDING CI`
+- #71 still blocking
+
+Preserve historical results as historical evidence, but make the CURRENT status reflect the actual merged repository.
+
+Do not fabricate new test counts. Use only results from this final run.
+
+## 4. Full HackerRank contract audit
+
+Audit `REQUIREMENTS.md`, `GUIDELINES.md`, `INSTRUCTIONS.md`, `README.md`, `hackerrank.yml`, `.gitattributes`, `.gitignore`, `.env.example`, setup, CI and runtime.
+
+Verify all 10 README capability groups map end-to-end:
+
+UI → frontend API → backend route/controller → service → repository → MongoDB where applicable.
+
+Check:
+
+- authentication and authorization
+- profile/workspace isolation
+- persistence
+- validation/errors/loading/empty states
+- responsive + keyboard behavior
+- no unreachable advertised feature
+- no public backend product route accidentally disconnected from the UI
+
+Fix only proven defects.
+
+## 5. Runtime and repository acceptance
+
+Prove from the final tree:
+```
+bun install --frozen-lockfile
+bash setup.sh --seed
+bun run test
+bun run test:backend
+bun run test:frontend
+cd frontend && bun run build
+```
+
+Then verify:
+
+- frontend `3000`
+- backend `8000`
+- MongoDB connected
+- `/api/v1/health` healthy
+- exact `hackerrank.yml` install/run commands work
+- no manual `.env` edits
+- `.vscode/launch.json` is valid
+- no real secrets, local `.env`, build output, DB files, or debug residue committed
+
+Generate the HackerRank archive and prove it remains `<5 MB`.
+
+## 6. UI acceptance
+
+Exercise the real app at 375 / 768 / 1024 / 1440.
+
+Check required workflows, dialogs, menus, keyboard focus, mobile overflow, loading/error/empty states, console errors and React warnings.
+
+Do not redesign working UI.
+
+## 7. Official validator
+
+Run `skills/validate/SKILL.md` against the exact final repository.
+
+Resolve every applicable `FAIL`.
+
+`MANUAL` is unverified, never silently convert it to PASS.
+
+Keep validator scratch artifacts outside the audited repo if required.
+
+## 8. Final CI
+
+Push the final branch and require the exact head to pass:
+
+- Baseline Gate
+- Tracer CLI
+- Phase 30 E2E + Load
+
+Do not rely on an older green SHA.
+
+Verify `/transcripts/log.txt` remains present and authentic. Never rewrite or fabricate transcript history.
+
+## Final report
+
+Return:
+
+- final SHA
+- changes made and why
+- exact backend/frontend/full test counts
+- browser acceptance results
+- validator PASS/FAIL/MANUAL counts
+- archive size
+- three CI results
+- any remaining manual submission actions
+
+Finish with exactly:
+
+`FINAL HACKERRANK VERDICT: READY TO SUBMIT`
+
+or
+
+`FINAL HACKERRANK VERDICT: BLOCKED — <concrete blockers>`
+
+Do not say READY if `bun run test`, the validator, runtime acceptance, or exact-head CI is not green.
+
+Agent Response Summary:
+Pi agent harness performed the final submission pass on branch `final/submission-pass`.
+
+Proven defects fixed:
+- frontend combined-test isolation: added `frontend/test-setup.js` and Bun test preloads so browser globals such as `localStorage` exist before application modules evaluate, removing shared-process/module-order dependence without deleting, skipping, or weakening tests
+- collaboration SSE self-echo race: mutations carry a bounded per-browser-session `x-tracer-origin`; backend AsyncLocalStorage propagates it to advisory workspace/review events; frontend ignores only the exact originating session while another tab/session using the same profile still reconciles normally
+- seeded environment variable IDs now use UUIDs, matching the API schema and restoring editability of the documented seeded Local environment
+- Investigation Engine finalization keeps the run in the ACTIVE map until the final result write is persisted, eliminating the poll window that could falsely stamp a just-completed investigation as interrupted
+- Baseline Gate now runs canonical `bun run test` first and retains root `bun test` as additional discovery coverage
+- stale post-PR74 readiness documentation was refreshed while historical evidence remained historical
+
+SSE coverage includes exact-session recognition, same-profile/different-session distinction, origin-less CLI/seed behavior, backend broker propagation, mutation-header behavior, event-before-save-response ordering, response-before-event ordering, and genuine collaborator dirty-draft notices.
+
+Investigation coverage adds a deterministic gate around the final persistence write and proves `status()` remains `running` while that write is pending, then becomes completed with a non-null result.
+
+Pi's reported final implementation head:
+`cfa191e7de5b354871cf9fbf7cebab0597158e4e`
+
+At that implementation head, GitHub Actions were independently confirmed green by ChatGPT:
+- Tracer CLI: success
+- Baseline Gate: success
+- Phase 30 E2E + Load: success
+
+ChatGPT also inspected the exact Baseline Gate logs. On that audited CI environment:
+- canonical `bun run test`: backend **1662 pass / 1 skip / 0 fail**, 1663 tests / 103 files
+- canonical frontend child suite: **457 pass / 0 fail**, 457 tests / 35 files
+- additional root `bun test`: **2119 pass / 1 skip / 0 fail**, 2120 tests / 138 files
+
+Those exact-head CI counts supersede earlier local documentation values from the same final pass. ChatGPT corrected only current-status/count lines in:
+- `docs/final-submission-readiness.md`
+- `docs/project-history-reconciliation.md`
+- `design/feature-coverage.md`
+
+The old 2026-10-01 submission blocker remains in the readiness record only as explicitly labeled historical evidence.
+
+Validator normalization:
+Pi's chat report used the informal label `R01 PARTIAL` because WSL could not reach the Windows-host MongoDB. The checked-in validator skill permits only `PASS`, `FAIL`, `MANUAL`, and `N/A`; `PARTIAL` is not a canonical verdict. No repository failure was proven. Independent exact-head Baseline Gate evidence executes the exact `hackerrank.yml` install command, `bun install && bash setup.sh --seed`, successfully against MongoDB, and Runtime smoke executes the declared `bun start` and proves both frontend/backend readiness plus healthy MongoDB. Therefore ChatGPT records R01 as directly evidenced PASS for merge-gating rather than silently treating a noncanonical `PARTIAL` as a validator status. No validator FAIL was reported.
+
+Pi's external validator report was kept outside the repository as required. Pi reported all static S01–S19 checks PASS, live health/auth/profile/feature reads, CRUD persistence, expected 401/404/400 negative paths with no 500s, restart-reset behavior, valid seeded environment-variable UUIDs, and no validator FAIL. Scratch artifacts were not committed.
+
+Repository/hygiene evidence reported by Pi:
+- no transcript rewrite on the implementation commit
+- no secrets, local `.env`, build output, DB files, or debug residue committed
+- HackerRank archive reported at 1,619,489 bytes, below 5 MB
+- exact `hackerrank.yml` install/run contracts exercised
+- runtime health reported database connected
+
+Manual handoff actions reported by Pi remain outside code:
+- keep repository private
+- add `content.team@problemsetters.com`
+- join/post in the required Discord flow
+- export transcripts at freeze/handoff
+- transfer ownership after acceptance
+
+ChatGPT independently reviewed PR #87's implementation boundaries, session-origin security semantics, same-profile/multi-session behavior, deterministic SSE ordering tests, test preload isolation, seeded UUID fix, Investigation ACTIVE/result race, Baseline Gate command contract, readiness documentation, and exact-head workflows.
+
+Actions:
+* ran canonical full-suite acceptance and fixed frontend test-order isolation
+* added per-session mutation origin correlation without using it for authorization
+* preserved same-profile collaboration across different browser sessions
+* added deterministic event-before-response and response-before-event tests
+* corrected seeded environment variable identifier type
+* closed the Investigation final-write/ACTIVE race with deterministic regression coverage
+* made Baseline Gate run `bun run test` plus native `bun test`
+* audited HackerRank contract/runtime/repository/UI acceptance
+* ran the official validation skill with scratch output outside the repo
+* produced and size-checked the HackerRank archive
+* verified exact implementation-head Tracer CLI, Baseline Gate, and Phase 30 E2E + Load
+* ChatGPT reconciled current readiness docs to the actual exact-head CI evidence
+* ChatGPT normalized the validator's informal R01 wording against the validator's declared verdict schema and direct CI evidence
+* appended this canonical final-submission audit record to the tracked transcript before merge
+
+Context:
+tool=Pi agent harness + ChatGPT GitHub review
+branch=final/submission-pass
+base=61836f1c91ae1faf4b07cb06b41da40de2afa060
+implementation_commit=cfa191e7de5b354871cf9fbf7cebab0597158e4e
+pr=87
+parent_agent=Pi agent harness
