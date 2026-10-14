@@ -57,6 +57,9 @@ describe("workspace keyboard shortcuts", () => {
 	test("shortcuts stay inert while any modal on the dialog stack is open", () => {
 		// Audit regression: Ctrl+S saved the request behind the open "New example"
 		// dialog because that dialog was not in App's explicit open-dialog flags.
+		// The stack is module state shared by every test file in one `bun test`
+		// process, so compare against the size this test started with.
+		const before = dialogStackSize();
 		const token = { onClose: () => {} };
 		pushDialog(token);
 		try {
@@ -66,6 +69,6 @@ describe("workspace keyboard shortcuts", () => {
 		} finally {
 			popDialog(token);
 		}
-		expect(dialogStackSize()).toBe(0);
+		expect(dialogStackSize()).toBe(before);
 	});
 });
