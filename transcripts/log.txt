@@ -6252,3 +6252,570 @@ branch=polish/core-story-clarity
 pr=66 MERGED
 final_head=44114474ec349638a7810ee95ee7052dbe81d139
 merge_commit=8cebc8672c4936f22dfbafeac15851da8b617995
+
+
+## [2026-09-26T10:07:40+05:30] HackerRank submission-scope and compliance cleanup
+
+Implementation Prompt:
+Perform a final HackerRank submission-scope audit of Tracer against the actual repository requirements and submission rules before declaring it ready.
+
+Requirements:
+
+1. Verify the exported submission size
+- Build the exact Git archive that would be handed to HackerRank.
+- Confirm it is strictly below the 5 MB archive limit.
+- Add a CI guard so future changes cannot silently push the archive over the limit.
+
+2. Verify the 5–10 feature constraint
+- Inventory every currently shipped Tracer capability.
+- Distinguish true top-level product capabilities from supporting controls, dialogs, utilities, and sub-workflows.
+- If the product appears to exceed the allowed feature count, do not delete tested functionality merely to reduce the number.
+- Instead, group related supporting behavior under a maximum of 10 meaningful end-to-end capabilities that accurately describe the product.
+- Update README/reviewer-facing documentation so Tracer is presented consistently as exactly 10 core capabilities.
+
+3. Check end-to-end integration quality
+- Inspect the submission requirements that expect meaningful features to flow through UI → internal API/service → persistence/runtime rather than being frontend-only demos.
+- Pay special attention to cURL import, code-snippet generation, and generated collection documentation.
+- Where a feature currently relies too heavily on frontend-only logic, route the final authoritative operation through authenticated backend services while preserving fast local preview where useful.
+- Re-check workspace authorization on any new request-tool endpoints.
+- Keep the frontend presentation-only for backend-owned normalization/truth.
+
+4. Preserve HackerRank platform compliance
+- Do not add external hosted APIs, unapproved SDKs, or new dependencies.
+- Keep the application deterministic and self-contained.
+- Preserve the required single-session reviewer walkthrough.
+- Treat two-browser collaboration as optional local evidence, not a runtime requirement for the evaluator.
+- Do not change the frozen execution/persistence/security authority beyond the smallest integration fixes required for compliance.
+
+5. Verification
+Run the full acceptance matrix on the exact PR head:
+- full backend/frontend tests;
+- frontend production build;
+- backend syntax checks;
+- seed/reset and runtime smoke;
+- Phase 30 browser E2E;
+- direct Verification Proof → Review browser flow;
+- Tracer CLI;
+- load checks where already part of the standing gate;
+- exact archive-size check.
+
+6. Delivery
+- Report the final count of top-level capabilities and list them clearly.
+- State whether the repository now aligns with the HackerRank requirement/guideline documents.
+- Open a PR with the smallest necessary code/docs changes.
+- Merge only after the exact PR head is green.
+
+Agent Response Summary:
+Tracer was reconciled to exactly 10 submission-facing core capabilities without deleting the deeper tested product behavior. Supporting controls were grouped underneath those workflows, and README/reviewer copy was updated accordingly. Narrow backend-authority fixes were added for cURL import, code-snippet generation, generated documentation refresh, and workspace-checked request-tool endpoints; no new dependency or external service was introduced.
+
+The exact PR #67 head passed the standing repository gates, including 2,015 tests with 0 failures, Phase 30 browser E2E 14/14, direct Verification Proof → Review 6/6, CLI/build/runtime/load checks, and an exact HackerRank archive of 1,519,288 bytes, below 5 MB. PR #67, `Submission scope: define 10 core capabilities`, was merged into `main` as `a9f915992cd9ea6e328b4904d6573d0f882d2a26`.
+
+Result:
+- exactly 10 core capabilities documented
+- archive-size guard added and verified below 5 MB
+- required backend integration gaps closed
+- HackerRank requirement/guideline alignment re-verified
+- PR #67 merged
+
+
+## [2026-09-26T11:51:47+05:30] Final HackerRank compliance-record refresh
+
+Implementation Prompt:
+Refresh Tracer's final submission-readiness record so it describes the exact current repository state after the merged submission-scope cleanup rather than carrying stale freeze-era claims.
+
+Requirements:
+- Treat this as a documentation/evidence reconciliation only; do not change product behavior, dependencies, architecture, or runtime semantics.
+- Re-read the current HackerRank requirements, repository requirement documents, and the merged PR #67 state.
+- Update the final readiness document with the latest verified evidence for:
+  - exact 10-capability submission scope;
+  - exact archive size and <5 MB compliance;
+  - full test status;
+  - browser acceptance;
+  - direct Proof → Review acceptance;
+  - build/runtime/seed checks;
+  - internal API/backend-integration compliance;
+  - security/runtime constraints;
+  - single-session evaluator path;
+  - any remaining caveats that are real rather than historical.
+- Remove or qualify stale statements whose evidence refers to an older commit.
+- Do not claim evidence that was not actually run.
+- Open a docs-only PR and merge it only when the final record matches the verified repository state.
+
+Agent Response Summary:
+The stale final-readiness record was refreshed to the merged PR #67 state with current feature-scope, archive-size, browser, test, and single-session evidence. No product behavior or dependency changed. PR #68, `Refresh final HackerRank compliance record`, changed one documentation file and was merged as `7b07768f3dba1d2a274070e293c832ab69e80ed9`.
+
+A later exact-command validation of the resulting state reported 31 PASS and 0 FAIL, confirming that the compliance record matched the executable submission contract.
+
+Result:
+- stale freeze evidence reconciled
+- current compliance evidence recorded
+- docs-only PR #68 merged
+
+
+## [2026-09-27T21:29:17+05:30] Exact HackerRank install-contract verification and merge
+
+Review / Execution Prompt:
+Review PR #69, `CI: execute exact HackerRank install contract`, as the final validator-evidence gate before submission.
+
+Goal:
+Prove that Tracer succeeds under the literal install command declared to HackerRank, not merely under a stricter or near-equivalent local/CI command, and merge the PR only if that exact contract is demonstrated safely.
+
+Required checks:
+
+1. Exact install contract
+- Start from a clean checkout of the PR head.
+- Execute the literal `hackerrank.yml` install command:
+  `bun install && bash setup.sh --seed`
+- Confirm the command completes successfully.
+- Confirm it does not leave an unexpected lockfile/dependency mutation.
+- Afterward, run the stricter frozen-lockfile install check as an additional integrity gate rather than a substitute for the declared install command.
+
+2. Full submission verification
+Verify on the exact PR head:
+- full tests;
+- backend syntax;
+- frontend production build;
+- seed/reset behavior;
+- runtime smoke;
+- Tracer CLI;
+- exact submission archive size;
+- relevant browser/standing CI gates.
+
+3. Scope/risk review
+- Confirm the PR changes CI evidence only and does not alter product/runtime dependencies or application semantics.
+- Identify any remaining submission risk separately from the merge decision.
+- In particular, note environment-parity caveats such as the evaluator's Bun/Mongo versions without turning them into unsupported blockers if the declared contract itself passes.
+
+4. Merge rule
+- If the exact head is green and the literal install contract is proven, merge PR #69.
+- After merge, verify the `main` Baseline Gate so the final readiness claim is based on the merged commit, not only the PR branch.
+- Report the merge commit and final readiness state.
+
+Agent Response Summary:
+PR #69 closed the remaining validator-evidence gap by adding the literal HackerRank install command before the stricter frozen-lockfile check. A clean-checkout run succeeded, the lockfile remained valid, and the full tests/syntax/build/archive/seed/runtime/CLI evidence was green. The archive remained below 5 MB.
+
+The review found no product/runtime dependency change in the PR. Residual environment-parity caveats were limited to the evaluator-controlled Bun/Mongo environment and did not invalidate the demonstrated install contract. PR #69 was merged into `main` as `5cf93892fe4288f8b82165f7c478492bf5f8cfe8`, and the merged-main Baseline Gate passed with the exact install path included.
+
+Result:
+- literal `hackerrank.yml` install command proven
+- stricter frozen-lockfile integrity check retained
+- PR scope confirmed CI-only
+- PR #69 merged
+- merged-main Baseline Gate green
+
+## [2026-09-29T18:40:06+05:30] Restore the Figma workbench shell without losing later features
+
+Implementation Prompt:
+Restore Tracer's UI to the known-good Figma / Phase 30 workbench structure without removing or weakening any functionality added in later phases.
+
+Goal:
+The product must visually and structurally feel like the original Tracer workbench again, while preserving collaboration, versioning, Verification Proof, Reviews, Why?, Investigation, runner/history, and all backend behavior.
+
+Required work:
+
+1. Restore the shell geometry
+- Reinstate the permanent 76px command rail.
+- Reinstate the contextual 286px resource index.
+- Keep the request/response workspace as the main third pane.
+- Restore the resource index to exactly four primary slots:
+  Collections / History / Cookies / Examples.
+- Remove later shell additions that turned the rail/resource area into a second navigation system or visually departed from the Figma structure.
+
+2. Re-home later features instead of deleting them
+- Do not remove workspace switching, roles, member management, collaboration, activity, version compare/restore, Reviews, Verification Proof, or other later functionality.
+- Put workspace switching, Manage Workspace, New Workspace, Activity, and Reviews behind one compact Workspace command in the existing command rail.
+- Keep Activity inside the workspace-management experience.
+- Open Reviews contextually without creating a fifth or sixth permanent resource tab.
+- Preserve viewer fail-closed permissions and existing role behavior.
+
+3. Preserve product and backend contracts
+- No backend semantic changes unless required to repair a proven UI integration defect.
+- No dependency changes.
+- No persistence/schema changes.
+- No changes to HackerRank runtime/install contracts.
+- Preserve Verification Proof → Review, live review refresh, environments, collections, runner, history, Flight Recorder, collaboration, and versioning behavior.
+
+4. Visual and responsive acceptance
+Verify the restored shell in the real browser:
+- rail width = 76px;
+- resource index width = 286px;
+- canvas starts at x=362 on desktop;
+- resource tabs are exactly Collections / History / Cookies / Examples;
+- no full workspace picker inside the narrow rail;
+- no role badge occupying rail space;
+- compact Workspace command remains discoverable;
+- no horizontal overflow on desktop;
+- no horizontal overflow on mobile;
+- preserve keyboard/focus behavior and existing responsive rules.
+
+5. Regression verification
+Run:
+- Phase 24 two-browser collaboration;
+- Phase 24B collaboration/versioning acceptance;
+- Baseline Gate;
+- Tracer CLI;
+- Phase 30 browser E2E + load;
+- relevant frontend tests/build checks.
+
+6. Delivery
+- Keep the change narrowly focused on restoring the Figma workbench shell.
+- Remove any temporary visual/debug validation artifacts before merge.
+- Open a PR and merge only after the restored geometry and regression gates pass.
+
+Agent Response Summary:
+The Tracer shell was restored to the original Figma/Phase 30 structure: a 76px command rail, 286px resource index, and the main request/response canvas. The resource index returned to exactly Collections / History / Cookies / Examples, while workspace switching, management, activity, and Reviews were moved behind one compact Workspace command rather than being deleted.
+
+Later product functionality remained intact, including collaboration, role enforcement, activity/version links, compare/restore, Verification Proof → Review, Reviews, environments, collections, runner, history, and Flight Recorder. Visual geometry passed with no desktop/mobile overflow; Phase 24 collaboration passed 24/24, Phase 24B collaboration/versioning passed 29/29, and Baseline Gate, Tracer CLI, and Phase 30 browser E2E + load all passed.
+
+PR #70, `Restore Figma workbench shell without losing later features`, was merged into `main` as `bbe62602aa565e4157db4f7754923f312f041d7e`.
+
+Result:
+- Figma/Phase 30 workbench restored
+- later features preserved
+- responsive/overflow checks passed
+- collaboration/versioning regressions passed
+- PR #70 merged
+
+
+## [2026-10-01T00:44:04+05:30] Full UI / feature-coverage audit
+
+Implementation Prompt (generated from the user's instruction):
+You are performing the final full-product UI audit and integration pass for Tracer.
+
+Goal:
+Make Tracer feel like a complete real-world product where every shipped user-facing capability is visibly discoverable, correctly aligned, responsive, and usable end-to-end from the existing UI. Preserve the established Figma/Tracer workbench as the visual source of truth.
+
+Required work:
+
+1. Inventory the product
+- Read the current README, REQUIREMENTS.md, reviewer docs, and the shipped frontend/backend feature directories.
+- Build a complete inventory of every shipped core and supporting capability.
+- Map each user-facing capability to a real UI entry point.
+- Identify anything that exists only in backend/code, is hidden behind developer knowledge, or is only partially represented in the UI.
+
+2. Fix discoverability and complete missing workflows
+- Every shipped user-facing feature must be reachable naturally from the product UI.
+- Do not create a second navigation system or a new visual language.
+- Fit all additions into the existing Figma workbench and current command-rail/resource-panel patterns.
+- Complete the browser workflow for the change-safety chain:
+  Impact → Environment Drift → Rehearsal → Contract Compatibility → Verification Proof.
+- These must support the required generation/selection/action states, not only read-only inspection of previously recorded evidence.
+- Verification Proof and Why? may inspect canonical evidence, but the UI must also expose the actual upstream workflow needed to create that evidence.
+
+3. Preserve backend authority
+- The frontend must not re-derive or invent Impact, Drift, Rehearsal, Contract, Verification, or Proof truth.
+- React may call and render the canonical backend semantics only.
+- Reuse existing cores/services wherever possible.
+- Add the smallest API/UI wiring necessary to expose existing functionality cleanly.
+- Do not introduce new dependencies, a second execution engine, or unrelated architectural refactors.
+
+4. Perform a complete UI/UX audit
+Check and fix:
+- alignment, spacing, sizing, hierarchy, and visual consistency;
+- navigation and feature discoverability;
+- request/response tabs and state transitions;
+- forms on desktop and mobile;
+- account/workspace switching;
+- dialogs, sheets, menus, and overlays;
+- scrolling and overflow;
+- loading, empty, error, validation, disabled, success, and destructive states;
+- keyboard navigation, focus handling, Escape behavior, and accessible labels;
+- responsive behavior at 375, 768, 1024, and 1440 px;
+- dark/light themes where applicable;
+- browser console/runtime errors.
+
+5. Snapshot everything important
+- Capture current screenshots for all material pages, dialogs, feature states, and responsive breakpoints.
+- Include enough state coverage that a reviewer can visually verify every shipped capability.
+- Keep the screenshot output organized and generate an index/gallery.
+
+6. Verification
+- Run the full frontend test suite.
+- Run the full backend test suite.
+- Run the production frontend build.
+- Run targeted browser checks for every workflow changed in this pass.
+- Re-run the exhaustive full-UI browser audit after fixes.
+- Do not claim a feature is complete unless the browser path is actually exercised.
+
+7. Produce a repository-visible feature coverage report
+For every shipped feature, record:
+- feature/capability name;
+- UI entry point;
+- canonical backend/API/service authority;
+- persistence/evidence path;
+- browser-test coverage;
+- screenshot coverage;
+- status: complete / partial / backend-only / blocked.
+
+Acceptance gate:
+- No shipped user-facing capability is practically hidden or backend-only while being presented as an end-to-end product feature.
+- All major UI surfaces are visually coherent with the existing Figma workbench.
+- The Impact → Drift → Rehearsal → Contract → Verification Proof journey is usable from the browser without developer-only setup.
+- Responsive, keyboard, overflow, error-state, and console checks pass.
+- Full frontend/backend suites and production build pass.
+- The final feature coverage report and screenshot gallery are produced.
+- If any substantial gap remains, report it explicitly and do not mark the product as fully submission-ready.
+
+Keep the implementation bounded and verification-first. Fix what is actually broken, preserve existing working behavior, and do not broaden scope unnecessarily.
+
+At the end, report:
+- what you found;
+- what you fixed;
+- every user-facing workflow now reachable in the UI;
+- screenshot/browser evidence;
+- exact test/build results;
+- any remaining blocker.
+
+Agent Response Summary:
+Running: Open Tracer at http://localhost:3000/.
+
+The local coding-agent audit reported that feature navigation, alignments, mobile forms, keyboard handling, response tabs, and account-switch bugs were fixed. It produced a 139-capture screenshot gallery at `C:/Users/arsat/Downloads/postman-p44/output/playwright/full-ui-audit/index.html`; 19 browser checks passed; 427 frontend + 1,595 backend tests passed with 2 skipped; and the build passed. The feature coverage report was written to `C:/Users/arsat/Downloads/postman-p44/design/feature-coverage.md`.
+
+One substantial gap remained: Impact / Drift / Rehearsal / Contract generation did not yet have complete browser workflows. Verification Proof and Why? could inspect recorded evidence, but that did not constitute a complete browser generation workflow.
+
+Actions:
+* audited the full Tracer UI for feature discoverability and real-website presentation
+* fixed reported navigation, alignment, mobile-form, keyboard, response-tab, and account-switch issues
+* captured 139 current UI screenshots
+* ran 19 browser checks successfully
+* ran 427 frontend + 1,595 backend tests with 2 skipped
+* verified the production build passed
+* generated the local feature-coverage report
+* identified the remaining Impact / Drift / Rehearsal / Contract browser-workflow gap
+* ChatGPT verified that gap against the GitHub repository
+* created issue #71 to track the remaining browser-workflow work
+* updated the repository readiness record through PR #72
+* PR #72 was subsequently merged into main as `54604374d7ae6a2a5e46132d3e4992b9efc07566`
+
+Context:
+tool=local coding agent + ChatGPT GitHub verification
+repo_root=C:/Users/arsat/Downloads/postman-p44
+issue=71 OPEN
+pr=72 MERGED
+merge_commit=54604374d7ae6a2a5e46132d3e4992b9efc07566
+parent_agent=none
+
+
+## [2026-10-01] Project-history and readiness reconciliation
+
+Implementation / Audit Prompt:
+Reconcile Tracer's project history and submission-readiness record so a reviewer cannot misread phase order, phase coverage, verdicts, or test totals.
+
+Required work:
+
+1. Phase-history audit
+- Inspect the tracked transcript headings against the canonical roadmap and shipped phase reports.
+- Document where transcript append order differs from phase-number/dependency order.
+- Identify phase numbers with no dedicated transcript heading.
+- Distinguish intentionally skipped/unimplemented roadmap phases from implemented phases whose transcript entry is missing.
+- Do not fabricate missing history merely to make numbering continuous.
+- Correct any misleading roadmap heading that implies a different phase count than the table actually contains.
+
+2. PASS / BLOCKED reconciliation
+- Audit reviewer-facing documentation for historical or scoped PASS results that can be mistaken for the current whole-product verdict.
+- Preserve legitimate historical gate results for their exact commits/scopes.
+- State plainly that the current product/submission status is BLOCKED while the full Impact → Drift → Rehearsal → Contract Compatibility → Verification Proof generation path is not proven as one browser workflow.
+- Keep issue #71 open unless that browser gap is actually implemented and evidenced.
+- Scope README/reviewer claims so the ten capability groups are presented as submission grouping, not as a claim that all ten are complete browser end-to-end workflows.
+
+3. Test-count reconciliation
+- Explain the apparent change from 1822 pass / 2 skip to 1417 pass / 114 skip using the recorded command scope, file counts, and environment notes.
+- Verify whether the runs had the same denominator before describing the change as a regression.
+- Account for database-dependent test skipping under the recorded MongoDB/OOM instability.
+- Establish a rule that future reported counts include command, scope/directory, file count, and pass/skip/fail.
+
+4. Delivery
+- Add one repository-visible reconciliation document.
+- Update README, reviewer guide, final readiness report, and roadmap wording where needed.
+- Keep changes documentation-only; do not alter runtime/product semantics.
+- Open a PR, verify the claims are internally consistent, merge it, and report the final issue #71 state.
+
+Agent Response Summary:
+The repository history/readiness claims were reconciled without changing product behavior. A new `docs/project-history-reconciliation.md` documents the non-linear transcript ordering, identifies missing phase headings, separates intentionally unimplemented/skipped phases from implemented-but-unlogged phases, and records the roadmap-heading drift. Reviewer-facing docs now distinguish historical/scoped PASS results from the current BLOCKED product/submission verdict.
+
+The README no longer calls all 10 submission groups “end-to-end capabilities”; it explicitly treats them as scope grouping and states the known browser gap in capability 10. Issue #71 remains OPEN because the full Impact → Drift → Rehearsal → Contract → Verification Proof generation chain is still not proven as one browser workflow.
+
+The test-count discrepancy is documented as a scope/environment mismatch: Phase 48B recorded 1822 pass / 2 skip across a repo-wide 116-file run, while the later freeze recorded 1417 pass / 114 skip across a backend-only 90-file run on a host where MongoDB OOM-crashed. Database-backed suites intentionally skip when Mongo is unavailable, so the numbers cannot be compared as if 405 tests disappeared.
+
+PR #73, `Docs: reconcile phase history, readiness status, and test counts`, was merged into `main` as `fa66a64d3802613ae23b2ce3c5ec1231a55d7e09`.
+
+Actions:
+* added `docs/project-history-reconciliation.md`
+* documented phase-order anomalies and missing phase headings
+* corrected the misleading “26-phase” roadmap heading
+* scoped README and reviewer-guide end-to-end claims
+* reconciled historical PASS versus current BLOCKED status
+* explained the 1822/2 versus 1417/114 test-count difference
+* kept issue #71 open with explicit product-completeness wording
+* merged PR #73
+
+Context:
+tool=ChatGPT GitHub verification
+branch=audit/history-readiness-reconciliation
+pr=73 MERGED
+merge_commit=fa66a64d3802613ae23b2ce3c5ec1231a55d7e09
+issue=71 OPEN
+parent_agent=none
+
+
+## [2026-10-14] Fix concurrent first Local Runtime creation race (#79)
+
+Implementation Prompt:
+Work in Tracer:
+`C:\Users\arsat\Downloads\postman`
+
+Repo:
+`Sathvikar01/coderepo-react-node-postman`
+
+Fix GitHub issue **#79: Handle concurrent first Local Runtime creation safely**.
+
+IMPORTANT:
+- Phase 54 / PR #74 is being fixed by another agent in parallel.
+- Do NOT touch `phase54/change-safety-browser-workflow`.
+- Do NOT modify Change Safety, rehearsal, verification, frontend, or CI files.
+- Create a separate branch from current `main`, e.g. `fix/79-local-runtime-create-race`.
+- Keep the change narrowly scoped to #79.
+
+## Problem
+
+Current Local Runtime update flow is effectively:
+
+`findByProfile → missing → create`
+
+Two concurrent first-time updates can both observe no record.
+One Mongo insert succeeds and the other can throw duplicate-key error.
+
+A duplicate-key race is expected concurrency behavior, not a server error.
+
+## Inspect first
+
+Read:
+- `backend/src/features/local-runtime/local-runtime.service.js`
+- `backend/src/features/local-runtime/local-runtime.repository.js`
+- `backend/src/features/local-runtime/local-runtime.model.js`
+- `backend/src/features/local-runtime/local-runtime.service.test.js`
+
+Also inspect existing revision/CAS conventions elsewhere before choosing semantics.
+
+## Required behavior
+
+Preserve the unique `ownerProfileId` constraint.
+
+For first creation:
+
+1. Try the normal create.
+2. If create succeeds, return it.
+3. If it fails specifically because another request concurrently created the row:
+   - fetch the canonical row now stored;
+   - never expose raw Mongo duplicate-key details;
+   - reconcile using existing revision/CAS semantics.
+4. If the concurrent winner represents an incompatible update, return the existing typed:
+   `LOCAL_RUNTIME_CHANGED`
+5. Do not catch unrelated database errors.
+
+Do NOT weaken revision checks.
+
+## Concurrency contract
+
+Two concurrent first updates must result in:
+
+- exactly one LocalRuntimeSetting document;
+- no raw duplicate-key/500 error;
+- deterministic public behavior;
+- revision remains valid and monotonic.
+
+Compatible concurrent requests may return the canonical record if that matches existing semantics.
+
+Conflicting requests should fail cleanly with:
+`LOCAL_RUNTIME_CHANGED`
+
+## Tests
+
+Add deterministic tests for:
+
+### Same first update concurrently
+Two equivalent first writes race.
+
+Assert:
+- one canonical document;
+- both calls have valid API-level outcomes;
+- no duplicate-key leak.
+
+### Different first updates concurrently
+Two conflicting first writes race.
+
+Assert:
+- one wins;
+- loser gets `LOCAL_RUNTIME_CHANGED`;
+- stored state equals the winner;
+- no silent overwrite.
+
+### Non-duplicate DB error
+Inject another repository/create failure.
+
+Assert it is NOT converted to `LOCAL_RUNTIME_CHANGED`.
+
+Avoid timing-only flaky tests.
+Use barriers/deferred promises or controlled repository doubles where useful.
+
+## Verification
+
+Run:
+- Local Runtime focused tests
+- relevant backend tests
+- full backend test suite
+
+Do not modify unrelated failing tests to make the branch green.
+
+## Git
+
+Commit the fix with tests.
+Push the new branch.
+Open a PR that closes #79.
+
+Do NOT merge it.
+Do NOT modify PR #74.
+
+## Final response
+
+Report only:
+- root cause
+- concurrency semantics chosen
+- files changed
+- tests added
+- test results
+- commit SHA
+- PR link
+- whether #79 acceptance criteria are fully satisfied
+
+Agent Response Summary:
+The Local Runtime first-create race was fixed on branch `fix/79-local-runtime-create-race`. The root cause was the non-atomic `findByProfile → missing → create` path: two requests with `expectedRevision: 0` could both observe no row, then race the unique `ownerProfileId` insert and leak raw Mongo E11000 from the loser.
+
+The implementation preserves the unique `ownerProfileId` index and all existing revision/CAS checks. A normal first create still returns directly. If create loses specifically to the `ownerProfileId` duplicate-key race, the service reloads the canonical row. Equivalent logical settings return that canonical row idempotently; conflicting settings return the existing typed `LOCAL_RUNTIME_CHANGED` 409. Unrelated duplicate keys and non-duplicate database errors still propagate unchanged.
+
+Deterministic barrier-based tests cover equivalent first writes, conflicting first writes, monotonic revision after the race, unrelated database failures, and duplicate keys on unrelated indexes. Focused Local Runtime tests passed 36/36, and the full backend suite passed 1600 with 2 skipped and 0 failures. Prettier and syntax checks were clean.
+
+ChatGPT independently reviewed PR #83 before merge. The diff is limited to the Local Runtime service and tests, the Mongoose model confirms `ownerProfileId` is the only explicit unique application index, the existing conditional replace/CAS path is unchanged, and the new concurrency tests do not rely on sleeps. On implementation head `4e9ee6394c6db74ad50dea614da04bc76711a77f`, Tracer CLI, Baseline Gate, and Phase 30 E2E + Load all passed.
+
+Actions:
+* diagnosed the first-create TOCTOU race
+* preserved the existing unique index and revision/CAS contract
+* added duplicate-key reconciliation only for the first-create race
+* made equivalent concurrent first writes idempotent
+* made conflicting concurrent first writes fail with `LOCAL_RUNTIME_CHANGED`
+* preserved unrelated database errors
+* added deterministic race regression tests
+* ran 36 focused Local Runtime tests successfully
+* ran 1600 backend tests with 2 skipped and 0 failures
+* verified formatting and syntax gates
+* opened PR #83 closing issue #79
+* ChatGPT reviewed the PR diff, model/index assumptions, tests, and PR-head CI
+* appended this implementation/audit record to the tracked transcript before merge
+
+Context:
+tool=local coding agent + ChatGPT GitHub review
+branch=fix/79-local-runtime-create-race
+implementation_commit=4e9ee6394c6db74ad50dea614da04bc76711a77f
+pr=83
+issue=79
+parent_agent=none
