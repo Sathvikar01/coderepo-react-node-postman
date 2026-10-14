@@ -51,6 +51,7 @@ import { ProductDialog } from "./features/product/ProductDialog.jsx";
 import { DEFAULT_PRODUCT_SURFACE } from "./features/product/product-content.js";
 import { RequestBuilder } from "./features/requests/RequestBuilder.jsx";
 import { MaterialIcon } from "./shared/components/MaterialIcon.jsx";
+import { dialogStackSize } from "./shared/components/dialog-stack.js";
 import {
 	clearProfileSession,
 	clearSession,
@@ -73,7 +74,12 @@ import {
 	workspaceReducer,
 } from "./features/workspace/workspace-reducer.js";
 import { useExecutionReconciliation } from "./features/workspace/useExecutionReconciliation.js";
-import { isExecutionActive, tabKeyIntent, workspaceHasUnsettledWork } from "./features/workspace/workspace-workflow.js";
+import {
+	isExecutionActive,
+	tabKeyIntent,
+	workspaceHasUnsettledWork,
+	workspaceShortcutIntent,
+} from "./features/workspace/workspace-workflow.js";
 import { WorkspaceDialogs } from "./features/workspace/WorkspaceDialogs.jsx";
 import { RemoteChangeBanner } from "./features/versions/RemoteChangeBanner.jsx";
 import { useWorkspaceEvents } from "./features/versions/useWorkspaceEvents.js";
@@ -1272,16 +1278,13 @@ export default function App() {
 
 	useEffect(() => {
 		const onKeyDown = (event) => {
-			const meta = event.metaKey || event.ctrlKey;
-			if (!meta || shortcutHandlers.current.dialogOpen) return;
-			if (event.key === "Enter") {
-				event.preventDefault();
-				shortcutHandlers.current.send?.();
-			}
-			if (event.key.toLowerCase() === "s") {
-				event.preventDefault();
-				shortcutHandlers.current.saveDraft?.();
-			}
+			// Every modal registers on the dialog stack, including the example, docs,
+			// versions, and workspace dialogs that the flags above do not track.
+			const dialogOpen = shortcutHandlers.current.dialogOpen || dialogStackSize() > 0;
+			const intent = workspaceShortcutIntent(event, { dialogOpen });
+			if (intent) event.preventDefault();
+			if (intent === "send") shortcutHandlers.current.send?.();
+			if (intent === "save") shortcutHandlers.current.saveDraft?.();
 		};
 		window.addEventListener("keydown", onKeyDown);
 		return () => window.removeEventListener("keydown", onKeyDown);
