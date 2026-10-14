@@ -5,13 +5,16 @@
 // dialog stack closes its top entry and every Modal only prevents the browser's
 // own close. The logic stays DOM-light so it is regression-testable.
 
+const TRANSIENT_SURFACES = ".menu, .select-menu-list";
+
 const stack = [];
 let listening = false;
 
 function handleEscapeKey(event) {
 	if (event?.key !== "Escape") return;
-	// An open menu (or similar transient surface) consumes the Escape first.
-	if (typeof document !== "undefined" && document.querySelector && document.querySelector(".menu")) return;
+	// An open menu or select listbox (or similar transient surface) consumes the
+	// Escape first, so closing a select inside a dialog leaves the dialog open.
+	if (typeof document !== "undefined" && document.querySelector && document.querySelector(TRANSIENT_SURFACES)) return;
 	const top = stack[stack.length - 1];
 	if (!top) return;
 	event.preventDefault?.();
