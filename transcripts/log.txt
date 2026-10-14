@@ -7841,3 +7841,338 @@ main_sync_commit=5ab01887340f44e5eb1ef23e5b819c6af1cc27e5
 pr=74
 issue=71
 parent_agent=none
+
+
+## [2026-10-14] Full UI functional audit and workbench polish (#85)
+
+Implementation Prompt:
+Work in Tracer:
+`C:\Users\arsat\Downloads\postman`
+
+Repo:
+`Sathvikar01/coderepo-react-node-postman`
+
+Create a branch from latest `main`:
+`audit/ui-functional-polish`
+
+Goal: audit the entire existing Tracer frontend in a real browser, find broken/incomplete UI behavior, fix verified problems, and polish the product without redesigning its established visual identity.
+
+## Parallel-work boundaries
+
+Other agents are working on PR #74 and issues #75–#80.
+
+Do NOT modify:
+- Change Safety / PR #74 implementation
+- backend files
+- root/package test scripts
+- GitHub Actions
+- Local Runtime backend
+- Minimization backend
+- History retention backend
+- Collection Runner backend
+
+You may inspect Change Safety but do not edit it.
+
+## Required skills/tools
+
+Use these exact skills where available:
+
+1. `anthropics/frontend-design`
+2. `nextlevelbuilder/ui-ux-pro-max`
+3. `pbakaus/impeccable`
+4. `pbakaus/impeccable:init`
+5. `pbakaus/impeccable:audit`
+6. `pbakaus/impeccable:shape`
+7. `pbakaus/impeccable:layout`
+8. `pbakaus/impeccable:typeset`
+9. `pbakaus/impeccable:colorize`
+10. `pbakaus/impeccable:polish`
+11. `pbakaus/impeccable:harden`
+12. `pbakaus/impeccable:delight`
+13. `emilkowalski/emil-design-eng`
+14. `emilkowalski/animate`
+15. `emilkowalski/review-animations`
+16. `emilkowalski/improve-animations`
+17. `emilkowalski/find-animation-opportunities`
+18. `vercel-labs/web-design-guidelines`
+19. `Leonxlnx/design-taste-frontend`
+20. Matt Pocock `codebase-design`
+21. `react-best-practices`
+22. `agent-browser-verify`
+23. Microsoft `playwright-mcp`
+24. Unlumen UI via `@computer-use`
+
+If a named skill is unavailable, do not install random substitutes. Apply its intended review manually.
+
+## Skill routing
+
+Do NOT let every visual skill redesign independently.
+
+Use this sequence:
+
+`Playwright baseline → Impeccable audit → codebase-design → frontend-design/ui-ux-pro-max → implementation → web-design-guidelines → animation review → Playwright verification → Impeccable polish/harden`
+
+Use Unlumen only for interaction/pattern inspiration, not for copying a new design language.
+
+## Preserve Tracer identity
+
+Do NOT redesign the app.
+
+Preserve:
+- Graphite + Electric Mint + Bone visual system
+- Tracer waveform/pulse identity
+- Phase 30 workbench structure
+- icon rail → contextual resource sidebar → dense request/response canvas
+- compact keyboard-first controls
+- resizable request/response workflow
+- existing product terminology and information architecture
+
+## Audit in a real browser
+
+Test at:
+
+- 1440px
+- 1024px
+- 768px
+- 375px
+
+Capture baseline screenshots before edits.
+
+Exercise every reachable frontend flow, not just static screenshots.
+
+Audit:
+
+- login/profile selection
+- collections/resource tree
+- request tabs
+- request editor
+- headers/query/body/auth inputs
+- environment selection
+- save/dirty-state behavior
+- send/cancel flows
+- response viewer
+- history
+- Passport
+- Compare
+- Minimize
+- Repro Capsule
+- Runner
+- Investigation/Proof surfaces
+- dialogs/modals
+- dropdowns/select menus
+- keyboard shortcuts
+- loading/empty/error states
+- focus restoration
+- disabled states
+- responsive behavior
+
+## Find functional defects first
+
+Look for:
+
+- buttons that do nothing
+- stale state after navigation
+- broken saves
+- hidden controls
+- bad focus behavior
+- keyboard traps
+- incorrect disabled states
+- dialogs that cannot close correctly
+- dropdown/menu positioning bugs
+- overflow/clipping
+- mobile unusability
+- inaccessible labels
+- missing error/loading feedback
+- duplicate actions
+- stale request/response rendering
+- console/runtime errors
+- React warnings
+- broken links/navigation
+- inconsistent dirty-state behavior
+
+Fix confirmed defects before visual polish.
+
+## Visual audit
+
+Then inspect:
+
+- hierarchy
+- spacing
+- alignment
+- typography
+- contrast
+- density
+- borders
+- surface hierarchy
+- selected/hover/focus states
+- empty/error/loading states
+- responsive layout
+- modal sizing
+- long text/JSON overflow
+- animation quality
+
+Do not introduce generic SaaS-card styling or excessive gradients/rounding.
+
+## Animation
+
+Use motion only where it improves state understanding.
+
+Review existing animations with:
+`review-animations`
+
+Use:
+`improve-animations`
+and
+`find-animation-opportunities`
+
+only for justified interactions.
+
+Respect `prefers-reduced-motion`.
+
+## Accessibility
+
+Verify:
+
+- keyboard-only operation
+- visible focus
+- semantic controls
+- labels
+- ARIA where needed
+- focus return from dialogs
+- no keyboard traps
+- useful accessible names
+- sufficient contrast
+
+## Testing
+
+For every fixed bug, add the smallest meaningful regression test.
+
+Run:
+- frontend unit tests
+- frontend build
+- existing frontend/browser E2E relevant to changed surfaces
+
+Use Playwright/CDP to manually verify critical repaired flows.
+
+Do not weaken an existing test to make a visual change pass.
+
+## Scope discipline
+
+Prefer small local fixes.
+
+Do not perform a framework rewrite.
+Do not replace the visual system.
+Do not refactor unrelated files.
+Do not modify APIs.
+Do not change backend behavior.
+
+If you find a backend-only defect, document it instead of fixing it on this branch.
+
+## Git
+
+Commit coherent frontend fixes.
+Push the branch.
+Open one PR for the UI audit.
+
+Do NOT merge it.
+
+## Final report
+
+Return:
+- surfaces audited
+- defects found
+- defects fixed
+- issues intentionally deferred
+- skill/tool usage
+- screenshots compared
+- accessibility findings
+- responsive results
+- console/runtime status
+- frontend test/build/E2E results
+- files changed
+- commit SHA
+- PR link
+
+Agent Response Summary:
+Claude Code performed the UI audit in a separate worktree, `C:\Users\arsat\Downloads\postman-ui-audit`, initially branched from main at `d82091a`. It kept the audit frontend-only and preserved Tracer's Graphite + Electric Mint + Bone workbench identity.
+
+Claude audited sign-in/profile selection, collections, request tabs/editor, environment picker, save/dirty behavior, send/response flows, History, Passport, Compare, Minimize, Repro Capsule, Why?, Investigate, Runner, Verification Proof, Import, Code, Example, Local Runtime, Manage Workspace, help/product dialogs, loading/empty states, and responsive layouts at 1440, 1024, 768, and 375px in both dark and light themes.
+
+Verified defects fixed included:
+- 22 referenced MaterialIcon names with no glyph, leaving multiple controls invisible
+- rail Help/Workspace menus opening off-screen
+- desktop request canvas displacement from the overlay scrim entering the grid
+- Ctrl/Cmd+S and Ctrl/Cmd+Enter acting behind open dialogs
+- Escape inside a select closing the containing dialog
+- clipped key/value row actions
+- overflowing History actions plus missing loading/empty states
+- Why? and Product dialogs losing their intended widths
+- phone URL field overlapping Send
+- phone command bar clipping Variables/Runtime
+- sign-in headline overlap on short wide screens
+- rail environment dropdown opening below the viewport
+- tab-strip scrollbar, avatar alignment, and touch-tooltip issues
+
+Polish retained the existing visual language while improving the rail environment label, JSON default expansion, History typography/action alignment, scratch-request link placement, phone request-title layout, text-button icon alignment, and Verification Proof headline treatment.
+
+Claude added/extended 24 frontend regression tests and verified the frontend build plus local browser suites: Phase 30 E2E 14/14, direct-review-promotion E2E 6/6, and Phase 24 E2E 24/24. Its responsive sweep covered all eight width/theme combinations with no page overflow, inner horizontal scrolling, empty icon controls, console errors, React warnings, or keyboard traps.
+
+Skill usage reported by Claude Code:
+- used Impeccable context/audit/craft-floor/mechanical-detector guidance, frontend-design, ui-ux-pro-max, emil-design-eng, and web-design-guidelines
+- skipped Impeccable init/shape because they target new-design setup
+- unavailable tools/skills were not replaced with random installs; browser verification used the repo's Chrome/CDP style
+- Unlumen inspiration was not used
+
+Initial audit commits:
+- `916659c`
+- `c6e047a`
+- `3587cbd`
+- `9be6d77`
+- `8ad8d3c480c8395b4be764c43c8bc0634529c573`
+
+CI follow-up:
+The first Baseline Gate run exposed a test-isolation bug in Claude's new shortcut regression: the test asserted the dialog stack returned to absolute size zero, but an existing main-branch test leaves one dialog on the module-global stack when the whole suite shares a process. Claude changed the assertion to restore the starting stack size, reproduced the leaked-stack condition locally, and pushed fix commit `b3bb10f`.
+
+PR #74 then merged to main and caused PR #85 to conflict. Claude merged current main into the audit branch as `4f72af0b195d87bc356aa27237f423570f9ffbfc`, keeping both the Phase 54 and UI-audit contracts. The merge surfaced six Phase 54 icon names with no registered glyph; Claude added those glyphs only to the shared MaterialIcon registry and left Change Safety implementation files untouched. The registry regression test now covers them.
+
+Local post-merge verification reported 2066 passing tests, with only the known local Windows/Bun test-order failures that also reproduce on main. Frontend build passed.
+
+ChatGPT independently reviewed PR #85 after the Claude Code follow-up. The branch is 0 commits behind current main, the overlap resolution preserves the merged Phase 54 App/Header/design-contract changes, menu placement is viewport-bounded, menu keyboard navigation/focus restoration is explicit, dialog Escape handling respects open transient menus/listboxes, global send/save shortcuts consult the shared dialog stack, and the MaterialIcon registry test catches missing literal icon references.
+
+On head `4f72af0b195d87bc356aa27237f423570f9ffbfc`, GitHub Actions are fully green:
+- Tracer CLI: success
+- Baseline Gate: success
+- Phase 30 browser E2E: success
+- direct proof-to-review flow: success
+- Complete Change Safety browser flow: success
+- Locust load: success
+
+Deferred findings remain intentionally out of this frontend-only PR:
+- self-echo collaboration notices need backend/session origin identity
+- phone Code/header environment controls need a deliberate URL-bar layout decision
+- existing frontend test-isolation issues are separate from the UI audit
+
+Actions:
+* audited the full existing frontend in a real browser across desktop/tablet/phone sizes and dark/light themes
+* fixed 13 confirmed functional/responsive/accessibility defects
+* added targeted regression tests for each defect class
+* performed a constrained polish pass without redesigning Tracer
+* verified keyboard focus, responsive overflow, and console cleanliness
+* added an icon-registry contract preventing glyphless MaterialIcon controls
+* fixed the CI-sensitive shortcut test to restore its starting dialog-stack state
+* merged current main/Phase 54 into the branch and kept both contract sets
+* added six newly required Phase 54 glyphs without editing Change Safety implementation
+* verified build and local browser suites
+* Claude Code appended its local transcript notes; ChatGPT recorded the canonical repository transcript entry here
+* ChatGPT independently reviewed the shared interaction primitives, Phase 54 overlap resolution, and exact PR-head CI
+* final PR head before transcript append was fully green and 0 commits behind main
+
+Context:
+tool=Claude Code + ChatGPT GitHub review
+branch=audit/ui-functional-polish
+initial_base=d82091ad7e8c728c4538bb2aeb59f9d57708198e
+initial_audit_head=8ad8d3c480c8395b4be764c43c8bc0634529c573
+ci_fix_commit=b3bb10f
+main_sync_head=4f72af0b195d87bc356aa27237f423570f9ffbfc
+pr=85
+parent_agent=Claude Code
