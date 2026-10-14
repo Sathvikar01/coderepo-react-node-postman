@@ -5,6 +5,8 @@ Branch: `main`
 
 This is the repository-visible coverage map for the ten submission capability groups. It distinguishes UI reachability from backend authority and names the browser/screenshot evidence rather than treating code existence as product coverage.
 
+Final submission gate: **Baseline Gate, Tracer CLI, and Phase 30 E2E + Load are green on the final submission pass.**
+
 Status vocabulary:
 - **COMPLETE** — user-facing entry point exists and the capability is exercised through tracked browser/API/tests.
 - **TARGETED** — shipped and reachable, with targeted rather than one monolithic browser suite.
