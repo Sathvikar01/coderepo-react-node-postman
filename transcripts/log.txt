@@ -7046,3 +7046,228 @@ main_sync_commit=4938426a123135e2340222f8000de723b9065c87
 pr=81
 issue=80
 parent_agent=none
+
+
+## [2026-10-14] Replace per-profile History retention loop with set-based database work (#78)
+
+Implementation Prompt:
+Work in Tracer:
+`C:\Users\arsat\Downloads\postman`
+
+Repo:
+`Sathvikar01/coderepo-react-node-postman`
+
+Fix GitHub issue **#78: Replace per-profile History retention loop with set-based database work**.
+
+IMPORTANT:
+- PR #74, #79, and #76 may be running in parallel.
+- Do NOT touch Change Safety, Local Runtime, Minimization, Collection Runner, frontend, or CI.
+- Create a separate branch from current `main`:
+  `fix/78-set-based-history-retention`
+- Keep scope strictly limited to #78.
+
+## Current problem
+
+`historyService.retentionPass()` currently does roughly:
+
+`list every profile → query history separately for each profile → trim excess bodies`
+
+This creates an N+1 maintenance pattern.
+
+Maintenance cost grows with total profile count even when almost no history records need cleanup.
+
+Current relevant files:
+
+- `backend/src/features/history/history.service.js`
+- `backend/src/features/history/history.repository.js`
+- History model/tests
+- execution retention config/limits
+
+## Goal
+
+Remove the per-profile maintenance loop while preserving:
+
+- newest N retained response bodies **per profile**
+- history metadata
+- expiration semantics
+- visibility rules
+- bounded maintenance work
+- secret/data handling behavior
+
+Do NOT change the configured retention policy itself.
+
+## Inspect first
+
+Understand:
+
+- `retainedBodyRecords`
+- `selectBodyCandidates`
+- `trimBodies`
+- history indexes
+- current sort order
+- hidden/expired records
+- terminal/running semantics
+
+Check whether MongoDB aggregation/window operators available in the project's Mongo version can safely express per-profile ranking.
+
+## Required design
+
+Implement a set-based repository operation that finds only body records eligible for trimming.
+
+Preferred semantics:
+
+For each profile independently:
+
+1. consider eligible visible terminal records with stored response bodies;
+2. order newest first using the existing deterministic ordering;
+3. retain the newest configured N;
+4. select only records beyond N;
+5. trim those records.
+
+Do this without first enumerating every profile.
+
+Use bounded batches so one maintenance tick cannot process an unlimited number of records.
+
+Possible implementation:
+- Mongo aggregation with partition/rank per `ownerProfileId`;
+- or another genuinely set-based query.
+
+Do NOT merely move the existing profile loop into another service function.
+
+## Preserve trim behavior
+
+Eligible records should still be updated to the existing retention form, e.g.:
+
+- response body cleared
+- `truncated: true`
+- `omittedReason: "retention"`
+
+Do not delete the history record.
+
+Do not trim:
+- active/running records;
+- already-empty bodies;
+- records that belong within that profile's newest-N retained-body allowance.
+
+## Tests
+
+Add deterministic multi-profile tests.
+
+Cover:
+
+1. Profile A has fewer than N records → nothing trimmed.
+2. Profile A has N+K records → only oldest K trimmed.
+3. Profile B's records do not affect Profile A's allowance.
+4. Multiple profiles with excess records are handled in one pass.
+5. Running/non-terminal records are ignored.
+6. Already-trimmed/empty-body records are ignored.
+7. Batch limit prevents unbounded work.
+8. Re-running retention is idempotent.
+
+Also assert `profileRepository.listIds()` is no longer used by retention.
+
+## Performance correctness
+
+If the query needs an index, inspect existing indexes first.
+
+Add an index only if justified by the actual query shape.
+Do not add speculative indexes.
+
+## Verification
+
+Run:
+
+- focused History retention tests
+- History repository/service tests
+- full backend suite
+
+Do not modify unrelated tests.
+
+## Git
+
+Commit with tests.
+Push the branch.
+Open a PR that closes #78.
+
+Do NOT merge it.
+Do NOT modify PR #74, #76, or #79 branches.
+
+## Final report
+
+Return only:
+
+- old N+1 behavior
+- new set-based strategy
+- Mongo query/aggregation used
+- files changed
+- tests added
+- performance/boundedness behavior
+- test results
+- commit SHA
+- PR link
+- whether #78 acceptance criteria are fully satisfied
+
+Agent Response Summary:
+Issue #78 was implemented on `fix/78-set-based-history-retention`.
+
+The old retention pass enumerated all profiles and then issued a body-candidate query per profile. The new implementation uses one MongoDB aggregation over eligible visible terminal records with non-empty stored string bodies. It partitions by `ownerProfileId`, ranks each profile newest-first, selects only rows beyond that profile's configured retained-body count, and trims those records in one bounded write batch.
+
+The trim behavior is unchanged:
+- `response.body.value` becomes an empty string
+- `response.body.truncated` becomes `true`
+- `response.body.omittedReason` becomes `"retention"`
+- history records are never deleted
+
+`RETENTION_BATCH_SIZE` is 500, so each tick updates at most 500 records. The aggregation itself still scans/ranks the eligible set; the boundedness claim applies to the selected/write batch rather than to total read/sort work.
+
+No new index was added. The existing per-profile history index cannot directly bound a global partitioned scan because `ownerProfileId` is unconstrained, and a new dedicated index would add write cost without eliminating the window ranking work. `allowDiskUse(true)` is used for the aggregation sort.
+
+Files changed:
+- `backend/src/features/history/history.repository.js`
+- `backend/src/features/history/history.service.js`
+- `backend/src/features/history/history-retention.test.js`
+
+Nine deterministic tests cover below-N behavior, N+K oldest-only trimming, profile isolation, multiple profiles in one pass, running/hidden records, already-trimmed/body-less records, batch limiting, idempotent reruns, and proof that retention no longer calls `profileRepository.listIds()`.
+
+Agent verification:
+- `bun install --frozen-lockfile` succeeded with the lockfile unchanged
+- focused history-retention/history-CAS/persistence tests: 44 pass, 0 fail
+- full backend suite: 1604 pass, 2 skip, 0 fail
+- backend syntax gate passed
+
+Implementation commit:
+`4e8d6d2923eff3d4e07f313b10f16a383ece8a24`
+
+PR:
+`#82 — fix(history): replace per-profile retention loop with a set-based pass`
+
+ChatGPT independently reviewed PR #82. The implementation correctly removes the per-profile service loop, preserves newest-N semantics per profile, keeps trim-only persistence behavior, ignores non-eligible records, and adds focused multi-profile regression coverage. The original PR-head Tracer CLI, Baseline Gate, and Phase 30 E2E + Load workflows were all green.
+
+Because `main` advanced after #79 and #80 were merged, ChatGPT synchronized current `main` into the #78 branch as merge commit `0dc1a88d6a19e489c31fa7f105ed1015f2f7802d`.
+
+During review, ChatGPT briefly changed the window sort to direct `sortBy: { startedAt: -1, _id: -1 }` based on the generic `$setWindowFields` sort syntax. MongoDB 7 CI correctly rejected that for `$documentNumber` with error code 5371602: `$documentNumber must be specified with a top level sortBy expression with exactly one element`. That review-only change was reverted in commit `187206b140128e654dccab876b5f3faa973f15af`, restoring the agent's original computed composite sort key. No failing review experiment remains in the final code.
+
+Actions:
+* replaced the N+1 per-profile retention loop with one set-based aggregation
+* preserved newest-N body retention independently per profile
+* preserved body trimming semantics and record retention
+* excluded running, hidden, already-trimmed, and body-less records from ranking
+* bounded each trim/write batch to 500 records
+* avoided an unjustified new index
+* added nine deterministic Mongo-backed retention tests
+* verified focused, full-backend, and syntax gates
+* opened PR #82 closing issue #78
+* ChatGPT reviewed the aggregation, history indexes, tests, and PR-head CI
+* synchronized current `main` into the branch
+* tested an alternative window sort in CI, observed the Mongo 7 rank-operator restriction, and reverted the review-only change
+* appended this implementation/audit record to the tracked transcript before merge
+
+Context:
+tool=agent harness + ChatGPT GitHub review
+branch=fix/78-set-based-history-retention
+implementation_commit=4e8d6d2923eff3d4e07f313b10f16a383ece8a24
+main_sync_commit=0dc1a88d6a19e489c31fa7f105ed1015f2f7802d
+review_revert_commit=187206b140128e654dccab876b5f3faa973f15af
+pr=82
+issue=78
+parent_agent=none
