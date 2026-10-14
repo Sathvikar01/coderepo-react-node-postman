@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { AppError } from "../../shared/errors/app-error.js";
+import { currentClientOrigin } from "../../shared/middleware/client-origin.js";
 import { LIMITS } from "../../shared/utils/limits.js";
 import { Profile } from "../profiles/profile.model.js";
 import { ResourceVersion } from "../versions/version.model.js";
@@ -112,6 +113,7 @@ async function publishReviewEvent({ workspaceId, action, review, actorProfileId,
 			revision: revision ?? review.revision ?? null,
 			actorProfileId: actorProfileId ? String(actorProfileId) : null,
 			actorName: await actorName(actorProfileId),
+			originClientId: currentClientOrigin(),
 			timestamp: new Date().toISOString(),
 		});
 	} catch {

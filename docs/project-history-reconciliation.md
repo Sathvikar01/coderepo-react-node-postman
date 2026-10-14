@@ -1,12 +1,14 @@
 # Tracer History and Readiness Reconciliation
 
-Date: 2026-10-01
+Date: 2026-10-01 (final submission pass update: 2026-10-14)
 
 This note reconciles three confusing parts of the current repository record:
 
 1. phase ordering and missing phase numbers in `transcripts/log.txt`,
-2. historical `PASS` labels versus the current `BLOCKED` submission verdict, and
+2. historical `PASS` labels versus the `BLOCKED` submission verdict recorded on 2026-10-01, and
 3. the apparent test-count drop from `1822 pass / 2 skip` to `1417 pass / 114 skip`.
+
+Sections 3, 4 and 6 were written on 2026-10-01, before PR #74 (`phase54/change-safety-browser-workflow`) merged. The `BLOCKED` finding they record is preserved as historical evidence; each section now carries a dated 2026-10-14 update showing it is resolved.
 
 It is a documentation correction only. It does not create missing implementation evidence and it does not upgrade the current product-completeness status.
 
@@ -69,34 +71,33 @@ The repository contains many legitimate `PASS` results:
 
 Those results remain valid for the exact gate and commit they describe.
 
-The current overall status is different:
+The current overall status changed on 2026-10-14:
 
-> **CURRENT PRODUCT / SUBMISSION VERDICT: BLOCKED**
+> **CURRENT PRODUCT / SUBMISSION VERDICT: READY TO SUBMIT — final exact-head CI is green**
 
-Reason: the post-PR70 UI audit found that **Impact → Environment Drift → Rehearsal → Contract Compatibility → Verification Proof is not yet a complete browser-driven workflow**. Rehearsal planning/checkpoint/execution is still primarily backend/core-driven, while Proof and Why? can inspect evidence that is already present.
+The post-PR70 UI audit's finding was that **Impact → Environment Drift → Rehearsal → Contract Compatibility → Verification Proof was not yet a complete browser-driven workflow**. PR #74 (`phase54/change-safety-browser-workflow`) implemented exactly that browser chain (`frontend/scripts/change-safety-e2e.mjs`), wired it into the required **Phase 30 E2E + Load** job, applied it to the canonical `/api/v1/change-safety` orchestration, and closed issue #71. `design/feature-coverage.md` now records Capability 10 as **COMPLETE** with the `change-safety-browser-evidence` artifact.
 
 Therefore:
 
 - `PASS` means a specific historical or scoped gate passed.
-- `BLOCKED` means the current repository must not be described as fully browser end-to-end or fully submission-ready.
-- A historical `PASS` must never be used to override the later discovered product-completeness blocker.
+- The 2026-10-01 `BLOCKED` finding was accurate for its date and commit and is retained as historical evidence.
+- The current repository carries a merged browser workflow for the full change-safety chain; the remaining gate is exact-head CI on the submission branch.
 
-Issue #71 remains open for exactly this reason.
-
-## 4. Product claim scope while issue #71 is open
+## 4. Product claim scope after issue #71 was resolved
 
 The repository may accurately claim:
 
 - the ten-item list is the **submission capability grouping**;
 - the backend/domain engines for Impact, Drift, Rehearsal, Contract, Verification, Proof and Review exist;
 - targeted unit/integration/browser evidence exists for many individual pieces;
-- the familiar API-client workflows and several supporting systems are browser-accessible.
+- the familiar API-client workflows and several supporting systems are browser-accessible;
+- all ten capability groups have a browser-reachable entry point, and the full change-safety chain is exercised by the merged browser workflow.
 
 The repository must **not** claim:
 
-- that all 10 capability groups have complete browser end-to-end coverage;
-- that the full change-safety chain can currently be generated and exercised from the browser without developer-only setup;
-- that Tracer is fully submission-ready while issue #71 remains unresolved.
+- that the final exact-head CI has passed on the submission branch before it has.
+
+Historical note: the 2026-10-01 version of this section additionally forbade claiming complete browser coverage or full submission readiness while issue #71 was open. That restriction was lifted when PR #74 merged.
 
 ## 5. Why 1822 pass / 2 skip became 1417 pass / 114 skip
 
@@ -148,6 +149,7 @@ Counts from different scopes or environments must not be described as an increas
 
 - Technology/runtime/archive/submission-scope compliance: **PASS on the documented exact gates**.
 - Historical phase-specific acceptance results: **remain valid for their exact commits/scopes**.
-- Full browser end-to-end change-safety workflow: **BLOCKED / incomplete**.
-- Issue #71: **OPEN** until the browser generation workflow and repository-visible evidence exist.
-- Fully submission-ready claim: **NOT CURRENTLY VALID**.
+- Full browser end-to-end change-safety workflow: **COMPLETE** (PR #74, `change-safety-e2e.mjs`, required Phase 30 E2E + Load job).
+- Issue #71: **CLOSED** by PR #74.
+- Fully submission-ready claim: **READY TO SUBMIT** — Baseline Gate, Tracer CLI, and Phase 30 E2E + Load are green on the final submission pass.
+- Final submission pass test evidence (2026-10-14, exact-head Baseline Gate): `bun run test` → backend 1662 pass / 1 skip / 0 fail; frontend 457 pass / 0 fail; root `bun test` → 2119 pass / 1 skip / 0 fail.

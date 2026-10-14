@@ -56,6 +56,7 @@ import { dialogStackSize } from "./shared/components/dialog-stack.js";
 import {
 	clearProfileSession,
 	clearSession,
+	getClientOrigin,
 	hasProfileToken,
 	hasSessionToken,
 	readActiveWorkspaceId,
@@ -83,6 +84,7 @@ import {
 } from "./features/workspace/workspace-workflow.js";
 import { WorkspaceDialogs } from "./features/workspace/WorkspaceDialogs.jsx";
 import { RemoteChangeBanner } from "./features/versions/RemoteChangeBanner.jsx";
+import { classifyResourceEvent, isOwnSessionEvent, RESOURCE_EVENT } from "./features/versions/event-reconciliation.js";
 import { useWorkspaceEvents } from "./features/versions/useWorkspaceEvents.js";
 import { VersionsDialog } from "./features/versions/VersionsDialog.jsx";
 import { WorkspaceHeader } from "./features/workspace/WorkspaceHeader.jsx";
@@ -607,6 +609,7 @@ export default function App() {
 	const handleWorkspaceEvent = async (event) => {
 		if (!event?.action) return;
 		const { action } = event;
+		const ownClientOrigin = getClientOrigin();
 		if (action === "stream.forbidden") {
 			await handleWorkspaceLoss();
 			return;
@@ -623,10 +626,18 @@ export default function App() {
 				}
 				return;
 			}
+			const decision = classifyResourceEvent(event, {
+				clientOrigin: ownClientOrigin,
+				dirty: state.tabs.some((tab) => tab.collectionId === event.resourceId && tab.dirty),
+			});
+			// This session's own save response is already the source of truth for the
+			// originating tab; treating its echo as a collaborator change falsely marks
+			// the draft stale (event-before-response) or double-applies it.
+			if (decision === RESOURCE_EVENT.SELF) return;
 			const aggregates = await refreshCollections();
 			const fresh = aggregates?.find((item) => item._id === event.resourceId) ?? null;
 			if (!fresh) return;
-			if (state.tabs.some((tab) => tab.collectionId === fresh._id && tab.dirty)) {
+			if (decision === RESOURCE_EVENT.NOTICE) {
 				setRemoteNotices((current) => ({
 					...current,
 					[`collection:${fresh._id}`]: { actorName: event.actorName, revision: fresh.revision, resourceName: fresh.name },
@@ -645,6 +656,9 @@ export default function App() {
 				setEnvironments((current) => current.filter((item) => item._id !== event.resourceId));
 				return;
 			}
+			// The mutation response already reconciled this session's own write; only
+			// another session's change should reload and announce.
+			if (isOwnSessionEvent(event, ownClientOrigin)) return;
 			await refreshEnvironments();
 			if (action === "environment.updated" || action === "environment.restored") {
 				toast(`${event.actorName ?? "A collaborator"} updated the environment${event.revision ? ` · v${event.revision}` : ""}.`, "info");

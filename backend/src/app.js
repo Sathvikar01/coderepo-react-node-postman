@@ -25,6 +25,7 @@ import { whyInspectorRouter } from "./features/why-inspector/why-inspector.route
 import { workspaceRouter } from "./features/workspaces/workspace.routes.js";
 import { errorHandler, notFoundHandler } from "./shared/middleware/error-handler.js";
 import { requireWorkspaceAuth } from "./shared/middleware/auth.js";
+import { captureClientOrigin } from "./shared/middleware/client-origin.js";
 import { resolveProfileContext } from "./shared/middleware/profile-context.js";
 import { resolveWorkspaceContext } from "./shared/middleware/workspace-context.js";
 import { LIMITS } from "./shared/utils/limits.js";
@@ -56,6 +57,9 @@ export function createApp() {
 		next();
 	});
 	app.use(express.static(publicDirectory));
+	// Session-scoped mutation origin: captured before any router so the advisory
+	// workspace event broker can tag each event without touching every service.
+	app.use(captureClientOrigin);
 	app.get("/api/v1/health", (request, response) => {
 		const database = mongoose.connection.readyState === 1 ? "connected" : "disconnected";
 		response

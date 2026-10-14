@@ -29,7 +29,7 @@ function replayFor(workspaceId) {
 	return replay;
 }
 
-export function publishWorkspaceEvent({ workspaceId, action, resourceType = null, resourceId = null, revision = null, actorProfileId = null, actorName = null, timestamp = null }) {
+export function publishWorkspaceEvent({ workspaceId, action, resourceType = null, resourceId = null, revision = null, actorProfileId = null, actorName = null, timestamp = null, originClientId = null }) {
 	const key = String(workspaceId);
 	const event = {
 		id: nextEventId(key),
@@ -40,6 +40,9 @@ export function publishWorkspaceEvent({ workspaceId, action, resourceType = null
 		revision,
 		actorProfileId: actorProfileId ? String(actorProfileId) : null,
 		actorName,
+		// Session-scoped origin, not a profile id: a self-echo can be ignored while
+		// another browser session on the same profile still receives updates.
+		originClientId: originClientId ? String(originClientId) : null,
 		timestamp: timestamp ?? new Date().toISOString(),
 	};
 	const replay = replayFor(key);

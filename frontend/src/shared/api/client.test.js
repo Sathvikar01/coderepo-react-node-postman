@@ -88,3 +88,41 @@ describe("request error shaping", () => {
 		expect(caught.message).toContain("invalid response");
 	});
 });
+
+describe("session mutation origin", () => {
+	const captureInit = () => {
+		let init = null;
+		globalThis.fetch = async (_url, options) => {
+			init = options;
+			return new Response(JSON.stringify({ data: {} }), { status: 200, headers: { "content-type": "application/json" } });
+		};
+		return () => init;
+	};
+
+	test("stamps a mutation so the session can recognise its own event echo", async () => {
+		const init = captureInit();
+		await client.request("/collections/c1", { method: "PUT", body: JSON.stringify({ name: "Orders" }) });
+		expect(init().headers["x-tracer-origin"]).toBe(client.getClientOrigin());
+	});
+
+	test("distinguishes a delete from a create while keeping one session origin", async () => {
+		const init = captureInit();
+		await client.request("/collections/c1", { method: "DELETE" });
+		const deleteOrigin = init().headers["x-tracer-origin"];
+		await client.request("/collections", { method: "POST", body: JSON.stringify({ name: "New" }) });
+		expect(init().headers["x-tracer-origin"]).toBe(deleteOrigin);
+	});
+
+	test("does not stamp a read, which causes no state change", async () => {
+		const init = captureInit();
+		await client.request("/collections");
+		expect(init().headers["x-tracer-origin"]).toBeUndefined();
+		expect(init().method ?? "GET").toBe("GET");
+	});
+
+	test("exposes a bounded, opaque origin value that is stable for the session", () => {
+		const origin = client.getClientOrigin();
+		expect(origin).toBe(client.getClientOrigin());
+		expect(origin).toMatch(/^[A-Za-z0-9._:-]{1,128}$/);
+	});
+});
