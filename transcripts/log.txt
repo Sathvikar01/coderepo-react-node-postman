@@ -7271,3 +7271,220 @@ review_revert_commit=187206b140128e654dccab876b5f3faa973f15af
 pr=82
 issue=78
 parent_agent=none
+
+
+## [2026-10-14] Make Minimization Job status transitions atomic (#76)
+
+Implementation Prompt:
+Work in Tracer:
+`C:\Users\arsat\Downloads\postman`
+
+Repo:
+`Sathvikar01/coderepo-react-node-postman`
+
+Fix GitHub issue **#76: Make Minimization Job status transitions atomic**.
+
+IMPORTANT:
+- PR #74 Phase 54 is being fixed separately.
+- Issue #79 may also be running in parallel.
+- Do NOT touch Change Safety, Local Runtime, Collection Runner, frontend, or CI files.
+- Create a separate branch from current `main`:
+  `fix/76-atomic-minimization-status`
+- Keep scope strictly limited to #76.
+
+## Problem
+
+Current Minimization repository updates match only:
+
+`{ ownerProfileId, jobId }`
+
+without checking the current job status.
+
+Late asynchronous completion, cancellation, failure, or recovery can overwrite an already-terminal result.
+
+Examples that must become impossible:
+
+`cancelled → completed`
+`completed → failed`
+`failed → completed`
+
+## Inspect first
+
+Read:
+
+- `backend/src/features/execution-intelligence/minimization.service.js`
+- `backend/src/features/execution-intelligence/minimization.repository.js`
+- `backend/src/features/execution-intelligence/minimization.model.js`
+- minimization tests
+- `backend/src/features/history/history.repository.js`
+
+Use History finalization as a reference for compare-and-set semantics.
+
+## Required design
+
+Implement atomic state transitions at the database boundary.
+
+Terminal transitions must require the expected source state:
+
+`running → completed`
+`running → failed`
+`running → cancelled`
+
+Prefer a repository API such as:
+
+`transition(ownerProfileId, jobId, expectedStatus, patch)`
+
+implemented using one conditional `findOneAndUpdate`.
+
+Do NOT:
+
+- read status and then update separately;
+- silently retry a stale terminal write;
+- allow terminal → terminal transitions;
+- weaken cancellation behavior;
+- change minimization algorithm semantics.
+
+## Race behavior
+
+If two operations race:
+
+### Completion vs cancellation
+
+Exactly one transition wins.
+
+The loser must:
+- detect that its expected-state update did not apply;
+- reload/return the canonical stored terminal result;
+- never overwrite the winner.
+
+### Completion vs interrupted recovery
+
+Recovery must not overwrite a job that completed concurrently.
+
+### Duplicate terminal writes
+
+A second terminal transition must be harmless and deterministic.
+
+## Tests
+
+Add deterministic concurrency tests.
+
+Cover at least:
+
+1. `running → completed`
+2. `running → failed`
+3. `running → cancelled`
+4. completion vs cancellation
+5. completion vs interrupted recovery
+6. terminal state cannot transition again
+
+Use barriers/deferred promises or repository doubles.
+Do not rely on arbitrary sleeps.
+
+Assert both:
+- returned API result;
+- persisted canonical status.
+
+## Preserve
+
+Do not change:
+
+- `MINIMIZATION_MAX_PROBES`
+- probe logic
+- failure predicate logic
+- Repro Capsule behavior
+- execution safety rules
+- existing public status vocabulary
+
+## Verification
+
+Run:
+
+- focused minimization tests
+- execution-intelligence tests
+- full backend test suite
+
+Fix only failures caused by this change.
+
+## Git
+
+Commit with tests.
+Push the branch.
+Open a PR that closes #76.
+
+Do NOT merge it.
+Do NOT modify PR #74 or #79 branches.
+
+## Final report
+
+Return only:
+
+- root cause
+- atomic transition design
+- race semantics
+- files changed
+- tests added
+- test results
+- commit SHA
+- PR link
+- whether #76 acceptance criteria are fully satisfied
+
+Agent Response Summary:
+Issue #76 was implemented on `fix/76-atomic-minimization-status`.
+
+The root cause was an unconditional repository update keyed only by `ownerProfileId` and `jobId`. Completion, failure, cancellation, and interrupted recovery could therefore race and let a stale terminal write overwrite a newer terminal state.
+
+The repository now exposes `transition(ownerProfileId, jobId, expectedStatus, patch)`, implemented as one conditional `findOneAndUpdate` whose filter includes the expected source status. The service adds a `finalize` helper that attempts the atomic transition and, if another writer already won, reloads and returns the canonical persisted record without retrying or overwriting it.
+
+All terminal service paths now require `running` as the source state:
+- running → completed
+- running → failed
+- running → cancelled
+- interrupted recovery → failed only if the job is still running
+
+Exactly one concurrent terminal writer can win. Losers observe a null conditional update, reload canonical state, and return the winner's result. Cancellation remains fail-closed and no minimization algorithm, probe, predicate, capsule, or execution-safety semantics were changed.
+
+Files changed:
+- `backend/src/features/execution-intelligence/minimization.repository.js`
+- `backend/src/features/execution-intelligence/minimization.service.js`
+- `backend/src/features/execution-intelligence/minimization.service.test.js`
+- `backend/src/features/execution-intelligence/minimization.repository.test.js`
+
+Tests cover running → completed/failed/cancelled, completion vs cancellation, completion vs interrupted recovery, refusal of late terminal transitions, repository filter shape, real-Mongo CAS behavior, and profile scoping. The race tests are deterministic and do not depend on arbitrary sleeps.
+
+Agent verification:
+- focused minimization tests: 14 pass, 0 fail
+- execution-intelligence suite: 182 pass, 1 skip, 0 fail
+- full backend suite: 1605 pass, 2 skip, 0 fail
+- `node --check` on all four changed files passed
+
+Implementation commit:
+`7ceff1d0d8df02857a5b0ac58da08e1d4a561625`
+
+PR:
+`#84 — fix(execution-intelligence): make minimization job status transitions atomic`
+
+ChatGPT independently reviewed PR #84. The repository CAS filter includes `status: expectedStatus` in the same atomic `findOneAndUpdate`, every production terminal service path uses `expectedStatus: "running"`, losers reload canonical state, and active-job cleanup still occurs in the existing `finally` path. The real-Mongo tests verify exactly-one-winner behavior and refuse stale terminal writes. The original implementation head had Tracer CLI, Baseline Gate, and Phase 30 E2E + Load all green.
+
+Because `main` advanced after issues #79, #80, and #78 were merged, ChatGPT synchronized current `main` into the branch as merge commit `8f943cc70d2f74978978b97ff2a655cc1be307a4`, preserving the original minimization implementation unchanged.
+
+Actions:
+* replaced unconditional MinimizationJob terminal writes with atomic compare-and-set transitions
+* routed completion, failure, cancellation, and interrupted recovery through one expected-state finalization helper
+* made concurrent losers reload canonical persisted state instead of retrying
+* preserved cancellation and minimization semantics
+* added deterministic service race tests and real-Mongo repository CAS tests
+* verified focused, execution-intelligence, full-backend, and syntax checks
+* opened PR #84 closing issue #76
+* ChatGPT reviewed the service lifecycle, repository filter, model, tests, and original PR-head CI
+* synchronized current `main` into the branch without altering the issue #76 patch
+* appended this implementation/audit record to the tracked transcript before merge
+
+Context:
+tool=agent harness + ChatGPT GitHub review
+branch=fix/76-atomic-minimization-status
+implementation_commit=7ceff1d0d8df02857a5b0ac58da08e1d4a561625
+main_sync_commit=8f943cc70d2f74978978b97ff2a655cc1be307a4
+pr=84
+issue=76
+parent_agent=none
