@@ -3,6 +3,7 @@ import { MaterialIcon } from "../../shared/components/MaterialIcon.jsx";
 import { OUTCOME_LABELS, relativeTime } from "../../shared/utils/format.js";
 import { canInvestigateHistoryItem } from "../execution-intelligence/investigation-model.js";
 import { historyApi } from "./history.api.js";
+import { historyEmptyMessage } from "./history-view.js";
 
 const OUTCOME_STYLE = {
 	response: "response",
@@ -21,7 +22,7 @@ export function HistoryPanel({ compareBaseId, onAnalyze, onCompare, onDelete, on
 	const [query, setQuery] = useState("");
 	const [method, setMethod] = useState("");
 	const [outcome, setOutcome] = useState("");
-	const [loading, setLoading] = useState(false);
+	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState("");
 	const searchTimer = useRef(null);
 	const requestId = useRef(0);
@@ -62,6 +63,13 @@ export function HistoryPanel({ compareBaseId, onAnalyze, onCompare, onDelete, on
 		searchTimer.current = setTimeout(() => load(), 220);
 		return () => clearTimeout(searchTimer.current);
 	}, [query, method, outcome, refreshToken]);
+
+	const emptyMessage = historyEmptyMessage({
+		error,
+		filtered: Boolean(query || method || outcome),
+		itemCount: items.length,
+		loading,
+	});
 
 	return (
 		<div className="sidebar-panel">
@@ -124,7 +132,11 @@ export function HistoryPanel({ compareBaseId, onAnalyze, onCompare, onDelete, on
 				</p>
 			)}
 			<div className="sidebar-scroll">
-				{items.length === 0 && !loading && <p className="kv-empty">No history yet. Every send is recorded here.</p>}
+				{emptyMessage && (
+					<p className="kv-empty" role="status">
+						{emptyMessage}
+					</p>
+				)}
 				<div className="history-list">
 					{items.map((item) => (
 						<div className={`history-item ${compareBaseId === item.executionId ? "active" : ""}`} key={item.executionId}>
@@ -141,7 +153,7 @@ export function HistoryPanel({ compareBaseId, onAnalyze, onCompare, onDelete, on
 								<span>{item.durationMs ? `${Math.round(item.durationMs)} ms` : "—"}</span>
 								<span>{relativeTime(item.startedAt)}</span>
 							</div>
-							<div className="history-item-meta">
+							<div className="history-item-meta history-item-actions">
 								<button className="text-button" type="button" onClick={() => onAnalyze(item.executionId)}>
 									Passport
 								</button>

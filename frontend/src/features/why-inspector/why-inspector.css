@@ -8,7 +8,9 @@
 	width: min(960px, 95vw);
 	max-width: min(960px, 95vw);
 }
-.why-dialog {
+/* Compound selector: this file loads before styles.css, whose .form-dialog
+   width would otherwise win and leave the content in a 560px column. */
+.form-dialog.why-dialog {
 	width: min(960px, 95vw);
 	min-height: min(680px, 88vh);
 	/* Cap the dialog to the viewport and let only the section body scroll, so the
@@ -570,7 +572,7 @@
 }
 @media (max-width: 600px) {
 	.why-modal,
-	.why-dialog {
+	.form-dialog.why-dialog {
 		width: 96vw;
 	}
 	.why-dialog .recorder-header {

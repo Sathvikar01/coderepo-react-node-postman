@@ -385,7 +385,9 @@ pre {
 	border-color: var(--border);
 	background: var(--hover);
 }
-.profile-account span {
+/* Only the name/email block stacks; the avatar and the sign-out icon keep their
+   own centered layout. */
+.profile-account span:not(.profile-avatar, .icon-button) {
 	display: flex;
 	flex-direction: column;
 	gap: 2px;
@@ -1038,7 +1040,7 @@ pre {
 }
 .kv-head {
 	display: grid;
-	grid-template-columns: 36px minmax(0, 1fr) minmax(0, 1.4fr) 34px;
+	grid-template-columns: 36px minmax(0, 1fr) minmax(0, 1.4fr) 56px;
 	gap: 8px;
 	padding: 0 4px;
 	color: var(--muted);
@@ -1046,9 +1048,10 @@ pre {
 	letter-spacing: 0.3px;
 	text-transform: uppercase;
 }
+/* The last track holds the move-up and remove buttons (2 × 28px). */
 .kv-row {
 	display: grid;
-	grid-template-columns: 36px minmax(0, 1fr) minmax(0, 1.4fr) 34px;
+	grid-template-columns: 36px minmax(0, 1fr) minmax(0, 1.4fr) 56px;
 	align-items: center;
 	gap: 8px;
 }
@@ -1522,6 +1525,12 @@ pre {
 	color: var(--quiet);
 	font-size: 11.5px;
 	font-variant-numeric: tabular-nums;
+}
+/* Nine actions do not fit the 260px panel on one line; wrap them instead of
+   scrolling the whole sidebar sideways and hiding Reopen, Resend, and Delete. */
+.history-item-actions {
+	flex-wrap: wrap;
+	gap: 0 2px;
 }
 .outcome-chip {
 	padding: 2px 8px;
