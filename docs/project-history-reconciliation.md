@@ -81,7 +81,7 @@ Therefore:
 
 - `PASS` means a specific historical or scoped gate passed.
 - The 2026-10-01 `BLOCKED` finding was accurate for its date and commit and is retained as historical evidence.
-- The current repository carries a merged browser workflow for the full change-safety chain; the remaining gate is exact-head CI on the submission branch.
+- The current repository carries a merged browser workflow for the full change-safety chain, and exact-head CI on the final submission pass is green.
 
 ## 4. Product claim scope after issue #71 was resolved
 
@@ -93,9 +93,7 @@ The repository may accurately claim:
 - the familiar API-client workflows and several supporting systems are browser-accessible;
 - all ten capability groups have a browser-reachable entry point, and the full change-safety chain is exercised by the merged browser workflow.
 
-The repository must **not** claim:
-
-- that the final exact-head CI has passed on the submission branch before it has.
+The repository must **not** claim evidence that was not directly run or verified. For the current final submission pass, exact-head Baseline Gate, Tracer CLI, and Phase 30 E2E + Load have all passed.
 
 Historical note: the 2026-10-01 version of this section additionally forbade claiming complete browser coverage or full submission readiness while issue #71 was open. That restriction was lifted when PR #74 merged.
 
