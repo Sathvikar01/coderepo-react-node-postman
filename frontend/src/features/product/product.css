@@ -12,7 +12,9 @@
 .product-modal::backdrop {
 	background: rgb(0 0 0 / 55%);
 }
-.product-dialog {
+/* Compound selector: this file loads before styles.css, whose .form-dialog
+   width would otherwise win and leave the content in a 560px column. */
+.form-dialog.product-dialog {
 	width: min(780px, 95vw);
 	gap: 14px;
 }

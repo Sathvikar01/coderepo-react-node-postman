@@ -373,7 +373,7 @@ export function RequestBuilder({
 					</div>
 				)}
 			</div>
-			<div>
+			<div className="request-builder-footer">
 				<button className="text-button" type="button" onClick={onCancel}>
 					Send a scratch request instead
 				</button>

@@ -57,6 +57,7 @@ export function WorkspaceSwitcher({
 				},
 			]}
 			label={active ? `Workspace: ${active.name}` : "Workspace"}
+			side="right"
 			trigger="workspaces"
 			triggerClassName="icon-button rail-command"
 		/>

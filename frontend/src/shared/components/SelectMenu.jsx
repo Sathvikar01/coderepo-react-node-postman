@@ -45,6 +45,7 @@ export function SelectMenu({ ariaLabel, className = "", disabled = false, id, on
 				disabled={disabled}
 				id={id}
 				role="combobox"
+				title={selected?.label}
 				type="button"
 				onClick={() => (open ? closeAndFocusTrigger() : openAndFocus())}
 				onKeyDown={(event) => {

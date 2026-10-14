@@ -16,3 +16,12 @@ export function tabKeyIntent(key) {
 	if (key === "Delete" || key === "Backspace") return "close";
 	return null;
 }
+
+// Global Ctrl/Cmd+Enter (send) and Ctrl/Cmd+S (save) act on the active request
+// tab, so they must stay inert while any modal dialog covers the workbench.
+export function workspaceShortcutIntent(event, { dialogOpen = false } = {}) {
+	if (!(event?.metaKey || event?.ctrlKey) || dialogOpen) return null;
+	if (event.key === "Enter") return "send";
+	if (typeof event.key === "string" && event.key.toLowerCase() === "s") return "save";
+	return null;
+}

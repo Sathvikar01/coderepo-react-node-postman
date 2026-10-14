@@ -66,4 +66,30 @@ describe("dialog stack", () => {
 		handleEscapeKey(fakeEvent());
 		expect(closed).toEqual(["dialog"]);
 	});
+
+	test("Escape closes an open select listbox inside a dialog, not the dialog", () => {
+		// Audit regression: Escape in a SelectMenu inside "Manage workspace" closed
+		// the whole dialog, because only `.menu` counted as a transient surface.
+		const previous = globalThis.document;
+		let openSurface = ".select-menu-list";
+		globalThis.document = {
+			addEventListener() {},
+			querySelector: (selector) => (selector.split(",").some((part) => part.trim() === openSurface) ? {} : null),
+		};
+		const closed = [];
+		const token = { onClose: () => closed.push("dialog") };
+		try {
+			pushDialog(token);
+			const event = fakeEvent();
+			handleEscapeKey(event);
+			expect(closed).toEqual([]);
+			expect(event.prevented).toBe(false);
+			openSurface = null;
+			handleEscapeKey(fakeEvent());
+			expect(closed).toEqual(["dialog"]);
+		} finally {
+			popDialog(token);
+			globalThis.document = previous;
+		}
+	});
 });

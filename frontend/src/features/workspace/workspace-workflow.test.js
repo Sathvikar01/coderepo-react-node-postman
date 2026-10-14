@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { isExecutionActive, tabKeyIntent, workspaceHasUnsettledWork } from "./workspace-workflow.js";
+import { dialogStackSize, popDialog, pushDialog } from "../../shared/components/dialog-stack.js";
+import { isExecutionActive, tabKeyIntent, workspaceHasUnsettledWork, workspaceShortcutIntent } from "./workspace-workflow.js";
 
 const tab = (overrides = {}) => ({
 	id: "tab-1",
@@ -42,5 +43,32 @@ describe("tab keyboard close", () => {
 	test("other keys keep roving focus behavior", () => {
 		expect(tabKeyIntent("Enter")).toBeNull();
 		expect(tabKeyIntent("ArrowRight")).toBeNull();
+	});
+});
+
+describe("workspace keyboard shortcuts", () => {
+	test("Ctrl/Cmd+Enter sends and Ctrl/Cmd+S saves when no dialog is open", () => {
+		expect(workspaceShortcutIntent({ key: "Enter", ctrlKey: true })).toBe("send");
+		expect(workspaceShortcutIntent({ key: "s", metaKey: true })).toBe("save");
+		expect(workspaceShortcutIntent({ key: "S", ctrlKey: true })).toBe("save");
+		expect(workspaceShortcutIntent({ key: "s" })).toBeNull();
+	});
+
+	test("shortcuts stay inert while any modal on the dialog stack is open", () => {
+		// Audit regression: Ctrl+S saved the request behind the open "New example"
+		// dialog because that dialog was not in App's explicit open-dialog flags.
+		// The stack is module state shared by every test file in one `bun test`
+		// process, so compare against the size this test started with.
+		const before = dialogStackSize();
+		const token = { onClose: () => {} };
+		pushDialog(token);
+		try {
+			const dialogOpen = dialogStackSize() > 0;
+			expect(workspaceShortcutIntent({ key: "s", ctrlKey: true }, { dialogOpen })).toBeNull();
+			expect(workspaceShortcutIntent({ key: "Enter", metaKey: true }, { dialogOpen })).toBeNull();
+		} finally {
+			popDialog(token);
+		}
+		expect(dialogStackSize()).toBe(before);
 	});
 });

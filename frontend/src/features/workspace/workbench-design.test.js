@@ -6,6 +6,9 @@ const css = readFileSync(fileURLToPath(new URL("../../phase30-workbench.css", im
 const app = readFileSync(fileURLToPath(new URL("../../App.jsx", import.meta.url)), "utf8");
 const header = readFileSync(fileURLToPath(new URL("./WorkspaceHeader.jsx", import.meta.url)), "utf8");
 const productCss = readFileSync(fileURLToPath(new URL("../product/product.css", import.meta.url)), "utf8");
+const baseCss = readFileSync(fileURLToPath(new URL("../../styles.css", import.meta.url)), "utf8");
+const whyCss = readFileSync(fileURLToPath(new URL("../why-inspector/why-inspector.css", import.meta.url)), "utf8");
+const historyPanel = readFileSync(fileURLToPath(new URL("../history/HistoryPanel.jsx", import.meta.url)), "utf8");
 const proofDialog = readFileSync(fileURLToPath(new URL("../verification-proof/VerificationProofDialog.jsx", import.meta.url)), "utf8");
 const changeSafetyDialog = readFileSync(fileURLToPath(new URL("../change-safety/ChangeSafetyDialog.jsx", import.meta.url)), "utf8");
 const changeSafetyCss = readFileSync(fileURLToPath(new URL("../change-safety/change-safety.css", import.meta.url)), "utf8");
@@ -119,6 +122,70 @@ describe("Phase 48A product identity contracts", () => {
 	});
 });
 
+// Regressions found by the UI functional audit in a real browser. Each rule here
+// was observed broken at 375, 768, 1024, or 1440 before the fix.
+describe("UI audit layout contracts", () => {
+	const block = (source, selector) => {
+		const start = source.indexOf(`${selector} {`);
+		return start === -1 ? "" : source.slice(start, source.indexOf("}", start));
+	};
+
+	test("the phone URL bar keeps method, URL, and Send in their own grid tracks", () => {
+		expect(block(css, "	.url-bar .url-input")).toContain("order: 0");
+		expect(block(css, "	.url-bar .method-select")).toContain("width: auto");
+	});
+
+	test("key-value rows reserve room for both row actions", () => {
+		expect(block(baseCss, ".kv-head")).toContain("minmax(0, 1.4fr) 56px");
+		expect(block(baseCss, ".kv-row")).toContain("minmax(0, 1.4fr) 56px");
+	});
+
+	test("history row actions wrap instead of scrolling the panel sideways", () => {
+		expect(historyPanel).toContain('className="history-item-meta history-item-actions"');
+		expect(block(baseCss, ".history-item-actions")).toContain("flex-wrap: wrap");
+	});
+
+	test("wide dialogs out-rank the shared 560px form-dialog width", () => {
+		expect(whyCss).toContain(".form-dialog.why-dialog {");
+		expect(productCss).toContain(".form-dialog.product-dialog {");
+	});
+
+	test("the sign-in headline stays in flow so it cannot overlap the card", () => {
+		const headline = block(css, ".profile-picker-page::before");
+		expect(headline).toContain("margin-bottom: auto");
+		expect(headline).not.toContain("position: absolute");
+	});
+
+	test("the phone command bar is two rows and the resource panel opens below it", () => {
+		expect(css).toContain("--phone-header-height: 104px");
+		expect(css).toContain("top: var(--phone-header-height);");
+		expect(block(css, "	.rail-primary")).toContain("grid-row: 2");
+	});
+
+	test("the overlay scrim never takes a desktop grid cell", () => {
+		// Clicking the rail's Collections command at 1440px pushed the request
+		// canvas below the viewport because the scrim became a grid item.
+		expect(block(css, ".sidebar-scrim")).toContain("display: none");
+		expect(block(css, "	.sidebar-scrim")).toContain("display: block");
+	});
+
+	test("the rail environment list opens beside the rail, inside the viewport", () => {
+		// It opened below a trigger that sits near the bottom of the rail, so the
+		// last environment was cut off at 1440 x 900.
+		const list = block(css, ".app-header .environment-picker .select-menu-list");
+		expect(list).toContain("bottom: 0");
+		expect(list).toContain("left: calc(100% + 8px)");
+		expect(list).toContain("max-height: calc(100dvh - 24px)");
+	});
+
+	test("the request tab strip scrolls sideways only", () => {
+		expect(block(css, ".request-tab-list")).toContain("overflow-y: hidden");
+	});
+
+	test("profile rows keep the avatar initials centered", () => {
+		expect(baseCss).toContain(".profile-account span:not(.profile-avatar, .icon-button) {");
+	});
+});
 
 describe("Phase 54 change-safety browser workflow contracts", () => {
 	test("keeps Change Safety in the existing command rail instead of adding a sidebar product", () => {

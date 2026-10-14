@@ -143,12 +143,13 @@ textarea:focus-visible,
 		var(--wb-ground);
 }
 
+/* The headline stays in normal flow above the card: positioned absolutely it
+   collided with the card on wide, short viewports such as 1440 × 900. */
 .workspace-login-page::before,
 .profile-picker-page::before {
-	position: absolute;
-	top: clamp(28px, 7vw, 88px);
-	left: clamp(32px, 8vw, 96px);
 	max-width: 620px;
+	margin-bottom: auto;
+	padding-bottom: 32px;
 	color: var(--wb-ink);
 	font-size: clamp(34px, 6vw, 78px);
 	font-weight: 500;
@@ -304,10 +305,17 @@ textarea:focus-visible,
 	white-space: nowrap;
 }
 
-.rail-command:hover .rail-command-label,
 .rail-command:focus-visible .rail-command-label {
 	opacity: 1;
 	transform: translateX(0);
+}
+
+/* Touch has no real hover: a tap would leave the label stuck over the panel. */
+@media (hover: hover) and (pointer: fine) {
+	.rail-command:hover .rail-command-label {
+		opacity: 1;
+		transform: translateX(0);
+	}
 }
 
 .app-header .environment-picker {
@@ -328,6 +336,41 @@ textarea:focus-visible,
 	font-weight: 700;
 	letter-spacing: 0.03em;
 	text-transform: uppercase;
+}
+
+/* In a 55px rail the caret left room for only "LO…"; the name gets the full
+   width (title shows it in full) and the trigger gets the rail hover state. */
+.app-header .environment-picker .select-menu-trigger svg {
+	display: none;
+}
+
+.app-header .environment-picker .select-menu-value {
+	overflow: hidden;
+	max-width: 100%;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.app-header .environment-picker .select-menu-trigger:hover {
+	background: var(--wb-surface-3);
+}
+
+/* The rail picker sits near the bottom of the screen: open the list beside the
+   rail, bottom-aligned, instead of below the viewport edge. */
+.app-header .environment-picker .select-menu-list {
+	top: auto;
+	right: auto;
+	bottom: 0;
+	left: calc(100% + 8px);
+	width: max-content;
+	min-width: 220px;
+	max-width: 320px;
+	max-height: calc(100dvh - 24px);
+	overflow-y: auto;
+}
+
+.app-header .environment-picker .select-menu-option > span {
+	white-space: nowrap;
 }
 
 .profile-chip {
@@ -544,6 +587,8 @@ textarea:focus-visible,
 	align-items: flex-end;
 	gap: 3px;
 	overflow-x: auto;
+	/* Tabs overflow sideways only; a 1px vertical overflow drew a stray scrollbar. */
+	overflow-y: hidden;
 }
 
 .request-tab {
@@ -914,6 +959,14 @@ textarea:focus-visible,
 	letter-spacing: -0.025em;
 }
 
+.menu {
+	/* Placement comes from menu-placement.js; a menu taller than the room it was
+	   given scrolls instead of running off the viewport. */
+	max-width: calc(100vw - 16px);
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+
 .menu,
 .select-menu-list {
 	border-color: var(--wb-line-strong);
@@ -945,6 +998,13 @@ textarea:focus-visible,
 	box-shadow: var(--wb-shadow);
 }
 
+/* The scrim belongs to the overlay resource index (tablet and phone). On the
+   desktop grid it would become a grid item and push the request canvas out of
+   view, so it stays hidden there even while the sidebar is marked open. */
+.sidebar-scrim {
+	display: none;
+}
+
 /* Tablet: resource index becomes an anchored overlay. */
 @media (max-width: 1179px) {
 	:root {
@@ -972,6 +1032,7 @@ textarea:focus-visible,
 	}
 
 	.sidebar-scrim {
+		display: block;
 		position: fixed;
 		z-index: 40;
 		inset: 0 0 0 var(--rail-width);
@@ -984,6 +1045,7 @@ textarea:focus-visible,
 	:root {
 		--rail-width: 0px;
 		--resource-width: min(88vw, 340px);
+		--phone-header-height: 104px;
 	}
 
 	.app-shell {
@@ -996,11 +1058,13 @@ textarea:focus-visible,
 		display: grid;
 		position: relative;
 		width: 100%;
-		height: 58px;
-		grid-template-columns: auto minmax(0, 1fr) auto;
-		grid-template-rows: 58px;
-		gap: 6px;
-		padding: 7px 9px;
+		/* Two rows: nine 40px commands do not fit one 375px row, and the old single
+		   row clipped Variables and Runtime behind a hidden scrollbar. */
+		height: var(--phone-header-height);
+		grid-template-columns: auto minmax(0, 1fr);
+		grid-template-rows: minmax(0, 1fr) 40px;
+		gap: 4px 6px;
+		padding: 6px 9px;
 		border-right: 0;
 		border-bottom: 1px solid var(--wb-line);
 	}
@@ -1033,11 +1097,15 @@ textarea:focus-visible,
 	}
 
 	.rail-primary {
+		grid-column: 1 / -1;
+		grid-row: 2;
 		justify-content: flex-start;
 		overflow-x: auto;
 	}
 
 	.rail-secondary {
+		grid-column: 2;
+		grid-row: 1;
 		justify-content: flex-end;
 	}
 
@@ -1058,6 +1126,27 @@ textarea:focus-visible,
 		display: none;
 	}
 
+	/* The workspace row has room for its labels, which beats four bare glyphs. */
+	.app-header .rail-primary .rail-command {
+		width: auto;
+		min-width: 40px;
+		flex: 1 1 auto;
+		gap: 5px;
+		padding: 0 6px;
+	}
+
+	.rail-primary .rail-command-label {
+		display: inline;
+		position: static;
+		padding: 0;
+		border: 0;
+		background: none;
+		box-shadow: none;
+		color: inherit;
+		opacity: 1;
+		transform: none;
+	}
+
 	.profile-chip {
 		width: 40px;
 		height: 40px;
@@ -1071,12 +1160,12 @@ textarea:focus-visible,
 	}
 
 	.sidebar {
-		top: 58px;
+		top: var(--phone-header-height);
 		left: 0;
 	}
 
 	.sidebar-scrim {
-		inset: 58px 0 0;
+		inset: var(--phone-header-height) 0 0;
 	}
 
 	.request-tabs {
@@ -1211,13 +1300,43 @@ textarea:focus-visible,
 	.url-bar {
 		grid-template-columns: minmax(78px, 96px) minmax(0, 1fr) auto;
 	}
+	/* styles.css still carries the pre-grid phone rules that sent the URL field
+	   to its own flex row (order: 3) and fixed the method picker at 104px; in
+	   this grid they put the field on top of Send. */
+	.url-bar .url-input {
+		order: 0;
+	}
+	.url-bar .method-select {
+		width: auto;
+		min-width: 0;
+	}
 	.url-bar .code-button {
 		display: none;
+	}
+	/* The request name gets its own line instead of being squeezed to a few
+	   characters by the "Saved in" note; the note and Save share the next. */
+	.request-title-row {
+		flex-wrap: wrap;
+		row-gap: 6px;
+	}
+	.request-title-row .request-name-input {
+		flex-basis: 100%;
+	}
+	.request-title-row .field-hint {
+		margin-right: auto;
 	}
 	.rail-primary {
 		scrollbar-width: none;
 	}
 	.rail-primary::-webkit-scrollbar {
+		display: none;
+	}
+}
+
+/* Very narrow phones: the workspace row falls back to icon-only commands, each
+   keeping its accessible name. */
+@media (max-width: 359px) {
+	.rail-primary .rail-command-label {
 		display: none;
 	}
 }

@@ -117,6 +117,7 @@ export function WorkspaceHeader({
 				</button>
 				<Menu
 					label="Help and product information"
+					side="right"
 					trigger="info"
 					triggerClassName="icon-button rail-command"
 					items={PRODUCT_SURFACES.map((surface) => ({
