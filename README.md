@@ -510,9 +510,10 @@ The [Tracer CLI workflow](.github/workflows/tracer-cli.yml) runs the same scenar
 | `bun run demo:flight-recorder` | Run the deterministic Flight Recorder demo (app must be running) |
 | `bun run tracer`        | Headless collection runner (see [Headless CLI](#headless-cli))  |
 | `bash examples/ci/ci-demo.sh` | Local pass/fail parity demo for the CLI (no database)      |
-| `bun test`              | Run the full test suite (backend + frontend, Bun's built-in runner) |
-| `bun run test`          | Backend tests only                                              |
-| `cd frontend && bun test` | Frontend tests only                                           |
+| `bun run test`          | **Canonical full repository suite** — backend, then frontend; fails if either fails |
+| `bun run test:backend`  | Backend tests only                                              |
+| `bun run test:frontend` | Frontend tests only                                             |
+| `bun test`              | Bun's built-in repo-wide discovery; runs the same committed suites as `bun run test` |
 | `bun run dev:backend`   | Backend only, with reload                                      |
 | `bun run dev:frontend`  | Frontend only                                                  |
 
@@ -521,11 +522,13 @@ The [Tracer CLI workflow](.github/workflows/tracer-cli.yml) runs the same scenar
 Tests live beside the code they cover as `*.test.js` files and run with Bun's test runner. The README intentionally does **not** hard-code a single suite total because the count changes as acceptance coverage grows; the final executed evidence is recorded in **[`docs/final-submission-readiness.md`](docs/final-submission-readiness.md)** and the phase-specific reports.
 
 ```bash
-bun test                       # repository-wide test discovery
-bun run test                   # backend tests
-cd frontend && bun test        # frontend tests
+bun run test              # full repository suite: backend + frontend
+bun run test:backend      # backend tests only
+bun run test:frontend     # frontend tests only
 cd frontend && bun run build   # production frontend build
 ```
+
+`bun run test` is the canonical reviewer-facing command. It runs the backend suite and then the frontend suite, and exits non-zero if either suite fails. `bun test` (Bun's built-in runner invoked directly from the repository root) discovers every committed `*.test.js` / `*.test.jsx` file under `backend/` and `frontend/`, so it executes the same complete suite; the Baseline Gate workflow uses it. The two component commands above are provided so a failure can be isolated to one workspace.
 
 Important acceptance surfaces include:
 
